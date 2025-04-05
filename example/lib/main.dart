@@ -15,7 +15,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  final _flutterOnnxruntimePlugin = Onnxruntime();
+  final _flutterOnnxruntimePlugin = OnnxRuntime();
   final _aController = TextEditingController(); // Controller for the first input
   final _bController = TextEditingController(); // Controller for the second input
   String _result = ''; // Variable to store the result

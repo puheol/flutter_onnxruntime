@@ -52,6 +52,24 @@ class MethodChannelFlutterOnnxruntime extends FlutterOnnxruntimePlatform {
     await methodChannel.invokeMethod<void>('closeSession', {'sessionId': sessionId});
   }
 
+  @override
+  Future<Map<String, dynamic>> getMetadata(String sessionId) async {
+    final result = await methodChannel.invokeMethod<Map<Object?, Object?>>('getMetadata', {'sessionId': sessionId});
+    return _convertMapToStringDynamic(result ?? {});
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getInputInfo(String sessionId) async {
+    final result = await methodChannel.invokeMethod<List<Object?>>('getInputInfo', {'sessionId': sessionId});
+    return result?.map((item) => _convertMapToStringDynamic(item as Map<Object?, Object?>)).toList() ?? [];
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getOutputInfo(String sessionId) async {
+    final result = await methodChannel.invokeMethod<List<Object?>>('getOutputInfo', {'sessionId': sessionId});
+    return result?.map((item) => _convertMapToStringDynamic(item as Map<Object?, Object?>)).toList() ?? [];
+  }
+
   Map<String, dynamic> _convertMapToStringDynamic(Map<Object?, Object?> map) {
     return map.map((key, value) => MapEntry(key.toString(), value));
   }

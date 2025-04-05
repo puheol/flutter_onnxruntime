@@ -6,7 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:flutter_onnxruntime/src/flutter_onnxruntime_platform_interface.dart';
 import 'package:flutter_onnxruntime/src/ort_session.dart';
 
-class Onnxruntime {
+class OnnxRuntime {
   Future<String?> getPlatformVersion() {
     return FlutterOnnxruntimePlatform.instance.getPlatformVersion();
   }
