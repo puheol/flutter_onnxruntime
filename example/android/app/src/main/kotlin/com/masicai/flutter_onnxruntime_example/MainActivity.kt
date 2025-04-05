@@ -1,4 +1,4 @@
-package com.masicai.flutter_onnxruntime_example
+package com.masicai.flutterOnnxruntimeExample
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -10,25 +10,25 @@ class Onnxruntime {
   Future<String?> getPlatformVersion() {
     return FlutterOnnxruntimePlatform.instance.getPlatformVersion();
   }
-  
+
   /// Create an ONNX Runtime session with the given model path
   Future<OrtSession> createSession(String modelPath, {OrtSessionOptions? options}) async {
     final result = await FlutterOnnxruntimePlatform.instance.createSession(
-      modelPath, 
-      sessionOptions: options?.toMap() ?? {}
+      modelPath,
+      sessionOptions: options?.toMap() ?? {},
     );
     return OrtSession.fromMap(result);
   }
 
   /// Create an ONNX Runtime session from an asset model file
-  /// 
+  ///
   /// This will extract the asset to a temporary file and use that path
   Future<OrtSession> createSessionFromAsset(String assetKey, {OrtSessionOptions? options}) async {
     // Get the temporary directory
     final directory = await getTemporaryDirectory();
     final fileName = path.basename(assetKey);
     final filePath = path.join(directory.path, fileName);
-    
+
     // Check if the model already exists
     final file = File(filePath);
     if (!await file.exists()) {
@@ -36,7 +36,7 @@ class Onnxruntime {
       final data = await rootBundle.load(assetKey);
       await file.writeAsBytes(data.buffer.asUint8List());
     }
-    
+
     // Create session with the file path
     return createSession(filePath, options: options);
   }

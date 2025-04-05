@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 
-import 'package:flutter/services.dart';
 import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
 
 void main() {
@@ -30,8 +29,8 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _initializeSession() async {
     _session = await _flutterOnnxruntimePlugin.createSessionFromAsset('assets/models/addition_model.ort');
-    print(_session?.inputNames);
-    print(_session?.outputNames);
+    // print(_session?.inputNames);
+    // print(_session?.outputNames);
   }
 
   @override
@@ -46,14 +45,14 @@ class _MyAppState extends State<MyApp> {
     if (_session == null) {
       await _initializeSession();
     }
-    
+
     final inputs = {
       'A': [a],
       'B': [b],
     };
 
     final outputs = await _session!.run(inputs);
-    print(outputs);
+    // print(outputs);
     setState(() {
       _result = outputs['outputs']['C'][0].toString(); // Update the result with the output from the model
     });
@@ -63,9 +62,7 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       home: Scaffold(
-        appBar: AppBar(
-          title: const Text('Addition Model with Onnxruntime Demo'),
-        ),
+        appBar: AppBar(title: const Text('Addition Model with Onnxruntime Demo')),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(32.0),

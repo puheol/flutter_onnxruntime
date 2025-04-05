@@ -1,0 +1,82 @@
+#!/bin/sh
+
+# Run Dart format check
+echo "Running Dart format check..."
+dart format --line-length 120 $(find . -name "*.dart" -not -path "./lib/l10n/generated/*")
+
+# Check for modified files after formatting
+if ! git diff --quiet; then
+  echo "Dart format changes detected. Please add the formatted files to your commit:"
+  git diff --name-only
+  exit 1  # Exit to allow user to add changes
+fi
+
+# Check for Kotlin files (Android)
+if [ -d "android" ]; then
+  echo "Running Kotlin auto-formatting..."
+  
+  # Check for ktlint installation
+  if ! ktlint --version > /dev/null 2>&1; then
+    echo "ktlint not found or not working. Please install it with: 'curl -sSLO https://github.com/pinterest/ktlint/releases/download/1.0.0/ktlint && chmod a+x ktlint && sudo mv ktlint /usr/local/bin/'"
+    echo "Skipping Kotlin auto-formatting."
+  else
+    # Run ktlint with format flag
+    ktlint --format "android/**/*.kt" "android/**/*.kts"
+    
+    # Check for modified files after formatting
+    if ! git diff --quiet; then
+      echo "Kotlin format changes detected. Please add the formatted files to your commit:"
+      git diff --name-only
+      exit 1  # Exit to allow user to add changes
+    fi
+  fi
+fi
+
+# Check for Swift files (iOS)
+if [ -d "ios" ]; then
+  echo "Running Swift auto-formatting..."
+  
+  # Improved check for swiftlint installation
+  if ! swiftlint version &> /dev/null; then
+    echo "swiftlint not found or not working. Please install it with 'brew install swiftlint'"
+    echo "Skipping Swift auto-formatting."
+  else
+    # Run swiftlint with autocorrect first
+    cd ios
+    swiftlint --config .swiftlint.yml --autocorrect
+    
+    # Check for modified files after auto-formatting
+    if ! git diff --quiet; then
+      echo "Swift format changes detected. Please add the formatted files to your commit:"
+      git diff --name-only
+      exit 1  # Exit to allow user to add changes
+    fi
+    
+    # Now run swiftlint again without autocorrect to check for warnings
+    echo "Checking for SwiftLint warnings..."
+    swiftlint --config .swiftlint.yml
+    SWIFTLINT_RESULT=$?
+    
+    # Check for SwiftLint errors or warnings
+    if [ $SWIFTLINT_RESULT -ne 0 ]; then
+      echo "SwiftLint detected warnings or errors that cannot be automatically fixed. Please address these issues before committing."
+      exit 1
+    fi
+    cd ..
+  fi
+fi
+
+
+# Run Flutter analyze
+echo "Running Flutter analyze..."
+flutter analyze
+
+# If analyze failed, prevent the commit
+if [ $? -ne 0 ]; then
+  echo "Flutter analyze failed. Please fix the issues and try committing again."
+  exit 1
+fi
+
+# If we got here, all checks passed
+echo "All format checks and analyses passed."
+exit 0

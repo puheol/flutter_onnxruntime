@@ -4,12 +4,23 @@ import 'package:flutter_onnxruntime/src/flutter_onnxruntime_platform_interface.d
 import 'package:flutter_onnxruntime/src/flutter_onnxruntime_method_channel.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
-class MockFlutterOnnxruntimePlatform
-    with MockPlatformInterfaceMixin
-    implements FlutterOnnxruntimePlatform {
-
+class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements FlutterOnnxruntimePlatform {
   @override
   Future<String?> getPlatformVersion() => Future.value('42');
+
+  @override
+  Future<Map<String, dynamic>> createSession(String modelPath, {Map<String, dynamic>? sessionOptions}) =>
+      Future.value({});
+
+  @override
+  Future<Map<String, dynamic>> runInference(
+    String sessionId,
+    Map<String, dynamic> inputs, {
+    Map<String, dynamic>? runOptions,
+  }) => Future.value({});
+
+  @override
+  Future<void> closeSession(String sessionId) => Future.value();
 }
 
 void main() {
