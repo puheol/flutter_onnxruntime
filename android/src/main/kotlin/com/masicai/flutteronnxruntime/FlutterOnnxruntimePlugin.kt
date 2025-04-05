@@ -21,10 +21,11 @@ import java.util.concurrent.ConcurrentHashMap
 
 /** FlutterOnnxruntimePlugin */
 class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
-    // / The MethodChannel that will the communication between Flutter and native Android
-    // /
-    // / This local reference serves to register the plugin with the Flutter Engine and unregister it
-    // / when the Flutter Engine is detached from the Activity
+    /** The MethodChannel that will the communication between Flutter and native Android
+
+     This local reference serves to register the plugin with the Flutter Engine and unregister it
+     when the Flutter Engine is detached from the Activity
+     */
     private lateinit var channel: MethodChannel
     private lateinit var ortEnvironment: OrtEnvironment
     private val sessions = ConcurrentHashMap<String, OrtSession>()
@@ -313,10 +314,12 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                     result.error("GENERIC_ERROR", e.message, e.stackTraceToString())
                 }
             }
-            // / Get metadata about the model
-            // /
-            // / Returns metadata about the model such as producer name, graph name, domain, description, version, and custom metadata.
-            // / Reference: https://onnxruntime.ai/docs/api/java/ai/onnxruntime/OrtSession.html#getMetadata()
+            /** Get metadata about the model
+
+             Returns metadata about the model such as producer name, graph name, domain, description, version, and custom metadata.
+
+             Reference: https://onnxruntime.ai/docs/api/java/ai/onnxruntime/OrtSession.html#getMetadata()
+             */
             "getMetadata" -> {
                 try {
                     val sessionId = call.argument<String>("sessionId")
@@ -347,10 +350,12 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                     result.error("GENERIC_ERROR", e.message, e.stackTraceToString())
                 }
             }
-            // / Get input info about the model
-            // /
-            // / Returns information about the model's inputs such as name, type, and shape.
-            // / Reference: https://onnxruntime.ai/docs/api/java/ai/onnxruntime/OrtSession.html#getInputInfo()
+            /** Get input info about the model
+
+             Returns information about the model's inputs such as name, type, and shape.
+
+             Reference: https://onnxruntime.ai/docs/api/java/ai/onnxruntime/OrtSession.html#getInputInfo()
+             */
             "getInputInfo" -> {
                 try {
                     val sessionId = call.argument<String>("sessionId")
@@ -392,10 +397,12 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                     result.error("GENERIC_ERROR", e.message, e.stackTraceToString())
                 }
             }
-            // / Get output info about the model
-            // /
-            // / Returns information about the model's outputs such as name, type, and shape.
-            // / Reference: https://onnxruntime.ai/docs/api/java/ai/onnxruntime/OrtSession.html#getOutputInfo()
+            /** Get output info about the model
+
+             Returns information about the model's outputs such as name, type, and shape.
+
+             Reference: https://onnxruntime.ai/docs/api/java/ai/onnxruntime/OrtSession.html#getOutputInfo()
+             */
             "getOutputInfo" -> {
                 try {
                     val sessionId = call.argument<String>("sessionId")
