@@ -1,7 +1,11 @@
 import Flutter
 import UIKit
-import onnxruntime
+import onnxruntime_objc
 import Foundation
+
+enum OrtError: Error {
+    case flutterError(FlutterError)
+}
 
 public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
   private var sessions = [String: ORTSession]()
@@ -42,13 +46,13 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
             try sessionOptions.setIntraOpNumThreads(Int32(intraOpNumThreads))
           }
           
-          if let interOpNumThreads = options["interOpNumThreads"] as? Int {
-            try sessionOptions.setInterOpNumThreads(Int32(interOpNumThreads))
-          }
+          // if let interOpNumThreads = options["interOpNumThreads"] as? Int {
+          //   try sessionOptions.setInterOpNumThreads(Int32(interOpNumThreads))
+          // }
           
-          if let enableCpuMemArena = options["enableCpuMemArena"] as? Bool {
-            sessionOptions.enableCPUMemArena = enableCpuMemArena
-          }
+          // if let enableCpuMemArena = options["enableCpuMemArena"] as? Bool {
+          //   sessionOptions.enableCPUMemArena = enableCpuMemArena
+          // }
         }
         
         // Check if file exists
@@ -59,7 +63,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
         }
         
         // Create session from file path
-        let session = try ORTSession(env: env!, path: modelPath, sessionOptions: sessionOptions)
+        let session = try ORTSession(env: env!, modelPath: modelPath, sessionOptions: sessionOptions)
         let sessionId = UUID().uuidString
         sessions[sessionId] = session
         
@@ -67,16 +71,14 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
         var inputNames: [String] = []
         var outputNames: [String] = []
         
-        for i in 0..<session.inputCount {
-          if let name = try? session.inputName(at: i) {
-            inputNames.append(name)
-          }
+        // Get input names
+        if let inputNodeNames = try? session.inputNames() {
+          inputNames = inputNodeNames
         }
         
-        for i in 0..<session.outputCount {
-          if let name = try? session.outputName(at: i) {
-            outputNames.append(name)
-          }
+        // Get output names
+        if let outputNodeNames = try? session.outputNames() {
+          outputNames = outputNodeNames
         }
         
         result([
@@ -89,6 +91,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
       }
       
     case "runInference":
+      print("runInference")
       guard let args = call.arguments as? [String: Any],
             let sessionId = args["sessionId"] as? String,
             let inputs = args["inputs"] as? [String: Any] else {
@@ -104,10 +107,11 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
       do {
         // Create an input map for the ORT session
         let ortInputs = try createORTValueInputs(inputs: inputs, session: session)
-        
+
+        let outputNames = try session.outputNames()
         // Run inference
-        let outputs = try session.run(withInputs: ortInputs)
-        
+        let outputs = try session.run(withInputs: ortInputs, outputNames: Set(outputNames), runOptions: nil)
+
         // Process outputs to Flutter-compatible format
         let flutterOutputs = try convertOutputsToFlutterFormat(outputs: outputs, session: session)
         
@@ -141,22 +145,26 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
         return
       }
       
-      do {
-        let modelMetadata = session.modelMetadata
+      // Note: 06/04/2025 on v1.21.0 session.getMetadata() is not supported in onnxruntime-objc
+      // do {
+      //   let modelMetadata = try session.getMetadata()
         
-        let metadataMap: [String: Any] = [
-          "producerName": modelMetadata.producerName ?? "",
-          "graphName": modelMetadata.graphName ?? "",
-          "domain": modelMetadata.domain ?? "",
-          "description": modelMetadata.description ?? "",
-          "version": modelMetadata.version,
-          "customMetadataMap": modelMetadata.customMetadata ?? [:]
-        ]
+      //   let metadataMap: [String: Any] = [
+      //     "producerName": modelMetadata.producerName ?? "",
+      //     "graphName": modelMetadata.graphName ?? "",
+      //     "domain": modelMetadata.domain ?? "",
+      //     "description": modelMetadata.description ?? "",
+      //     "version": modelMetadata.version,
+      //     "customMetadataMap": modelMetadata.customMetadata ?? [:]
+      //   ]
         
-        result(metadataMap)
-      } catch {
-        result(FlutterError(code: "METADATA_ERROR", message: error.localizedDescription, details: nil))
-      }
+      //   result(metadataMap)
+      // } catch {
+      //   result(FlutterError(code: "METADATA_ERROR", message: error.localizedDescription, details: nil))
+      // }
+
+      // return empty map
+      result([:])
       
     case "getInputInfo":
       guard let args = call.arguments as? [String: Any],
@@ -172,23 +180,14 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
       
       do {
         var nodeInfoList: [[String: Any]] = []
+
+        let inputNames = try session.inputNames()
+        // Note: 06/04/2025 on v1.21.0 session.getInputInfo() is not supported in onnxruntime-objc
+        // let inputInfoMap = try session.getInputInfo()
         
-        for i in 0..<session.inputCount {
-          if let name = try? session.inputName(at: i),
-             let info = try? session.inputTypeInfo(at: i) {
-            var infoMap: [String: Any] = ["name": name]
-            
-            // Handle tensor info if possible
-            if let tensorInfo = info as? ORTTensorTypeAndShapeInfo {
-              let shape = try tensorInfo.shape.map { Int($0) }
-              infoMap["shape"] = shape
-              infoMap["type"] = tensorInfo.elementType.description
-            } else {
-              infoMap["shape"] = []
-            }
-            
-            nodeInfoList.append(infoMap)
-          }
+        for name in inputNames {
+          var infoMap: [String: Any] = ["name": name]
+          nodeInfoList.append(infoMap)
         }
         
         result(nodeInfoList)
@@ -210,23 +209,14 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
       
       do {
         var nodeInfoList: [[String: Any]] = []
-        
-        for i in 0..<session.outputCount {
-          if let name = try? session.outputName(at: i),
-             let info = try? session.outputTypeInfo(at: i) {
-            var infoMap: [String: Any] = ["name": name]
-            
-            // Handle tensor info if possible
-            if let tensorInfo = info as? ORTTensorTypeAndShapeInfo {
-              let shape = try tensorInfo.shape.map { Int($0) }
-              infoMap["shape"] = shape
-              infoMap["type"] = tensorInfo.elementType.description
-            } else {
-              infoMap["shape"] = []
-            }
-            
-            nodeInfoList.append(infoMap)
-          }
+
+        let outputNames = try session.outputNames()
+        // Note: 06/04/2025 on v1.21.0 session.getOutputInfo() is not supported in onnxruntime-objc
+        // let outputInfoMap = try session.getOutputInfo()
+
+        for name in outputNames {
+          var infoMap: [String: Any] = ["name": name]
+          nodeInfoList.append(infoMap)
         }
         
         result(nodeInfoList)
@@ -260,26 +250,33 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
         // Default to 1D shape if not provided
         shape = [NSNumber(value: value.count)]
       } else {
-        throw FlutterError(code: "INVALID_SHAPE", message: "Shape information required for input '\(name)'", details: nil)
+        throw OrtError.flutterError(FlutterError(code: "INVALID_SHAPE", message: "Shape information required for input '\(name)'", details: nil))
       }
       
       // Create tensor based on input type
       if let floatArray = value as? [Float] {
-        let tensor = try ORTValue.createTensor(fromArray: floatArray, shape: shape)
+        let data = NSMutableData(bytes: floatArray, length: floatArray.count * MemoryLayout<Float>.stride)
+        let tensor = try ORTValue(tensorData: data, elementType: .float, shape: shape)
         ortInputs[name] = tensor
       } else if let intArray = value as? [Int32] {
-        let tensor = try ORTValue.createTensor(fromArray: intArray, shape: shape)
+        let data = NSMutableData(bytes: intArray, length: intArray.count * MemoryLayout<Int32>.stride)
+        let tensor = try ORTValue(tensorData: data, elementType: .int32, shape: shape)
         ortInputs[name] = tensor
       } else if let doubleArray = value as? [Double] {
-        let tensor = try ORTValue.createTensor(fromArray: doubleArray, shape: shape)
+        // ORTTensorElementDataType does not support double so we convert to float
+        // reference: https://onnxruntime.ai/docs/api/objectivec/Enums/ORTTensorElementDataType.html
+        let floatArray = doubleArray.map { Float($0) }
+        let data = NSMutableData(bytes: floatArray, length: floatArray.count * MemoryLayout<Float>.stride)
+        let tensor = try ORTValue(tensorData: data, elementType: .float, shape: shape)
         ortInputs[name] = tensor
       } else if let numberArray = value as? [NSNumber] {
         // Convert NSNumber array to float array
         let floatArray = numberArray.map { $0.floatValue }
-        let tensor = try ORTValue.createTensor(fromArray: floatArray, shape: shape)
+        let data = NSMutableData(bytes: floatArray, length: floatArray.count * MemoryLayout<Float>.stride)
+        let tensor = try ORTValue(tensorData: data, elementType: .float, shape: shape)
         ortInputs[name] = tensor
       } else {
-        throw FlutterError(code: "UNSUPPORTED_INPUT_TYPE", message: "Unsupported input type for '\(name)'", details: nil)
+        throw OrtError.flutterError(FlutterError(code: "UNSUPPORTED_INPUT_TYPE", message: "Unsupported input type for '\(name)'", details: nil))
       }
     }
     
@@ -290,31 +287,80 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
     var flutterOutputs: [String: Any] = [:]
     
     for (name, value) in outputs {
-      if let tensorInfo = try? value.tensorTypeAndShapeInfo {
+      if let tensorInfo = try? value.tensorTypeAndShapeInfo() {
         // Get shape information
         let shape = try tensorInfo.shape.map { Int($0) }
         flutterOutputs["\(name)_shape"] = shape
         
+        // Calculate total element count
+        let elementCount = shape.reduce(1, *)
+ 
         // Extract data based on tensor type
         switch tensorInfo.elementType {
         case .float:
-          if let data = try? value.floatArray() {
-            flutterOutputs[name] = data
-          }
-        case .int:
-          if let data = try? value.intArray() {
-            flutterOutputs[name] = data
-          }
-        case .double:
-          if let data = try? value.doubleArray() {
-            // Convert to float for Flutter compatibility
-            flutterOutputs[name] = data.map { Float($0) }
-          }
+          // For float tensors
+          let dataPtr = try value.tensorData()
+          let floatPtr = dataPtr.bytes.bindMemory(to: Float.self, capacity: elementCount)
+          let floatBuffer = UnsafeBufferPointer(start: floatPtr, count: elementCount)
+          flutterOutputs[name] = Array(floatBuffer)
+
+        case .int8:
+          // For int8 tensors
+          let dataPtr = try value.tensorData()
+          let int8Ptr = dataPtr.bytes.bindMemory(to: Int8.self, capacity: elementCount)
+          let int8Buffer = UnsafeBufferPointer(start: int8Ptr, count: elementCount)
+          flutterOutputs[name] = Array(int8Buffer)
+
+        case .uInt8:
+          // For uint8 tensors
+          let dataPtr = try value.tensorData()
+          let uint8Ptr = dataPtr.bytes.bindMemory(to: UInt8.self, capacity: elementCount)
+          let uint8Buffer = UnsafeBufferPointer(start: uint8Ptr, count: elementCount)
+          flutterOutputs[name] = Array(uint8Buffer)
+          
+        case .int32:
+          // For int32 tensors
+          let dataPtr = try value.tensorData()
+          let intPtr = dataPtr.bytes.bindMemory(to: Int32.self, capacity: elementCount)
+          let intBuffer = UnsafeBufferPointer(start: intPtr, count: elementCount)
+          flutterOutputs[name] = Array(intBuffer)
+
+        case .uInt32:
+          // For uint32 tensors
+          let dataPtr = try value.tensorData()
+          let uint32Ptr = dataPtr.bytes.bindMemory(to: UInt32.self, capacity: elementCount)
+          let uint32Buffer = UnsafeBufferPointer(start: uint32Ptr, count: elementCount)
+          flutterOutputs[name] = Array(uint32Buffer)
+
+        case .int64:
+          // For int64 tensors
+          let dataPtr = try value.tensorData()
+          let int64Ptr = dataPtr.bytes.bindMemory(to: Int64.self, capacity: elementCount)
+          let int64Buffer = UnsafeBufferPointer(start: int64Ptr, count: elementCount)
+          flutterOutputs[name] = Array(int64Buffer)
+        
+        case .uInt64:
+          // For uint64 tensors
+          let dataPtr = try value.tensorData()
+          let uint64Ptr = dataPtr.bytes.bindMemory(to: UInt64.self, capacity: elementCount)
+          let uint64Buffer = UnsafeBufferPointer(start: uint64Ptr, count: elementCount)
+          flutterOutputs[name] = Array(uint64Buffer)  
+        
+        case .string:
+          // For string tensors
+          let dataPtr = try value.tensorData()
+          let stringPtr = dataPtr.bytes.bindMemory(to: String.self, capacity: elementCount)
+          let stringBuffer = UnsafeBufferPointer(start: stringPtr, count: elementCount)
+          flutterOutputs[name] = Array(stringBuffer)
+
         default:
-          // For other types, try to extract as float (most common case)
-          if let data = try? value.floatArray() {
-            flutterOutputs[name] = data
-          } else {
+          // Try extracting as float for other types
+          do {
+            let dataPtr = try value.tensorData()
+            let floatPtr = dataPtr.bytes.bindMemory(to: Float.self, capacity: elementCount)
+            let floatBuffer = UnsafeBufferPointer(start: floatPtr, count: elementCount)
+            flutterOutputs[name] = Array(floatBuffer)
+          } catch {
             flutterOutputs[name] = "Unsupported output tensor type: \(tensorInfo.elementType)"
           }
         }
