@@ -10,13 +10,14 @@ enum OrtError: Error {
 public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
   private var sessions = [String: ORTSession]()
   private var env: ORTEnv?
-  
+
   public static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(name: "flutter_onnxruntime", binaryMessenger: registrar.messenger)
     let instance = FlutterOnnxruntimePlugin()
     registrar.addMethodCallDelegate(instance, channel: channel)
   }
 
+  // swiftlint:disable:next cyclomatic_complexity
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     if env == nil {
       do {
@@ -26,12 +27,12 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
         return
       }
     }
-    
+
     switch call.method {
     case "getPlatformVersion":
       // Use macOS-specific system version info
       result("macOS " + ProcessInfo.processInfo.operatingSystemVersionString)
-    
+
     /** Create a new session
 
       Create a new session from a model file path.
@@ -39,180 +40,202 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
       Reference: https://onnxruntime.ai/docs/api/objectivec/Classes/ORTSession.html
     */
     case "createSession":
-      guard let args = call.arguments as? [String: Any],
-            let modelPath = args["modelPath"] as? String else {
-        result(FlutterError(code: "INVALID_ARGS", message: "Model path is required", details: nil))
-        return
-      }
-      
-      do {
-        let sessionOptions = try ORTSessionOptions()
-        
-        if let options = args["sessionOptions"] as? [String: Any] {
-          if let intraOpNumThreads = options["intraOpNumThreads"] as? Int {
-            try sessionOptions.setIntraOpNumThreads(Int32(intraOpNumThreads))
-          }
-          
-          // if let interOpNumThreads = options["interOpNumThreads"] as? Int {
-          //   try sessionOptions.setInterOpNumThreads(Int32(interOpNumThreads))
-          // }
-          
-          // if let enableCpuMemArena = options["enableCpuMemArena"] as? Bool {
-          //   sessionOptions.enableCPUMemArena = enableCpuMemArena
-          // }
-        }
-        
-        // Check if file exists
-        let fileManager = FileManager.default
-        if !fileManager.fileExists(atPath: modelPath) {
-          result(FlutterError(code: "FILE_NOT_FOUND", message: "Model file not found at path: \(modelPath)", details: nil))
-          return
-        }
-        
-        // Create session from file path
-        let session = try ORTSession(env: env!, modelPath: modelPath, sessionOptions: sessionOptions)
-        let sessionId = UUID().uuidString
-        sessions[sessionId] = session
-        
-        // Get input and output names
-        var inputNames: [String] = []
-        var outputNames: [String] = []
-        
-        // Get input names
-        if let inputNodeNames = try? session.inputNames() {
-          inputNames = inputNodeNames
-        }
-        
-        // Get output names
-        if let outputNodeNames = try? session.outputNames() {
-          outputNames = outputNodeNames
-        }
-        
-        result([
-          "sessionId": sessionId,
-          "inputNames": inputNames,
-          "outputNames": outputNames
-        ])
-      } catch {
-        result(FlutterError(code: "SESSION_CREATION_FAILED", message: error.localizedDescription, details: nil))
-      }
-      
+      handleCreateSession(call: call, result: result)
     case "runInference":
-      print("runInference")
-      guard let args = call.arguments as? [String: Any],
-            let sessionId = args["sessionId"] as? String,
-            let inputs = args["inputs"] as? [String: Any] else {
-        result(FlutterError(code: "INVALID_ARGS", message: "Session ID and inputs are required", details: nil))
-        return
-      }
-      
-      guard let session = sessions[sessionId] else {
-        result(FlutterError(code: "INVALID_SESSION", message: "Session not found", details: nil))
-        return
-      }
-      
-      do {
-        // Create an input map for the ORT session
-        let ortInputs = try createORTValueInputs(inputs: inputs, session: session)
-
-        // Get output names
-        let outputNames = try session.outputNames()
-        
-        // Run inference
-        let outputs = try session.run(withInputs: ortInputs, outputNames: Set(outputNames), runOptions: nil)
-
-        // Process outputs to Flutter-compatible format
-        let flutterOutputs = try convertOutputsToFlutterFormat(outputs: outputs, session: session)
-        
-        result(["outputs": flutterOutputs])
-      } catch {
-        result(FlutterError(code: "INFERENCE_ERROR", message: error.localizedDescription, details: nil))
-      }
-      
+      handleRunInference(call: call, result: result)
     case "closeSession":
-      guard let args = call.arguments as? [String: Any],
-            let sessionId = args["sessionId"] as? String else {
-        result(FlutterError(code: "INVALID_ARGS", message: "Session ID is required", details: nil))
-        return
-      }
-      
-      if let _ = sessions.removeValue(forKey: sessionId) {
-        result(nil)
-      } else {
-        result(FlutterError(code: "INVALID_SESSION", message: "Session not found", details: nil))
-      }
-      
+      handleCloseSession(call: call, result: result)
     case "getMetadata":
-      guard let args = call.arguments as? [String: Any],
-            let sessionId = args["sessionId"] as? String else {
-        result(FlutterError(code: "INVALID_ARGS", message: "Session ID is required", details: nil))
-        return
-      }
-      
-      guard sessions[sessionId] != nil else {
-        result(FlutterError(code: "INVALID_SESSION", message: "Session not found", details: nil))
-        return
-      }
-      
-      // Return empty map as metadata functionality may not be available
-      result([:])
-      
+      handleGetMetadata(call: call, result: result)
     case "getInputInfo":
-      guard let args = call.arguments as? [String: Any],
-            let sessionId = args["sessionId"] as? String else {
-        result(FlutterError(code: "INVALID_ARGS", message: "Session ID is required", details: nil))
-        return
-      }
-      
-      guard let session = sessions[sessionId] else {
-        result(FlutterError(code: "INVALID_SESSION", message: "Session not found", details: nil))
-        return
-      }
-      
-      do {
-        var nodeInfoList: [[String: Any]] = []
-        
-        let inputNames = try session.inputNames()
-        
-        for name in inputNames {
-          let infoMap: [String: Any] = ["name": name]
-          nodeInfoList.append(infoMap)
-        }
-        
-        result(nodeInfoList)
-      } catch {
-        result(FlutterError(code: "INPUT_INFO_ERROR", message: error.localizedDescription, details: nil))
-      }
-      
+      handleGetInputInfo(call: call, result: result)
     case "getOutputInfo":
-      guard let args = call.arguments as? [String: Any],
-            let sessionId = args["sessionId"] as? String else {
-        result(FlutterError(code: "INVALID_ARGS", message: "Session ID is required", details: nil))
-        return
-      }
-      
-      guard let session = sessions[sessionId] else {
-        result(FlutterError(code: "INVALID_SESSION", message: "Session not found", details: nil))
-        return
-      }
-      
-      do {
-        var nodeInfoList: [[String: Any]] = []
-
-        let outputNames = try session.outputNames()
-        
-        for name in outputNames {
-          let infoMap: [String: Any] = ["name": name]
-          nodeInfoList.append(infoMap)
-        }
-        
-        result(nodeInfoList)
-      } catch {
-        result(FlutterError(code: "OUTPUT_INFO_ERROR", message: error.localizedDescription, details: nil))
-      }
-      
+      handleGetOutputInfo(call: call, result: result)
     default:
       result(FlutterMethodNotImplemented)
+    }
+  }
+
+  private func handleCreateSession(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let modelPath = args["modelPath"] as? String else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Model path is required", details: nil))
+      return
+    }
+
+    do {
+      let sessionOptions = try ORTSessionOptions()
+
+      if let options = args["sessionOptions"] as? [String: Any] {
+        if let intraOpNumThreads = options["intraOpNumThreads"] as? Int {
+          try sessionOptions.setIntraOpNumThreads(Int32(intraOpNumThreads))
+        }
+
+        // if let interOpNumThreads = options["interOpNumThreads"] as? Int {
+        //   try sessionOptions.setInterOpNumThreads(Int32(interOpNumThreads))
+        // }
+
+        // if let enableCpuMemArena = options["enableCpuMemArena"] as? Bool {
+        //   sessionOptions.enableCPUMemArena = enableCpuMemArena
+        // }
+      }
+
+      // Check if file exists
+      let fileManager = FileManager.default
+      if !fileManager.fileExists(atPath: modelPath) {
+        result(FlutterError(code: "FILE_NOT_FOUND", message: "Model file not found at path: \(modelPath)", details: nil))
+        return
+      }
+
+      // Create session from file path
+      guard let safeEnv = env else {
+        result(FlutterError(code: "ENV_NOT_INITIALIZED", message: "ONNX Runtime environment not initialized", details: nil))
+        return
+      }
+
+      let session = try ORTSession(env: safeEnv, modelPath: modelPath, sessionOptions: sessionOptions)
+      let sessionId = UUID().uuidString
+      sessions[sessionId] = session
+
+      // Get input and output names
+      var inputNames: [String] = []
+      var outputNames: [String] = []
+
+      // Get input names
+      if let inputNodeNames = try? session.inputNames() {
+        inputNames = inputNodeNames
+      }
+
+      // Get output names
+      if let outputNodeNames = try? session.outputNames() {
+        outputNames = outputNodeNames
+      }
+
+      result([
+        "sessionId": sessionId,
+        "inputNames": inputNames,
+        "outputNames": outputNames
+      ])
+    } catch {
+      result(FlutterError(code: "SESSION_CREATION_FAILED", message: error.localizedDescription, details: nil))
+    }
+  }
+
+  private func handleRunInference(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let sessionId = args["sessionId"] as? String,
+          let inputs = args["inputs"] as? [String: Any] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Session ID and inputs are required", details: nil))
+      return
+    }
+
+    guard let session = sessions[sessionId] else {
+      result(FlutterError(code: "INVALID_SESSION", message: "Session not found", details: nil))
+      return
+    }
+
+    do {
+      // Create an input map for the ORT session
+      let ortInputs = try createORTValueInputs(inputs: inputs, session: session)
+
+      // Get output names
+      let outputNames = try session.outputNames()
+
+      // Run inference
+      let outputs = try session.run(withInputs: ortInputs, outputNames: Set(outputNames), runOptions: nil)
+
+      // Process outputs to Flutter-compatible format
+      let flutterOutputs = try convertOutputsToFlutterFormat(outputs: outputs, session: session)
+
+      result(["outputs": flutterOutputs])
+    } catch {
+      result(FlutterError(code: "INFERENCE_ERROR", message: error.localizedDescription, details: nil))
+    }
+  }
+
+  private func handleCloseSession(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let sessionId = args["sessionId"] as? String else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Session ID is required", details: nil))
+      return
+    }
+
+    if sessions.removeValue(forKey: sessionId) != nil {
+      result(nil)
+    } else {
+      result(FlutterError(code: "INVALID_SESSION", message: "Session not found", details: nil))
+    }
+  }
+
+  private func handleGetMetadata(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let sessionId = args["sessionId"] as? String else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Session ID is required", details: nil))
+      return
+    }
+
+    guard sessions[sessionId] != nil else {
+      result(FlutterError(code: "INVALID_SESSION", message: "Session not found", details: nil))
+      return
+    }
+
+    // Return empty map as metadata functionality may not be available
+    result([:])
+  }
+
+  private func handleGetInputInfo(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let sessionId = args["sessionId"] as? String else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Session ID is required", details: nil))
+      return
+    }
+
+    guard let session = sessions[sessionId] else {
+      result(FlutterError(code: "INVALID_SESSION", message: "Session not found", details: nil))
+      return
+    }
+
+    do {
+      var nodeInfoList: [[String: Any]] = []
+
+      let inputNames = try session.inputNames()
+
+      for name in inputNames {
+        let infoMap: [String: Any] = ["name": name]
+        nodeInfoList.append(infoMap)
+      }
+
+      result(nodeInfoList)
+    } catch {
+      result(FlutterError(code: "INPUT_INFO_ERROR", message: error.localizedDescription, details: nil))
+    }
+  }
+
+  private func handleGetOutputInfo(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let sessionId = args["sessionId"] as? String else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Session ID is required", details: nil))
+      return
+    }
+
+    guard let session = sessions[sessionId] else {
+      result(FlutterError(code: "INVALID_SESSION", message: "Session not found", details: nil))
+      return
+    }
+
+    do {
+      var nodeInfoList: [[String: Any]] = []
+
+      let outputNames = try session.outputNames()
+
+      for name in outputNames {
+        let infoMap: [String: Any] = ["name": name]
+        nodeInfoList.append(infoMap)
+      }
+
+      result(nodeInfoList)
+    } catch {
+      result(FlutterError(code: "OUTPUT_INFO_ERROR", message: error.localizedDescription, details: nil))
     }
   }
 
@@ -220,17 +243,17 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
 
   private func createORTValueInputs(inputs: [String: Any], session: ORTSession) throws -> [String: ORTValue] {
     var ortInputs: [String: ORTValue] = [:]
-    
+
     for (name, value) in inputs {
       // Skip shape info
       if name.hasSuffix("_shape") {
         continue
       }
-      
+
       // Get shape if provided
       let shapeName = "\(name)_shape"
       let shape: [NSNumber]
-      
+
       if let shapeArray = inputs[shapeName] as? [NSNumber] {
         shape = shapeArray
       } else if let value = value as? [Any] {
@@ -239,7 +262,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
       } else {
         throw OrtError.flutterError(FlutterError(code: "INVALID_SHAPE", message: "Shape information required for input '\(name)'", details: nil))
       }
-      
+
       // Create tensor based on input type
       if let floatArray = value as? [Float] {
         let data = NSMutableData(bytes: floatArray, length: floatArray.count * MemoryLayout<Float>.stride)
@@ -265,22 +288,23 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
         throw OrtError.flutterError(FlutterError(code: "UNSUPPORTED_INPUT_TYPE", message: "Unsupported input type for '\(name)'", details: nil))
       }
     }
-    
+
     return ortInputs
   }
 
+  // swiftlint:disable:next cyclomatic_complexity
   private func convertOutputsToFlutterFormat(outputs: [String: ORTValue], session: ORTSession) throws -> [String: Any] {
     var flutterOutputs: [String: Any] = [:]
-    
+
     for (name, value) in outputs {
       if let tensorInfo = try? value.tensorTypeAndShapeInfo() {
         // Get shape information
         let shape = tensorInfo.shape.map { Int(truncating: $0) }
         flutterOutputs["\(name)_shape"] = shape
-        
+
         // Calculate total element count
         let elementCount = shape.reduce(1, *)
- 
+
         // Extract data based on tensor type
         switch tensorInfo.elementType {
         case .float:
@@ -303,7 +327,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
           let uint8Ptr = dataPtr.bytes.bindMemory(to: UInt8.self, capacity: elementCount)
           let uint8Buffer = UnsafeBufferPointer(start: uint8Ptr, count: elementCount)
           flutterOutputs[name] = Array(uint8Buffer)
-          
+
         case .int32:
           // For int32 tensors
           let dataPtr = try value.tensorData()
@@ -324,14 +348,14 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
           let int64Ptr = dataPtr.bytes.bindMemory(to: Int64.self, capacity: elementCount)
           let int64Buffer = UnsafeBufferPointer(start: int64Ptr, count: elementCount)
           flutterOutputs[name] = Array(int64Buffer)
-        
+
         case .uInt64:
           // For uint64 tensors
           let dataPtr = try value.tensorData()
           let uint64Ptr = dataPtr.bytes.bindMemory(to: UInt64.self, capacity: elementCount)
           let uint64Buffer = UnsafeBufferPointer(start: uint64Ptr, count: elementCount)
-          flutterOutputs[name] = Array(uint64Buffer)  
-        
+          flutterOutputs[name] = Array(uint64Buffer)
+
         case .string:
           // For string tensors
           let dataPtr = try value.tensorData()
@@ -354,7 +378,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
         flutterOutputs[name] = "Output is not a tensor"
       }
     }
-    
+
     return flutterOutputs
   }
 }
