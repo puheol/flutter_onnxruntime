@@ -62,11 +62,9 @@ jobs:
     - name: Run cppcheck
       run: |
         cppcheck --enable=all --error-exitcode=1 --suppress=missingIncludeSystem \
-        --xml --output-file=cppcheck-report.xml --suppress="*:example/linux/flutter/*" linux/
-    
-    - name: Upload cppcheck report
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: cppcheck-report
-        path: cppcheck-report.xml
+        --inline-suppr --verbose linux/
+        # Check if cppcheck found errors
+        if [ $? -ne 0 ]; then
+          echo "cppcheck found issues in the code"
+          exit 1
+        fi
