@@ -4,17 +4,17 @@ Native Wrapper Flutter Plugin for ONNX Runtime
 
 ## 🌟 Why This Project?
 
-   📦 No Pre-built Libraries Needed
-      Libraries are pulled directly from official repositories during installation - always up-to-date!
-
-   🪶 Lightweight Bundle Size
-      Native implementation keeps your app slim and efficient without bloated dependencies.
-
-   🛡️ Memory Safety First
-      Reduced risk of memory leaks with native-side memory management rather than handling in Dart.
-
-   🔄 Future-Proof Adaptability
-      Easily adapt to new OnnxRuntime releases without maintaining complex generated FFI wrappers.
+      📦 No Pre-built Libraries Needed
+         Libraries are pulled directly from official repositories during installation - always up-to-date!
+   
+      🪶 Lightweight Bundle Size
+         Native implementation keeps your app slim and efficient without bloated dependencies.
+   
+      🛡️ Memory Safety First
+         Reduced risk of memory leaks with native-side memory management rather than handling in Dart.
+   
+      🔄 Future-Proof Adaptability
+         Easily adapt to new OnnxRuntime releases without maintaining complex generated FFI wrappers.
 
 ## Getting Started
 
