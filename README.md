@@ -1,15 +1,28 @@
 # flutter_onnxruntime
 
-A new Flutter plugin project.
+Native Wrapper Flutter Plugin for ONNX Runtime
 
 ## Getting Started
 
-This project is a starting point for a Flutter
-[plug-in package](https://flutter.dev/to/develop-plugins),
-a specialized package that includes platform-specific implementation code for
-Android and/or iOS.
+## Know issues
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+### iOS
+* Target minimum version: iOS 16
+* "The 'Pods-Runner' target has transitive dependencies that include statically linked binaries: (onnxruntime-objc and onnxruntime-c)". In `Podfile` change:
+    ```
+    target 'Runner' do
+    use_frameworks! :linkage => :static
+    ```
 
+### MacOS
+* Target minimum version: MacOS 14
+* "The 'Pods-Runner' target has transitive dependencies that include statically linked binaries: (onnxruntime-objc and onnxruntime-c)". In `Podfile` change:
+    ```
+    target 'Runner' do
+    use_frameworks! :linkage => :static
+    ```
+* "error: compiling for macOS 10.14, but module 'flutter_onnxruntime' has a minimum deployment target of macOS 14.0". In terminal, cd to the `macos` directory and run the XCode to open the project:
+    ```
+    open Runner.xcworkspace
+    ```
+    Then change the "Minimum Deployments" to 14.0.
