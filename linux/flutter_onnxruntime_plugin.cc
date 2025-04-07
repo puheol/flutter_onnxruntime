@@ -14,6 +14,7 @@
 #include <vector>
 
 // Include ONNX Runtime headers
+#include "ort_value.h"
 #include <onnxruntime_cxx_api.h>
 
 #include "flutter_onnxruntime_plugin_private.h"
@@ -277,31 +278,57 @@ static void flutter_onnxruntime_plugin_handle_method_call(FlutterOnnxruntimePlug
           for (const auto &name : session_info.input_names) {
             auto it = inputs_map.find(name);
 
-            if (it != inputs_map.end() && fl_value_get_type(it->second) == FL_VALUE_TYPE_LIST) {
-              // Get shape if provided
-              std::vector<int64_t> shape;
-              auto shape_it = inputs_map.find(name + "_shape");
-              if (shape_it != inputs_map.end() && fl_value_get_type(shape_it->second) == FL_VALUE_TYPE_LIST) {
-                shape = fl_value_to_vector<int64_t>(shape_it->second);
-              } else {
-                // Default shape: just a single dimension with the list length
-                shape.push_back(fl_value_get_length(it->second));
+            if (it != inputs_map.end()) {
+              // Check if this is an OrtValue reference
+              if (fl_value_get_type(it->second) == FL_VALUE_TYPE_MAP) {
+                // Check for valueId in the map
+                FlValue *value_id_val = fl_value_lookup_string(it->second, "valueId");
+                if (value_id_val != nullptr && fl_value_get_type(value_id_val) == FL_VALUE_TYPE_STRING) {
+                  const char *value_id = fl_value_get_string(value_id_val);
+                  // Look up the OrtValue in the global map
+                  auto ort_value_it = g_ort_values.find(value_id);
+                  if (ort_value_it != g_ort_values.end()) {
+                    // Create a copy of the OrtValue
+                    ort_inputs.push_back(ort_value_it->second.Clone());
+                    input_names_cstr.push_back(name.c_str());
+                    continue;
+                  } else {
+                    // OrtValue not found
+                    response = FL_METHOD_RESPONSE(fl_method_error_response_new(
+                        "INVALID_ORT_VALUE", ("OrtValue with ID " + std::string(value_id) + " not found").c_str(),
+                        nullptr));
+                    return;
+                  }
+                }
               }
 
-              // Convert to float vector and persist it in the container
-              std::vector<float> data = fl_value_to_vector<float>(it->second);
-              input_buffers.push_back(std::move(data));
-              auto &buffer = input_buffers.back();
+              // Handle regular list input if not an OrtValue
+              if (fl_value_get_type(it->second) == FL_VALUE_TYPE_LIST) {
+                // Get shape if provided
+                std::vector<int64_t> shape;
+                auto shape_it = inputs_map.find(name + "_shape");
+                if (shape_it != inputs_map.end() && fl_value_get_type(shape_it->second) == FL_VALUE_TYPE_LIST) {
+                  shape = fl_value_to_vector<int64_t>(shape_it->second);
+                } else {
+                  // Default shape: just a single dimension with the list length
+                  shape.push_back(fl_value_get_length(it->second));
+                }
 
-              // Create tensor
-              Ort::MemoryInfo memory_info =
-                  Ort::MemoryInfo::CreateCpu(OrtAllocatorType::OrtArenaAllocator, OrtMemType::OrtMemTypeDefault);
+                // Convert to float vector and persist it in the container
+                std::vector<float> data = fl_value_to_vector<float>(it->second);
+                input_buffers.push_back(std::move(data));
+                auto &buffer = input_buffers.back();
 
-              Ort::Value tensor = Ort::Value::CreateTensor<float>(memory_info, buffer.data(), buffer.size(),
-                                                                  shape.data(), shape.size());
+                // Create tensor
+                Ort::MemoryInfo memory_info =
+                    Ort::MemoryInfo::CreateCpu(OrtAllocatorType::OrtArenaAllocator, OrtMemType::OrtMemTypeDefault);
 
-              ort_inputs.push_back(std::move(tensor));
-              input_names_cstr.push_back(name.c_str());
+                Ort::Value tensor = Ort::Value::CreateTensor<float>(memory_info, buffer.data(), buffer.size(),
+                                                                    shape.data(), shape.size());
+
+                ort_inputs.push_back(std::move(tensor));
+                input_names_cstr.push_back(name.c_str());
+              }
             }
           }
 

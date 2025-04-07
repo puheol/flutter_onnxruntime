@@ -35,11 +35,13 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
 
     // Return mock output
     return Future.value({
-      'output1': [1.0, 2.0, 3.0],
-      'output2': [
-        [4.0, 5.0],
-        [6.0, 7.0],
-      ],
+      'outputs': {
+        'output1': [1.0, 2.0, 3.0],
+        'output2': [
+          [4.0, 5.0],
+          [6.0, 7.0],
+        ],
+      },
     });
   }
 
@@ -95,6 +97,29 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
       },
     ]);
   }
+
+  @override
+  Future<Map<String, dynamic>> createOrtValue(
+    String sourceType,
+    dynamic data,
+    List<int> shape,
+    String targetType,
+    String device,
+  ) {
+    return Future.value({'valueId': 'test_value_id', 'dataType': targetType, 'shape': shape, 'device': device});
+  }
+
+  @override
+  Future<Map<String, dynamic>> convertOrtValue(String valueId, String targetType) => Future.value({});
+
+  @override
+  Future<Map<String, dynamic>> getOrtValueData(String valueId, String dataType) => Future.value({});
+
+  @override
+  Future<Map<String, dynamic>> moveOrtValueToDevice(String valueId, String targetDevice) => Future.value({});
+
+  @override
+  Future<void> releaseOrtValue(String valueId) => Future.value();
 }
 
 void main() {
@@ -162,10 +187,39 @@ void main() {
       });
 
       expect(outputs, isNotNull);
-      expect(outputs.keys, containsAll(['output1', 'output2']));
-      expect(outputs['output1'], [1.0, 2.0, 3.0]);
-      expect(outputs['output2'], isA<List>());
-      expect(outputs['output2'][0], isA<List>());
+      expect(outputs.keys, contains('outputs'));
+      expect(outputs['outputs'], isA<Map<String, dynamic>>());
+      expect(outputs['outputs'].keys, containsAll(['output1', 'output2']));
+      expect(outputs['outputs']['output1'], [1.0, 2.0, 3.0]);
+      expect(outputs['outputs']['output2'], isA<List>());
+      expect(outputs['outputs']['output2'][0], isA<List>());
+    });
+
+    test('run processes OrtValue inputs correctly', () async {
+      // Create a mock OrtValue
+      final mockOrtValue = OrtValue.fromMap({
+        'valueId': 'test_value_id',
+        'dataType': 'float32',
+        'shape': [2, 2],
+        'device': 'cpu',
+      });
+
+      // Use the OrtValue in session.run()
+      await session.run({
+        'input1': mockOrtValue,
+        'input2': [4, 5, 6],
+        'input2_shape': [1, 3],
+      });
+
+      // Verify the processed inputs
+      expect(mockPlatform.lastInputsForRun, isNotNull);
+      expect(mockPlatform.lastInputsForRun!['input1'], isA<Map<String, dynamic>>());
+      expect(mockPlatform.lastInputsForRun!['input1']['valueId'], 'test_value_id');
+      expect(mockPlatform.lastInputsForRun!['input1_shape'], [2, 2]);
+
+      // Check that other inputs are still processed normally
+      expect(mockPlatform.lastInputsForRun!['input2'], [4, 5, 6]);
+      expect(mockPlatform.lastInputsForRun!['input2_shape'], [1, 3]);
     });
   });
 

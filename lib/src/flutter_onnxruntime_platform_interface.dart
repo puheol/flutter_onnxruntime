@@ -22,6 +22,7 @@ abstract class FlutterOnnxruntimePlatform extends PlatformInterface {
     _instance = instance;
   }
 
+  /// Get the platform version
   Future<String?> getPlatformVersion() {
     throw UnimplementedError('platformVersion() has not been implemented.');
   }
@@ -31,6 +32,11 @@ abstract class FlutterOnnxruntimePlatform extends PlatformInterface {
     throw UnimplementedError('createSession() has not been implemented.');
   }
 
+  /// Run inference on a session
+  ///
+  /// [sessionId] is the ID of the session to run inference on
+  /// [inputs] is a map of input names to input values
+  /// [runOptions] is an optional map of run options
   Future<Map<String, dynamic>> runInference(
     String sessionId,
     Map<String, dynamic> inputs, {
@@ -39,19 +45,88 @@ abstract class FlutterOnnxruntimePlatform extends PlatformInterface {
     throw UnimplementedError('runInference() has not been implemented.');
   }
 
+  /// Close a session
+  ///
+  /// [sessionId] is the ID of the session to close
   Future<void> closeSession(String sessionId) {
     throw UnimplementedError('closeSession() has not been implemented.');
   }
 
+  /// Get metadata about the model
+  ///
+  /// [sessionId] is the ID of the session to get metadata from
+  ///
+  /// Returns information about the model such as producer name, graph name,
+  /// domain, description, version, and custom metadata.
   Future<Map<String, dynamic>> getMetadata(String sessionId) {
     throw UnimplementedError('getMetadata() has not been implemented.');
   }
 
+  /// Get input info about the model
+  ///
+  /// [sessionId] is the ID of the session to get input info from
+  ///
+  /// Returns information about the model's inputs such as name, type, and shape.
   Future<List<Map<String, dynamic>>> getInputInfo(String sessionId) {
     throw UnimplementedError('getInputInfo() has not been implemented.');
   }
 
+  /// Get output info about the model
+  ///
+  /// [sessionId] is the ID of the session to get output info from
+  ///
+  /// Returns information about the model's outputs such as name, type, and shape.
   Future<List<Map<String, dynamic>>> getOutputInfo(String sessionId) {
     throw UnimplementedError('getOutputInfo() has not been implemented.');
+  }
+
+  // OrtValue operations
+
+  /// Creates an OrtValue from data
+  ///
+  /// [sourceType] is the source data type (e.g., 'float32', 'int32')
+  /// [data] is the data to create the tensor from
+  /// [shape] is the shape of the tensor
+  /// [targetType] is the target data type (e.g., 'float32', 'float16')
+  /// [device] is the target device (e.g., 'cpu', 'cuda')
+  Future<Map<String, dynamic>> createOrtValue(
+    String sourceType,
+    dynamic data,
+    List<int> shape,
+    String targetType,
+    String device,
+  ) {
+    throw UnimplementedError('createOrtValue() has not been implemented.');
+  }
+
+  /// Converts an OrtValue to a different data type
+  ///
+  /// [valueId] is the ID of the OrtValue to convert
+  /// [targetType] is the target data type (e.g., 'float32', 'float16')
+  Future<Map<String, dynamic>> convertOrtValue(String valueId, String targetType) {
+    throw UnimplementedError('convertOrtValue() has not been implemented.');
+  }
+
+  /// Moves an OrtValue to a different device
+  ///
+  /// [valueId] is the ID of the OrtValue to move
+  /// [targetDevice] is the target device (e.g., 'cpu', 'cuda')
+  Future<Map<String, dynamic>> moveOrtValueToDevice(String valueId, String targetDevice) {
+    throw UnimplementedError('moveOrtValueToDevice() has not been implemented.');
+  }
+
+  /// Gets the data from an OrtValue
+  ///
+  /// [valueId] is the ID of the OrtValue to get data from
+  /// [dataType] is the requested data type (e.g., 'float32', 'int32')
+  Future<Map<String, dynamic>> getOrtValueData(String valueId, String dataType) {
+    throw UnimplementedError('getOrtValueData() has not been implemented.');
+  }
+
+  /// Releases native resources associated with an OrtValue
+  ///
+  /// [valueId] is the ID of the OrtValue to release
+  Future<void> releaseOrtValue(String valueId) {
+    throw UnimplementedError('releaseOrtValue() has not been implemented.');
   }
 }

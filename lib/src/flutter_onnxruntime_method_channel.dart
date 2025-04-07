@@ -70,6 +70,58 @@ class MethodChannelFlutterOnnxruntime extends FlutterOnnxruntimePlatform {
     return result?.map((item) => _convertMapToStringDynamic(item as Map<Object?, Object?>)).toList() ?? [];
   }
 
+  // OrtValue operations
+
+  @override
+  Future<Map<String, dynamic>> createOrtValue(
+    String sourceType,
+    dynamic data,
+    List<int> shape,
+    String targetType,
+    String device,
+  ) async {
+    final result = await methodChannel.invokeMethod<Map<Object?, Object?>>('createOrtValue', {
+      'sourceType': sourceType,
+      'data': data,
+      'shape': shape,
+      'targetType': targetType,
+      'device': device,
+    });
+    return _convertMapToStringDynamic(result ?? {});
+  }
+
+  @override
+  Future<Map<String, dynamic>> convertOrtValue(String valueId, String targetType) async {
+    final result = await methodChannel.invokeMethod<Map<Object?, Object?>>('convertOrtValue', {
+      'valueId': valueId,
+      'targetType': targetType,
+    });
+    return _convertMapToStringDynamic(result ?? {});
+  }
+
+  @override
+  Future<Map<String, dynamic>> moveOrtValueToDevice(String valueId, String targetDevice) async {
+    final result = await methodChannel.invokeMethod<Map<Object?, Object?>>('moveOrtValueToDevice', {
+      'valueId': valueId,
+      'targetDevice': targetDevice,
+    });
+    return _convertMapToStringDynamic(result ?? {});
+  }
+
+  @override
+  Future<Map<String, dynamic>> getOrtValueData(String valueId, String dataType) async {
+    final result = await methodChannel.invokeMethod<Map<Object?, Object?>>('getOrtValueData', {
+      'valueId': valueId,
+      'dataType': dataType,
+    });
+    return _convertMapToStringDynamic(result ?? {});
+  }
+
+  @override
+  Future<void> releaseOrtValue(String valueId) async {
+    await methodChannel.invokeMethod<void>('releaseOrtValue', {'valueId': valueId});
+  }
+
   Map<String, dynamic> _convertMapToStringDynamic(Map<Object?, Object?> map) {
     return map.map((key, value) => MapEntry(key.toString(), value));
   }
