@@ -1,4 +1,5 @@
 import 'package:flutter_onnxruntime/src/flutter_onnxruntime_platform_interface.dart';
+import 'package:flutter_onnxruntime/src/ort_model_metadata.dart';
 
 class OrtSession {
   final String id;
@@ -17,12 +18,51 @@ class OrtSession {
     );
   }
 
+  /// Run inference on the session
+  ///
+  /// [inputs] is a map of input names to input values
+  /// [options] is an optional map of run options
+  ///
+  /// `inputs` should be a map of input names to input values. Input shape could be provided with `_shape` suffix.
+  ///
+  /// Example:
+  /// ```dart
+  /// final inputs = {
+  ///   'input_name': [[1, 2], [3, 4]],
+  ///   'input_name_shape': [2, 2],
+  /// };
+  /// ```
   Future<Map<String, dynamic>> run(Map<String, dynamic> inputs, {OrtRunOptions? options}) async {
     return await FlutterOnnxruntimePlatform.instance.runInference(id, inputs, runOptions: options?.toMap() ?? {});
   }
 
   Future<void> close() async {
     await FlutterOnnxruntimePlatform.instance.closeSession(id);
+  }
+
+  /// Get metadata about the model
+  ///
+  /// Returns information about the model such as producer name, graph name,
+  /// domain, description, version, and custom metadata.
+  Future<OrtModelMetadata> getMetadata() async {
+    final metadataMap = await FlutterOnnxruntimePlatform.instance.getMetadata(id);
+    return OrtModelMetadata.fromMap(metadataMap);
+  }
+
+  /// Get input info about the model
+  ///
+  /// Returns information about the model's inputs such as name, type, and shape.
+  Future<List<Map<String, dynamic>>> getInputInfo() async {
+    final inputInfoMap = await FlutterOnnxruntimePlatform.instance.getInputInfo(id);
+    return inputInfoMap.map((info) => Map<String, dynamic>.from(info)).toList();
+  }
+
+  /// Get output info about the model
+  ///
+  /// Returns information about the model's outputs such as name, type, and shape.
+  Future<List<Map<String, dynamic>>> getOutputInfo() async {
+    final outputInfoMap = await FlutterOnnxruntimePlatform.instance.getOutputInfo(id);
+    return outputInfoMap.map((info) => Map<String, dynamic>.from(info)).toList();
   }
 }
 

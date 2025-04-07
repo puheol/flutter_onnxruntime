@@ -18,7 +18,7 @@ abstract class FlutterOnnxruntimePlatform extends PlatformInterface {
   /// platform-specific class that extends [FlutterOnnxruntimePlatform] when
   /// they register themselves.
   static set instance(FlutterOnnxruntimePlatform instance) {
-    PlatformInterface.verifyToken(instance, _token);
+    PlatformInterface.verify(instance, _token);
     _instance = instance;
   }
 
@@ -41,5 +41,17 @@ abstract class FlutterOnnxruntimePlatform extends PlatformInterface {
 
   Future<void> closeSession(String sessionId) {
     throw UnimplementedError('closeSession() has not been implemented.');
+  }
+
+  Future<Map<String, dynamic>> getMetadata(String sessionId) {
+    throw UnimplementedError('getMetadata() has not been implemented.');
+  }
+
+  Future<List<Map<String, dynamic>>> getInputInfo(String sessionId) {
+    throw UnimplementedError('getInputInfo() has not been implemented.');
+  }
+
+  Future<List<Map<String, dynamic>>> getOutputInfo(String sessionId) {
+    throw UnimplementedError('getOutputInfo() has not been implemented.');
   }
 }

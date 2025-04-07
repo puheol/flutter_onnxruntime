@@ -21,10 +21,11 @@ import java.util.concurrent.ConcurrentHashMap
 
 /** FlutterOnnxruntimePlugin */
 class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
-    // / The MethodChannel that will the communication between Flutter and native Android
-    // /
-    // / This local reference serves to register the plugin with the Flutter Engine and unregister it
-    // / when the Flutter Engine is detached from the Activity
+    /** The MethodChannel that will the communication between Flutter and native Android
+
+     This local reference serves to register the plugin with the Flutter Engine and unregister it
+     when the Flutter Engine is detached from the Activity
+     */
     private lateinit var channel: MethodChannel
     private lateinit var ortEnvironment: OrtEnvironment
     private val sessions = ConcurrentHashMap<String, OrtSession>()
@@ -309,6 +310,136 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                     sessions.remove(sessionId)
 
                     result.success(null)
+                } catch (e: Exception) {
+                    result.error("GENERIC_ERROR", e.message, e.stackTraceToString())
+                }
+            }
+            /** Get metadata about the model
+
+             Returns metadata about the model such as producer name, graph name, domain, description, version, and custom metadata.
+
+             Reference: https://onnxruntime.ai/docs/api/java/ai/onnxruntime/OrtSession.html#getMetadata()
+             */
+            "getMetadata" -> {
+                try {
+                    val sessionId = call.argument<String>("sessionId")
+
+                    if (sessionId == null || !sessions.containsKey(sessionId)) {
+                        result.error("INVALID_SESSION", "Session not found", null)
+                        return
+                    }
+
+                    val session = sessions[sessionId]!!
+                    val metadata = session.getMetadata()
+
+                    // Convert custom metadata map to a standard Map
+                    val customMetadataMap = metadata.customMetadata
+
+                    val metadataMap =
+                        mapOf(
+                            "producerName" to metadata.producerName,
+                            "graphName" to metadata.graphName,
+                            "domain" to metadata.domain,
+                            "description" to metadata.description,
+                            "version" to metadata.version,
+                            "customMetadataMap" to customMetadataMap,
+                        )
+
+                    result.success(metadataMap)
+                } catch (e: Exception) {
+                    result.error("GENERIC_ERROR", e.message, e.stackTraceToString())
+                }
+            }
+            /** Get input info about the model
+
+             Returns information about the model's inputs such as name, type, and shape.
+
+             Reference: https://onnxruntime.ai/docs/api/java/ai/onnxruntime/OrtSession.html#getInputInfo()
+             */
+            "getInputInfo" -> {
+                try {
+                    val sessionId = call.argument<String>("sessionId")
+
+                    if (sessionId == null || !sessions.containsKey(sessionId)) {
+                        result.error("INVALID_SESSION", "Session not found", null)
+                        return
+                    }
+
+                    val session = sessions[sessionId]!!
+                    val nodeInfoList = ArrayList<Map<String, Any>>()
+
+                    // Get all input info as Map<String, NodeInfo>
+                    val inputInfoMap = session.getInputInfo()
+
+                    // Convert to a list of maps for Flutter
+                    for ((name, nodeInfo) in inputInfoMap) {
+                        val infoMap = HashMap<String, Any>()
+                        infoMap["name"] = name
+
+                        // Get the info object and check its type
+                        val info = nodeInfo.info
+
+                        // Only extract shape if it's a TensorInfo
+                        if (info is ai.onnxruntime.TensorInfo) {
+                            val shape = info.shape
+                            infoMap["shape"] = shape.toList()
+                            infoMap["type"] = info.type.toString()
+                        } else {
+                            // For non-tensor types, provide an empty shape
+                            infoMap["shape"] = emptyList<Long>()
+                        }
+
+                        nodeInfoList.add(infoMap)
+                    }
+
+                    result.success(nodeInfoList)
+                } catch (e: Exception) {
+                    result.error("GENERIC_ERROR", e.message, e.stackTraceToString())
+                }
+            }
+            /** Get output info about the model
+
+             Returns information about the model's outputs such as name, type, and shape.
+
+             Reference: https://onnxruntime.ai/docs/api/java/ai/onnxruntime/OrtSession.html#getOutputInfo()
+             */
+            "getOutputInfo" -> {
+                try {
+                    val sessionId = call.argument<String>("sessionId")
+
+                    if (sessionId == null || !sessions.containsKey(sessionId)) {
+                        result.error("INVALID_SESSION", "Session not found", null)
+                        return
+                    }
+
+                    val session = sessions[sessionId]!!
+                    val nodeInfoList = ArrayList<Map<String, Any>>()
+
+                    // Get all output info as Map<String, NodeInfo>
+                    val outputInfoMap = session.getOutputInfo()
+
+                    // Convert to a list of maps for Flutter
+                    for ((name, nodeInfo) in outputInfoMap) {
+                        val infoMap = HashMap<String, Any>()
+                        infoMap["name"] = name
+
+                        // Get the info object and check its type
+                        val info = nodeInfo.info
+
+                        // Only extract shape if it's a TensorInfo
+                        if (info is ai.onnxruntime.TensorInfo) {
+                            val shape = info.shape
+                            infoMap["shape"] = shape.toList()
+                            infoMap["type"] = info.type.toString()
+                        } else {
+                            // For non-tensor types, provide an empty shape
+                            infoMap["shape"] = emptyList<Long>()
+                        }
+
+                        nodeInfoList.add(infoMap)
+                    }
+
+                    result.success(nodeInfoList)
                 } catch (e: Exception) {
                     result.error("GENERIC_ERROR", e.message, e.stackTraceToString())
                 }

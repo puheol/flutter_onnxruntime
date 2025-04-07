@@ -1,15 +1,11 @@
 #!/bin/sh
 
+# Flag to track if any formatting changes were made
+FORMATTING_CHANGES_DETECTED=0
+
 # Run Dart format check
 echo "Running Dart format check..."
 dart format --line-length 120 $(find . -name "*.dart" -not -path "./lib/l10n/generated/*")
-
-# Check for modified files after formatting
-if ! git diff --quiet; then
-  echo "Dart format changes detected. Please add the formatted files to your commit:"
-  git diff --name-only
-  exit 1  # Exit to allow user to add changes
-fi
 
 # Check for Kotlin files (Android)
 if [ -d "android" ]; then
@@ -22,61 +18,126 @@ if [ -d "android" ]; then
   else
     # Run ktlint with format flag
     ktlint --format "android/**/*.kt" "android/**/*.kts"
-    
-    # Check for modified files after formatting
-    if ! git diff --quiet; then
-      echo "Kotlin format changes detected. Please add the formatted files to your commit:"
-      git diff --name-only
-      exit 1  # Exit to allow user to add changes
-    fi
   fi
 fi
 
-# Check for Swift files (iOS)
-if [ -d "ios" ]; then
-  echo "Running Swift auto-formatting..."
+# Function to run SwiftLint on a directory
+run_swiftlint_for_directory() {
+  dir_name=$1
+  platform_name=$2
   
-  # Improved check for swiftlint installation
+  echo "Running Swift auto-formatting for $platform_name..."
+  
+  # Check for swiftlint installation
   if ! swiftlint version &> /dev/null; then
     echo "swiftlint not found or not working. Please install it with 'brew install swiftlint'"
-    echo "Skipping Swift auto-formatting."
-  else
-    # Run swiftlint with autocorrect first
-    cd ios
-    swiftlint --config .swiftlint.yml --autocorrect
-    
-    # Check for modified files after auto-formatting
-    if ! git diff --quiet; then
-      echo "Swift format changes detected. Please add the formatted files to your commit:"
-      git diff --name-only
-      exit 1  # Exit to allow user to add changes
-    fi
-    
-    # Now run swiftlint again without autocorrect to check for warnings
-    echo "Checking for SwiftLint warnings..."
-    swiftlint --config .swiftlint.yml
-    SWIFTLINT_RESULT=$?
-    
-    # Check for SwiftLint errors or warnings
-    if [ $SWIFTLINT_RESULT -ne 0 ]; then
-      echo "SwiftLint detected warnings or errors that cannot be automatically fixed. Please address these issues before committing."
-      exit 1
-    fi
+    echo "Skipping Swift auto-formatting for $platform_name."
+    return 0
+  fi
+  
+  # Run swiftlint with autocorrect first
+  cd "$dir_name"
+  swiftlint --config .swiftlint.yml --autocorrect
+  
+  # Now run swiftlint again without autocorrect to check for warnings
+  echo "Checking for SwiftLint warnings in $platform_name..."
+  swiftlint --config .swiftlint.yml
+  SWIFTLINT_RESULT=$?
+  
+  # Check for SwiftLint errors or warnings
+  if [ $SWIFTLINT_RESULT -ne 0 ]; then
+    echo "SwiftLint detected warnings or errors in $platform_name that cannot be automatically fixed. Please address these issues before committing."
     cd ..
+    return 1  # Return with error
+  fi
+  
+  cd ..
+  return 0  # Return success
+}
+
+# Check for Swift files (iOS)
+SWIFT_LINT_FAILED=0
+if [ -d "ios" ]; then
+  run_swiftlint_for_directory "ios" "iOS"
+  if [ $? -ne 0 ]; then
+    SWIFT_LINT_FAILED=1
   fi
 fi
 
+# Check for Swift files (macOS)
+if [ -d "macos" ]; then
+  run_swiftlint_for_directory "macos" "macOS"
+  if [ $? -ne 0 ]; then
+    SWIFT_LINT_FAILED=1
+  fi
+fi
+
+# Check for C++ files
+CPP_LINT_FAILED=0
+if [ -d "cpp" ] || find . -name "*.cpp" -o -name "*.h" -o -name "*.cc" -o -name "*.hpp" | grep -q .; then
+  echo "Running C++ auto-formatting with clang-format..."
+  
+  # Check for clang-format installation
+  if ! command -v clang-format > /dev/null 2>&1; then
+    echo "clang-format not found. Please install it with: 'sudo apt-get install clang-format' or equivalent for your OS"
+    echo "Skipping C++ auto-formatting."
+  else
+    # Find C++ files, excluding platform-specific, example, and build directories
+    CPP_FILES=$(find . -path ./cpp -prune -o \( -name "*.cpp" -o -name "*.h" -o -name "*.cc" -o -name "*.hpp" \) \
+      -not -path "./build/*" \
+      -not -path "./.dart_tool/*" \
+      -not -path "./ios/*" \
+      -not -path "./macos/*" \
+      -not -path "./windows/*" \
+      -not -path "./android/*" \
+      -not -path "./example/*" \
+      -not -path "./onnxruntime_download/*" -print)
+
+    if [ -n "$CPP_FILES" ]; then
+      # Run clang-format on the found files
+      echo "$CPP_FILES" | xargs clang-format -i --style=file
+      
+      if [ $? -ne 0 ]; then
+        echo "C++ auto-formatting failed. Please check the output above."
+        CPP_LINT_FAILED=1
+      else
+        # Check if any files were modified by clang-format
+        if ! git diff --quiet; then
+          echo "C++ files were automatically formatted. Please add the formatted files to your commit:"
+          git diff --name-only
+          FORMATTING_CHANGES_DETECTED=1
+        fi
+      fi
+    else
+      echo "No general C++ files found to format."
+    fi
+  fi
+fi
 
 # Run Flutter analyze
 echo "Running Flutter analyze..."
 flutter analyze
+FLUTTER_ANALYZE_RESULT=$?
 
-# If analyze failed, prevent the commit
-if [ $? -ne 0 ]; then
-  echo "Flutter analyze failed. Please fix the issues and try committing again."
+# Now check for any modified files after all formatting has been done
+if ! git diff --quiet; then
+  echo "Formatting changes detected. Please add the formatted files to your commit:"
+  git diff --name-only
+  FORMATTING_CHANGES_DETECTED=1
+fi
+
+# Check if any linting failed
+if [ $SWIFT_LINT_FAILED -ne 0 ] || [ $CPP_LINT_FAILED -ne 0 ] || [ $FLUTTER_ANALYZE_RESULT -ne 0 ] || [ $FORMATTING_CHANGES_DETECTED -ne 0 ]; then
+  if [ $FORMATTING_CHANGES_DETECTED -ne 0 ]; then
+    echo "Please add the formatted files to your commit."
+  fi
+  if [ $SWIFT_LINT_FAILED -ne 0 ] || [ $CPP_LINT_FAILED -ne 0 ] || [ $FLUTTER_ANALYZE_RESULT -ne 0 ]; then
+    echo "Please fix the linting issues before committing."
+  fi
   exit 1
 fi
 
 # If we got here, all checks passed
 echo "All format checks and analyses passed."
 exit 0
+

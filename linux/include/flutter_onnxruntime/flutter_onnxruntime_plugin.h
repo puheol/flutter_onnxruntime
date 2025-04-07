@@ -18,9 +18,8 @@ typedef struct {
 
 FLUTTER_PLUGIN_EXPORT GType flutter_onnxruntime_plugin_get_type();
 
-FLUTTER_PLUGIN_EXPORT void flutter_onnxruntime_plugin_register_with_registrar(
-    FlPluginRegistrar* registrar);
+FLUTTER_PLUGIN_EXPORT void flutter_onnxruntime_plugin_register_with_registrar(FlPluginRegistrar *registrar);
 
 G_END_DECLS
 
-#endif  // FLUTTER_PLUGIN_FLUTTER_ONNXRUNTIME_PLUGIN_H_
+#endif // FLUTTER_PLUGIN_FLUTTER_ONNXRUNTIME_PLUGIN_H_

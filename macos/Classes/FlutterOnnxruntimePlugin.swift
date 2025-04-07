@@ -1,5 +1,5 @@
-import Flutter
-import UIKit
+import Cocoa
+import FlutterMacOS
 import onnxruntime_objc
 import Foundation
 
@@ -12,7 +12,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
   private var env: ORTEnv?
 
   public static func register(with registrar: FlutterPluginRegistrar) {
-    let channel = FlutterMethodChannel(name: "flutter_onnxruntime", binaryMessenger: registrar.messenger())
+    let channel = FlutterMethodChannel(name: "flutter_onnxruntime", binaryMessenger: registrar.messenger)
     let instance = FlutterOnnxruntimePlugin()
     registrar.addMethodCallDelegate(instance, channel: channel)
   }
@@ -30,7 +30,8 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
 
     switch call.method {
     case "getPlatformVersion":
-      result("iOS " + UIDevice.current.systemVersion)
+      // Use macOS-specific system version info
+      result("macOS " + ProcessInfo.processInfo.operatingSystemVersionString)
 
     /** Create a new session
 
@@ -137,7 +138,9 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
       // Create an input map for the ORT session
       let ortInputs = try createORTValueInputs(inputs: inputs, session: session)
 
+      // Get output names
       let outputNames = try session.outputNames()
+
       // Run inference
       let outputs = try session.run(withInputs: ortInputs, outputNames: Set(outputNames), runOptions: nil)
 
@@ -171,30 +174,12 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
       return
     }
 
-    guard let session = sessions[sessionId] else {
+    guard sessions[sessionId] != nil else {
       result(FlutterError(code: "INVALID_SESSION", message: "Session not found", details: nil))
       return
     }
 
-    // Note: 06/04/2025 on v1.21.0 session.getMetadata() is not supported in onnxruntime-objc
-    // do {
-    //   let modelMetadata = try session.getMetadata()
-
-    //   let metadataMap: [String: Any] = [
-    //     "producerName": modelMetadata.producerName ?? "",
-    //     "graphName": modelMetadata.graphName ?? "",
-    //     "domain": modelMetadata.domain ?? "",
-    //     "description": modelMetadata.description ?? "",
-    //     "version": modelMetadata.version,
-    //     "customMetadataMap": modelMetadata.customMetadata ?? [:]
-    //   ]
-
-    //   result(metadataMap)
-    // } catch {
-    //   result(FlutterError(code: "METADATA_ERROR", message: error.localizedDescription, details: nil))
-    // }
-
-    // return empty map
+    // Return empty map as metadata functionality may not be available
     result([:])
   }
 
@@ -214,8 +199,6 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
       var nodeInfoList: [[String: Any]] = []
 
       let inputNames = try session.inputNames()
-      // Note: 06/04/2025 on v1.21.0 session.getInputInfo() is not supported in onnxruntime-objc
-      // let inputInfoMap = try session.getInputInfo()
 
       for name in inputNames {
         let infoMap: [String: Any] = ["name": name]
@@ -244,8 +227,6 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
       var nodeInfoList: [[String: Any]] = []
 
       let outputNames = try session.outputNames()
-      // Note: 06/04/2025 on v1.21.0 session.getOutputInfo() is not supported in onnxruntime-objc
-      // let outputInfoMap = try session.getOutputInfo()
 
       for name in outputNames {
         let infoMap: [String: Any] = ["name": name]
@@ -292,8 +273,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
         let tensor = try ORTValue(tensorData: data, elementType: .int32, shape: shape)
         ortInputs[name] = tensor
       } else if let doubleArray = value as? [Double] {
-        // ORTTensorElementDataType does not support double so we convert to float
-        // reference: https://onnxruntime.ai/docs/api/objectivec/Enums/ORTTensorElementDataType.html
+        // Convert double to float as ORTTensorElementDataType may not support double
         let floatArray = doubleArray.map { Float($0) }
         let data = NSMutableData(bytes: floatArray, length: floatArray.count * MemoryLayout<Float>.stride)
         let tensor = try ORTValue(tensorData: data, elementType: .float, shape: shape)
@@ -319,7 +299,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
     for (name, value) in outputs {
       if let tensorInfo = try? value.tensorTypeAndShapeInfo() {
         // Get shape information
-        let shape = try tensorInfo.shape.map { Int($0) }
+        let shape = tensorInfo.shape.map { Int(truncating: $0) }
         flutterOutputs["\(name)_shape"] = shape
 
         // Calculate total element count
