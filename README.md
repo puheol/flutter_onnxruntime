@@ -20,6 +20,15 @@ This onnxruntime plugin uses native wrappers to run `onnxruntime` on different p
 
 ## Getting Started
 
+### Installation
+
+Add the following dependency to your `pubspec.yaml`:
+
+```yaml
+dependencies:
+  flutter_onnxruntime: ^1.0.0
+```
+
 To get started with the Flutter ONNX Runtime plugin, see the [API Usage Guide](docs/api_usage.md).
 
 ## Component Overview
