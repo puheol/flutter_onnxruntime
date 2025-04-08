@@ -20,7 +20,32 @@ This onnxruntime plugin uses native wrappers to run `onnxruntime` on different p
 
 ## Getting Started
 
-## Know issues
+To get started with the Flutter ONNX Runtime plugin, see the [API Usage Guide](docs/api_usage.md).
+
+## Component Overview
+
+| Component | Description |
+|-----------|-------------|
+| OnnxRuntime | Main entry point for creating sessions and configuring global options |
+| OrtSession | Represents a loaded ML model for running inference |
+| OrtValue | Represents tensor data for inputs and outputs |
+| OrtSessionOptions | Configuration options for session creation |
+| OrtRunOptions | Configuration options for inference execution |
+
+## Implementation Status
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| CPU Inference | ✅ Complete | Supported on all platforms |
+| GPU Inference | ⚠️ Partial | Currently limited to specific platforms |
+| Data Type Conversion | ✅ Complete | All major numeric types supported |
+| Memory Management | ✅ Complete | Automatic and manual cleanup options |
+| Model Metadata | ✅ Complete | Full access to model information (not available on iOS and macOS) |
+| FP16 support | 🚧 Ongoing | In active development |
+| Tensor manipulation | ❌ Planned | Scheduled for future release |
+
+
+## Troubleshooting
 
 ### iOS
 * Target minimum version: iOS 16
@@ -44,51 +69,10 @@ This onnxruntime plugin uses native wrappers to run `onnxruntime` on different p
     Then change the "Minimum Deployments" to 14.0.
 
 ### Linux
-* The plugin now supports Linux platforms through a dedicated C++ implementation.
 * When running with ONNX Runtime 1.21.0, you may see reference counting warnings related to FlValue objects. These don't prevent the app from running but may be addressed in future updates.
-* For Linux-specific setup and troubleshooting, see our [detailed Linux setup guide](docs/linux/LINUX_SETUP.md).
 
 ## Contributing
-
-We welcome contributions to improve the flutter_onnxruntime plugin! Whether you're fixing bugs, adding features, or improving documentation, your help is appreciated.
-
-### Setting Up Development Environment
-
-#### Pre-commit Setup
-We use a pre-commit hook to ensure code quality and consistency. Follow these steps to set it up:
-
-1. Install required tools:
-   - Dart SDK and Flutter (required for all platforms)
-   - **ktlint** (for Android Kotlin formatting):
-     ```
-     curl -sSLO https://github.com/pinterest/ktlint/releases/download/1.0.0/ktlint && chmod a+x ktlint && sudo mv ktlint /usr/local/bin/
-     ```
-   - **SwiftLint** (for iOS/macOS Swift formatting, macOS only):
-     ```
-     brew install swiftlint
-     ```
-   - **clang-format** (for C++ formatting):
-     ```
-     # Ubuntu/Debian
-     sudo apt-get install clang-format
-     
-     # macOS
-     brew install clang-format
-     ```
-
-2. Copy the pre-commit hook to your local Git hooks directory:
-   ```
-   cp hooks/pre-commit .git/hooks/
-   chmod +x .git/hooks/pre-commit
-   ```
-
-The pre-commit hook will:
-- Format Dart code
-- Format Kotlin code (Android)
-- Format Swift code (iOS/macOS)
-- Format C++ code
-- Run Flutter analyze
-- Prevent commits with formatting errors
+Contributions to the Flutter ONNX Runtime plugin are welcome. Please see the [contributing.md](docs/contributing.md) file for more information.
 
 #### Documentation
 * For detailed Linux setup and troubleshooting:
