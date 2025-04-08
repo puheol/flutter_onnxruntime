@@ -1,5 +1,6 @@
 package com.masicai.flutteronnxruntime
 
+import ai.onnxruntime.OnnxJavaType
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OnnxValue
 import ai.onnxruntime.OrtEnvironment
@@ -17,8 +18,101 @@ import java.nio.ByteBuffer
 import java.nio.FloatBuffer
 import java.nio.IntBuffer
 import java.nio.LongBuffer
+import java.nio.ShortBuffer
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+
+/**
+ * Utility class for float16 conversions
+ *
+ * Implementation based on the MLAS approach mentioned in OnnxRuntime
+ *
+ * Reference: https://github.com/microsoft/onnxruntime/commit/a8e776b78bfa0d0b1fec8b34b4545d91c2a9d175
+ */
+class Float16Utils {
+    companion object {
+        // Constants for float16 <-> float32 conversion
+        private const val FLOAT16_EXPONENT_BIAS = 15
+        private const val FLOAT32_EXPONENT_BIAS = 127
+        private const val FLOAT16_SIGN_MASK = 0x8000
+        private const val FLOAT16_EXPONENT_MASK = 0x7C00
+        private const val FLOAT16_MANTISSA_MASK = 0x03FF
+
+        /**
+         * Convert float32 to float16
+         */
+        fun floatToFloat16(value: Float): Short {
+            val floatBits = java.lang.Float.floatToIntBits(value)
+
+            // Extract sign, exponent, and mantissa from float32
+            val sign = (floatBits ushr 31) and 0x1
+            val exponent = ((floatBits ushr 23) and 0xFF) - FLOAT32_EXPONENT_BIAS + FLOAT16_EXPONENT_BIAS
+            val mantissa = floatBits and 0x7FFFFF
+
+            // Handle special cases
+            if (exponent <= 0) {
+                // Zero or denormal
+                return (sign shl 15).toShort()
+            } else if (exponent >= 31) {
+                // Infinity or NaN
+                if (mantissa == 0) {
+                    // Infinity
+                    return ((sign shl 15) or FLOAT16_EXPONENT_MASK).toShort()
+                } else {
+                    // NaN
+                    return ((sign shl 15) or FLOAT16_EXPONENT_MASK or 0x200).toShort()
+                }
+            }
+
+            // Regular numbers
+            val float16Bits = (sign shl 15) or (exponent shl 10) or (mantissa ushr 13)
+            return float16Bits.toShort()
+        }
+
+        /**
+         * Convert float16 to float32
+         */
+        fun float16ToFloat(value: Short): Float {
+            val float16Bits = value.toInt() and 0xFFFF
+
+            // Extract sign, exponent, and mantissa from float16
+            val sign = (float16Bits and FLOAT16_SIGN_MASK) shl 16
+            val exponent = (float16Bits and FLOAT16_EXPONENT_MASK) ushr 10
+            val mantissa = float16Bits and FLOAT16_MANTISSA_MASK
+
+            // Handle special cases
+            if (exponent == 0) {
+                // Zero or denormal
+                if (mantissa == 0) {
+                    return java.lang.Float.intBitsToFloat(sign)
+                }
+                // Denormal - convert to normal
+                var e = 1
+                var m = mantissa
+                while ((m and 0x400) == 0) {
+                    m = m shl 1
+                    e++
+                }
+                val normalizedExponent = exponent - e + 1
+                val float32Bits = sign or ((normalizedExponent + FLOAT32_EXPONENT_BIAS - FLOAT16_EXPONENT_BIAS) shl 23) or ((m and 0x3FF) shl 13)
+                return java.lang.Float.intBitsToFloat(float32Bits)
+            } else if (exponent == 31) {
+                // Infinity or NaN
+                if (mantissa == 0) {
+                    // Infinity
+                    return java.lang.Float.intBitsToFloat(sign or 0x7F800000)
+                } else {
+                    // NaN
+                    return java.lang.Float.intBitsToFloat(sign or 0x7FC00000)
+                }
+            }
+
+            // Regular numbers
+            val float32Bits = sign or ((exponent + FLOAT32_EXPONENT_BIAS - FLOAT16_EXPONENT_BIAS) shl 23) or (mantissa shl 13)
+            return java.lang.Float.intBitsToFloat(float32Bits)
+        }
+    }
+}
 
 /** FlutterOnnxruntimePlugin */
 class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
@@ -504,6 +598,44 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                     }
                                 OnnxTensor.createTensor(ortEnvironment, FloatBuffer.wrap(floatData), longShape)
                             }
+                            "float16" -> {
+                                when (data) {
+                                    is List<*> -> {
+                                        if (data.isEmpty()) {
+                                            result.error("INVALID_DATA", "Data list cannot be empty for float16 type", null)
+                                            return
+                                        }
+
+                                        // Handle both short values (already in float16 format) and float values (need conversion)
+                                        val shortData = ShortArray(data.size)
+                                        when (data[0]) {
+                                            is Number -> {
+                                                // If source is float, convert to float16
+                                                for (i in data.indices) {
+                                                    val floatValue = (data[i] as Number).toFloat()
+                                                    shortData[i] = Float16Utils.floatToFloat16(floatValue)
+                                                }
+                                            }
+                                            else -> {
+                                                result.error("INVALID_DATA", "Data must be a list of numbers for float16 type", null)
+                                                return
+                                            }
+                                        }
+
+                                        // Create tensor with float16 type
+                                        OnnxTensor.createTensor(
+                                            ortEnvironment,
+                                            ShortBuffer.wrap(shortData),
+                                            longShape,
+                                            OnnxJavaType.FLOAT16,
+                                        )
+                                    }
+                                    else -> {
+                                        result.error("INVALID_DATA", "Data must be a list of numbers for float16 type", null)
+                                        return
+                                    }
+                                }
+                            }
                             "int32" -> {
                                 val intData =
                                     when (data) {
@@ -622,11 +754,25 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                     // A full implementation would handle all possible conversions
                     val newTensor =
                         when {
-                            // Float32 to other types
+                            // Float32 to float16
                             dataType == "FLOAT" && targetType == "float16" -> {
-                                // Real implementation would convert float32 to float16
-                                // This is a placeholder - just using the same tensor
-                                tensor
+                                // Extract the float data from the tensor
+                                val floatBuffer = tensor.floatBuffer
+                                val floatArray = FloatArray(floatBuffer.remaining())
+                                floatBuffer.get(floatArray)
+
+                                // Convert float array to short array using OnnxRuntime's float16 utilities
+                                // Use ShortBuffer to store float16 values
+                                val shortArray = ShortArray(floatArray.size)
+                                for (i in floatArray.indices) {
+                                    // Use ai.onnxruntime.OnnxRuntime utility method to convert float to float16
+                                    shortArray[i] = Float16Utils.floatToFloat16(floatArray[i])
+                                }
+
+                                // Create a new tensor with float16 data
+                                val shortBuffer = ShortBuffer.wrap(shortArray)
+                                // Use OnnxTensor.createTensor with the appropriate float16 type
+                                OnnxTensor.createTensor(ortEnvironment, shortBuffer, shape, OnnxJavaType.FLOAT16)
                             }
                             // Int32 to Float32
                             dataType == "INT32" && targetType == "float32" -> {
@@ -752,8 +898,36 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                             tensor.longBuffer.get(longArray)
                                             longArray.map { it.toFloat() }
                                         }
+                                        "FLOAT16" -> {
+                                            // Convert float16 (stored as shorts) to float32
+                                            val shortArray = ShortArray(flatSize)
+                                            tensor.shortBuffer.get(shortArray)
+                                            shortArray.map { Float16Utils.float16ToFloat(it) }
+                                        }
                                         else -> {
                                             result.error("CONVERSION_ERROR", "Cannot convert to float32", null)
+                                            return
+                                        }
+                                    }
+                                }
+                            }
+                            "float16" -> {
+                                try {
+                                    // For float16, we need to return the raw short values
+                                    // Client code will need to interpret these correctly
+                                    val shortArray = ShortArray(flatSize)
+                                    tensor.shortBuffer.get(shortArray)
+                                    shortArray.map { it.toInt() } // Convert to Int for JSON serialization
+                                } catch (e: Exception) {
+                                    // Try conversion from float32 if direct extraction fails
+                                    when (tensor.info.type.toString()) {
+                                        "FLOAT" -> {
+                                            val floatArray = FloatArray(flatSize)
+                                            tensor.floatBuffer.get(floatArray)
+                                            floatArray.map { Float16Utils.floatToFloat16(it).toInt() }
+                                        }
+                                        else -> {
+                                            result.error("CONVERSION_ERROR", "Cannot convert to float16", null)
                                             return
                                         }
                                     }
