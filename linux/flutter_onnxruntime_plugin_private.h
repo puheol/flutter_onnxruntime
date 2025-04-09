@@ -13,7 +13,7 @@
 FlMethodResponse *get_platform_version();
 
 // Helper function to generate a unique session ID
-std::string generate_uuid();
+std::string generate_session_uuid();
 
 // Helper function to convert FlValue to std::vector - implemented with
 // specializations

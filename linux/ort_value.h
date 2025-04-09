@@ -1,11 +1,16 @@
 #ifndef ORT_VALUE_H
 #define ORT_VALUE_H
 
+#include <memory>
 #include <onnxruntime_cxx_api.h>
 #include <string>
+#include <unordered_map>
 
-// Helper function to generate a UUID
-std::string generate_uuid();
+// Helper function to generate a UUID for OrtValue
+std::string generate_ort_value_uuid();
+
+// Global map to store OrtValue objects - accessible from other files
+extern std::unordered_map<std::string, std::unique_ptr<Ort::Value>> g_ort_values;
 
 // C API for OrtValue functions - these can be called from the Flutter FFI
 extern "C" {

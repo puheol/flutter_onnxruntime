@@ -7,7 +7,7 @@
 #include <vector>
 
 // Maintain global mappings for OrtValue objects
-static std::unordered_map<std::string, std::unique_ptr<OrtValue>> g_ort_values;
+std::unordered_map<std::string, std::unique_ptr<Ort::Value>> g_ort_values;
 
 // Create a new OrtValue from data
 extern "C" char *ort_create_tensor(const char *source_type, const void *data, const int64_t *shape, int shape_len,
@@ -86,7 +86,7 @@ extern "C" char *ort_create_tensor(const char *source_type, const void *data, co
     }
 
     // Create the tensor
-    std::unique_ptr<OrtValue> tensor = std::make_unique<OrtValue>();
+    std::unique_ptr<Ort::Value> tensor = std::make_unique<Ort::Value>();
 
     // Copy and potentially convert the data
     void *new_data = malloc(data_size);
@@ -114,7 +114,7 @@ extern "C" char *ort_create_tensor(const char *source_type, const void *data, co
     }
 
     // Store the OrtValue
-    std::string id = generate_uuid();
+    std::string id = generate_ort_value_uuid();
     g_ort_values[id] = std::move(tensor);
 
     // Create result JSON
@@ -160,12 +160,11 @@ extern "C" char *ort_convert_tensor(const char *value_id, const char *target_typ
       return nullptr;
     }
 
-    OrtValue *tensor = it->second.get();
+    Ort::Value *tensor = it->second.get();
 
     // Get tensor info
     Ort::TypeInfo type_info = tensor->GetTypeInfo();
-    Ort::TensorTypeAndShapeInfo tensor_info = type_info.GetTensorTypeAndShapeInfo();
-
+    auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
     ONNXTensorElementDataType current_type = tensor_info.GetElementType();
     std::vector<int64_t> shape = tensor_info.GetShape();
 
@@ -214,7 +213,7 @@ extern "C" char *ort_convert_tensor(const char *value_id, const char *target_typ
     // For now, we'll just create a new tensor ID for the "converted" tensor
 
     // Generate a new UUID for the "converted" tensor
-    std::string new_id = generate_uuid();
+    std::string new_id = generate_ort_value_uuid();
 
     // For demo purposes, we're not actually converting, just making a new reference
     g_ort_values[new_id] = std::move(it->second);
@@ -268,11 +267,11 @@ extern "C" char *ort_move_tensor_to_device(const char *value_id, const char *tar
       return nullptr;
     }
 
-    OrtValue *tensor = it->second.get();
+    Ort::Value *tensor = it->second.get();
 
     // Get tensor info
     Ort::TypeInfo type_info = tensor->GetTypeInfo();
-    Ort::TensorTypeAndShapeInfo tensor_info = type_info.GetTensorTypeAndShapeInfo();
+    auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
 
     ONNXTensorElementDataType element_type = tensor_info.GetElementType();
     std::vector<int64_t> shape = tensor_info.GetShape();
@@ -345,11 +344,11 @@ extern "C" char *ort_get_tensor_data(const char *value_id, const char *data_type
       return nullptr;
     }
 
-    OrtValue *tensor = it->second.get();
+    Ort::Value *tensor = it->second.get();
 
     // Get tensor info
     Ort::TypeInfo type_info = tensor->GetTypeInfo();
-    Ort::TensorTypeAndShapeInfo tensor_info = type_info.GetTensorTypeAndShapeInfo();
+    auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
 
     ONNXTensorElementDataType element_type = tensor_info.GetElementType();
     std::vector<int64_t> shape = tensor_info.GetShape();
@@ -542,7 +541,7 @@ extern "C" bool ort_release_tensor(const char *value_id, char **error_out) {
 
 // Helper function to generate a UUID
 // This is a simple implementation, you may want to use a proper UUID library
-std::string generate_uuid() {
+std::string generate_ort_value_uuid() {
   static int counter = 0;
   return "tensor_" + std::to_string(counter++);
 }

@@ -164,6 +164,7 @@ endif()
 # Any new source files that you add to the plugin should be added here.
 list(APPEND PLUGIN_SOURCES
   "flutter_onnxruntime_plugin.cc"
+  "ort_value.cc"
 )
 
 # Define the plugin library target. Its name must not be changed (see comment
