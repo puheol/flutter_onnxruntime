@@ -458,131 +458,295 @@ static void flutter_onnxruntime_plugin_handle_method_call(FlutterOnnxruntimePlug
       }
     }
   } else if (strcmp(method, "getMetadata") == 0) {
-    // Extract arguments
+    // Extract the session ID
     FlValue *session_id_value = fl_value_lookup_string(args, "sessionId");
 
     if (session_id_value == nullptr || fl_value_get_type(session_id_value) != FL_VALUE_TYPE_STRING) {
-      response =
-          FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_SESSION", "Session ID cannot be null", nullptr));
-    } else {
-      const char *session_id = fl_value_get_string(session_id_value);
-
-      // Check if session exists
-      auto session_it = g_sessions.find(session_id);
-      if (session_it == g_sessions.end()) {
-        response = FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_SESSION", "Session not found", nullptr));
-      } else {
-        try {
-          // Get metadata - this is a simplified version
-          g_autoptr(FlValue) metadata_map = fl_value_new_map();
-
-          // In a complete implementation, you would extract actual metadata
-          // from the session
-          fl_value_set_string_take(metadata_map, "producerName", fl_value_new_string("ONNX Runtime"));
-          fl_value_set_string_take(metadata_map, "graphName", fl_value_new_string(""));
-          fl_value_set_string_take(metadata_map, "domain", fl_value_new_string(""));
-          fl_value_set_string_take(metadata_map, "description", fl_value_new_string(""));
-          fl_value_set_string_take(metadata_map, "version", fl_value_new_int(1));
-          fl_value_set_string_take(metadata_map, "customMetadataMap", fl_value_new_map());
-
-          response = FL_METHOD_RESPONSE(fl_method_success_response_new(metadata_map));
-        } catch (const std::exception &e) {
-          response = FL_METHOD_RESPONSE(fl_method_error_response_new("GENERIC_ERROR", e.what(), nullptr));
-        }
-      }
+      response = FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_SESSION", "Session not found", nullptr));
+      return;
     }
-  } else if (strcmp(method, "getInputInfo") == 0 || strcmp(method, "getOutputInfo") == 0) {
-    bool is_input = strcmp(method, "getInputInfo") == 0;
 
-    // Extract arguments
+    const char *session_id = fl_value_get_string(session_id_value);
+
+    // Check if the session exists
+    if (g_sessions.find(session_id) == g_sessions.end()) {
+      response = FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_SESSION", "Session not found", nullptr));
+      return;
+    }
+
+    try {
+      // Get the session
+      auto &session_info = g_sessions[session_id];
+      auto &session = session_info.session;
+
+      // Get metadata for the model
+      Ort::ModelMetadata model_metadata = session->GetModelMetadata();
+      Ort::AllocatorWithDefaultOptions allocator;
+
+      // Extract metadata details
+      auto producer_name = model_metadata.GetProducerNameAllocated(allocator);
+      auto graph_name = model_metadata.GetGraphNameAllocated(allocator);
+      auto domain = model_metadata.GetDomainAllocated(allocator);
+      auto description = model_metadata.GetDescriptionAllocated(allocator);
+      int64_t version = model_metadata.GetVersion();
+
+      // Create empty custom metadata map - different ORT versions have different APIs
+      FlValue *custom_metadata_map = fl_value_new_map();
+
+      // Create response
+      FlValue *result = fl_value_new_map();
+      fl_value_set_string_take(result, "producerName", fl_value_new_string(producer_name.get()));
+      fl_value_set_string_take(result, "graphName", fl_value_new_string(graph_name.get()));
+      fl_value_set_string_take(result, "domain", fl_value_new_string(domain.get()));
+      fl_value_set_string_take(result, "description", fl_value_new_string(description.get()));
+      fl_value_set_string_take(result, "version", fl_value_new_int(version));
+      fl_value_set_string_take(result, "customMetadataMap", custom_metadata_map);
+
+      response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
+    } catch (const Ort::Exception &e) {
+      response = FL_METHOD_RESPONSE(fl_method_error_response_new("ORT_ERROR", e.what(), nullptr));
+    } catch (const std::exception &e) {
+      response = FL_METHOD_RESPONSE(fl_method_error_response_new("GENERIC_ERROR", e.what(), nullptr));
+    }
+  } else if (strcmp(method, "getInputInfo") == 0) {
+    // Extract the session ID
     FlValue *session_id_value = fl_value_lookup_string(args, "sessionId");
 
     if (session_id_value == nullptr || fl_value_get_type(session_id_value) != FL_VALUE_TYPE_STRING) {
-      response =
-          FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_SESSION", "Session ID cannot be null", nullptr));
-    } else {
-      const char *session_id = fl_value_get_string(session_id_value);
+      response = FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_SESSION", "Session not found", nullptr));
+      return;
+    }
 
-      // Check if session exists
-      auto session_it = g_sessions.find(session_id);
-      if (session_it == g_sessions.end()) {
-        response = FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_SESSION", "Session not found", nullptr));
-      } else {
-        try {
-          auto &session = session_it->second.session;
-          g_autoptr(FlValue) info_list = fl_value_new_list();
+    const char *session_id = fl_value_get_string(session_id_value);
 
-          // Get node count
-          size_t node_count = is_input ? session->GetInputCount() : session->GetOutputCount();
+    // Check if the session exists
+    if (g_sessions.find(session_id) == g_sessions.end()) {
+      response = FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_SESSION", "Session not found", nullptr));
+      return;
+    }
 
-          // Process each node
-          for (size_t i = 0; i < node_count; i++) {
-            Ort::AllocatorWithDefaultOptions allocator; // Define allocator here for name allocation
-            std::string node_name_str;                  // Use std::string to hold the name
+    try {
+      // Get the session
+      auto &session_info = g_sessions[session_id];
+      auto &session = session_info.session;
 
-            // Get node name
-            if (is_input) {
-              // Get input name using the API that returns an allocated string
-              auto input_name_ptr = session->GetInputNameAllocated(i, allocator);
-              node_name_str = input_name_ptr.get(); // Copy C-string content to std::string
-            } else {
-              // Get output name using the API that returns an allocated string
-              auto output_name_ptr = session->GetOutputNameAllocated(i, allocator);
-              node_name_str = output_name_ptr.get(); // Copy C-string content to std::string
-            }
-            // ORT allocated memory managed by input_name_ptr/output_name_ptr is
-            // freed automatically
+      // Create result list
+      FlValue *node_info_list = fl_value_new_list();
 
-            // Get node info
-            Ort::TypeInfo type_info = is_input ? session->GetInputTypeInfo(i) : session->GetOutputTypeInfo(i);
+      // Get all input info
+      size_t num_inputs = session->GetInputCount();
+      Ort::AllocatorWithDefaultOptions allocator;
 
-            // Create node info map manually, as its ownership will be taken by
-            // info_list
-            FlValue *node_map = fl_value_new_map(); // node_map ref count = 1
-            fl_value_set_string_take(node_map, "name", fl_value_new_string(node_name_str.c_str()));
+      for (size_t i = 0; i < num_inputs; i++) {
+        auto input_name = session->GetInputNameAllocated(i, allocator);
+        auto type_info = session->GetInputTypeInfo(i);
 
-            // Check if it's a tensor
-            if (type_info.GetONNXType() == ONNX_TYPE_TENSOR) {
-              auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
+        FlValue *info_map = fl_value_new_map();
+        fl_value_set_string_take(info_map, "name", fl_value_new_string(input_name.get()));
 
-              // Get shape
-              auto shape = tensor_info.GetShape();
-              FlValue *shape_list = vector_to_fl_value<int64_t>(shape);
-              fl_value_set_string_take(node_map, "shape", shape_list);
+        // Check if it's a tensor type
+        if (type_info.GetONNXType() == ONNX_TYPE_TENSOR) {
+          auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
+          auto shape = tensor_info.GetShape();
 
-              // Get type
-              ONNXTensorElementDataType element_type = tensor_info.GetElementType();
-              const char *type_str = "UNKNOWN";
-              switch (element_type) {
-              case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
-                type_str = "FLOAT";
-                break;
-              case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32:
-                type_str = "INT32";
-                break;
-              case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64:
-                type_str = "INT64";
-                break;
-              // Add more types as needed
-              default:
-                break;
-              }
-              fl_value_set_string_take(node_map, "type", fl_value_new_string(type_str));
-            } else {
-              // Non-tensor type
-              FlValue *empty_shape = fl_value_new_list();
-              fl_value_set_string_take(node_map, "shape", empty_shape);
-              fl_value_set_string_take(node_map, "type", fl_value_new_string("NON_TENSOR"));
-            }
-
-            fl_value_append_take(info_list, node_map);
+          // Convert shape to list
+          FlValue *shape_list = fl_value_new_list();
+          for (const auto &dim : shape) {
+            fl_value_append_take(shape_list, fl_value_new_int(dim));
           }
+          fl_value_set_string_take(info_map, "shape", shape_list);
 
-          response = FL_METHOD_RESPONSE(fl_method_success_response_new(info_list));
-        } catch (const std::exception &e) {
-          response = FL_METHOD_RESPONSE(fl_method_error_response_new("GENERIC_ERROR", e.what(), nullptr));
+          // Add type info
+          ONNXTensorElementDataType element_type = tensor_info.GetElementType();
+          const char *type_str;
+          switch (element_type) {
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
+            type_str = "FLOAT";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8:
+            type_str = "UINT8";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8:
+            type_str = "INT8";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT16:
+            type_str = "UINT16";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT16:
+            type_str = "INT16";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32:
+            type_str = "INT32";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64:
+            type_str = "INT64";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING:
+            type_str = "STRING";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL:
+            type_str = "BOOL";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16:
+            type_str = "FLOAT16";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE:
+            type_str = "DOUBLE";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT32:
+            type_str = "UINT32";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT64:
+            type_str = "UINT64";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_COMPLEX64:
+            type_str = "COMPLEX64";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_COMPLEX128:
+            type_str = "COMPLEX128";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_BFLOAT16:
+            type_str = "BFLOAT16";
+            break;
+          default:
+            type_str = "UNKNOWN";
+            break;
+          }
+          fl_value_set_string_take(info_map, "type", fl_value_new_string(type_str));
+        } else {
+          // For non-tensor types, provide an empty shape
+          FlValue *empty_shape = fl_value_new_list();
+          fl_value_set_string_take(info_map, "shape", empty_shape);
         }
+
+        fl_value_append_take(node_info_list, info_map);
       }
+
+      response = FL_METHOD_RESPONSE(fl_method_success_response_new(node_info_list));
+    } catch (const Ort::Exception &e) {
+      response = FL_METHOD_RESPONSE(fl_method_error_response_new("ORT_ERROR", e.what(), nullptr));
+    } catch (const std::exception &e) {
+      response = FL_METHOD_RESPONSE(fl_method_error_response_new("GENERIC_ERROR", e.what(), nullptr));
+    }
+  } else if (strcmp(method, "getOutputInfo") == 0) {
+    // Extract the session ID
+    FlValue *session_id_value = fl_value_lookup_string(args, "sessionId");
+
+    if (session_id_value == nullptr || fl_value_get_type(session_id_value) != FL_VALUE_TYPE_STRING) {
+      response = FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_SESSION", "Session not found", nullptr));
+      return;
+    }
+
+    const char *session_id = fl_value_get_string(session_id_value);
+
+    // Check if the session exists
+    if (g_sessions.find(session_id) == g_sessions.end()) {
+      response = FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_SESSION", "Session not found", nullptr));
+      return;
+    }
+
+    try {
+      // Get the session
+      auto &session_info = g_sessions[session_id];
+      auto &session = session_info.session;
+
+      // Create result list
+      FlValue *node_info_list = fl_value_new_list();
+
+      // Get all output info
+      size_t num_outputs = session->GetOutputCount();
+      Ort::AllocatorWithDefaultOptions allocator;
+
+      for (size_t i = 0; i < num_outputs; i++) {
+        auto output_name = session->GetOutputNameAllocated(i, allocator);
+        auto type_info = session->GetOutputTypeInfo(i);
+
+        FlValue *info_map = fl_value_new_map();
+        fl_value_set_string_take(info_map, "name", fl_value_new_string(output_name.get()));
+
+        // Check if it's a tensor type
+        if (type_info.GetONNXType() == ONNX_TYPE_TENSOR) {
+          auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
+          auto shape = tensor_info.GetShape();
+
+          // Convert shape to list
+          FlValue *shape_list = fl_value_new_list();
+          for (const auto &dim : shape) {
+            fl_value_append_take(shape_list, fl_value_new_int(dim));
+          }
+          fl_value_set_string_take(info_map, "shape", shape_list);
+
+          // Add type info
+          ONNXTensorElementDataType element_type = tensor_info.GetElementType();
+          const char *type_str;
+          switch (element_type) {
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
+            type_str = "FLOAT";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8:
+            type_str = "UINT8";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8:
+            type_str = "INT8";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT16:
+            type_str = "UINT16";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT16:
+            type_str = "INT16";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32:
+            type_str = "INT32";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64:
+            type_str = "INT64";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING:
+            type_str = "STRING";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL:
+            type_str = "BOOL";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16:
+            type_str = "FLOAT16";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE:
+            type_str = "DOUBLE";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT32:
+            type_str = "UINT32";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT64:
+            type_str = "UINT64";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_COMPLEX64:
+            type_str = "COMPLEX64";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_COMPLEX128:
+            type_str = "COMPLEX128";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_BFLOAT16:
+            type_str = "BFLOAT16";
+            break;
+          default:
+            type_str = "UNKNOWN";
+            break;
+          }
+          fl_value_set_string_take(info_map, "type", fl_value_new_string(type_str));
+        } else {
+          // For non-tensor types, provide an empty shape
+          FlValue *empty_shape = fl_value_new_list();
+          fl_value_set_string_take(info_map, "shape", empty_shape);
+        }
+
+        fl_value_append_take(node_info_list, info_map);
+      }
+
+      response = FL_METHOD_RESPONSE(fl_method_success_response_new(node_info_list));
+    } catch (const Ort::Exception &e) {
+      response = FL_METHOD_RESPONSE(fl_method_error_response_new("ORT_ERROR", e.what(), nullptr));
+    } catch (const std::exception &e) {
+      response = FL_METHOD_RESPONSE(fl_method_error_response_new("GENERIC_ERROR", e.what(), nullptr));
     }
   } else {
     response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());

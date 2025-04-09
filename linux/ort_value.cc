@@ -1,7 +1,9 @@
 #include "ort_value.h"
+#include "float16_utils.h"
 #include <cstring>
 #include <iostream>
 #include <memory>
+#include <sstream>
 #include <stdexcept>
 #include <unordered_map>
 #include <vector>
@@ -64,7 +66,7 @@ extern "C" char *ort_create_tensor(const char *source_type, const void *data, co
     Ort::MemoryInfo memory_info =
         Ort::MemoryInfo::CreateCpu(OrtAllocatorType::OrtArenaAllocator, OrtMemType::OrtMemTypeDefault);
 
-    // Create tensor with data
+    // Total size of data in bytes
     size_t data_size = total_elements * element_size;
 
     // Choose appropriate conversion based on target type
@@ -85,32 +87,76 @@ extern "C" char *ort_create_tensor(const char *source_type, const void *data, co
       }
     }
 
-    // Create the tensor
-    std::unique_ptr<Ort::Value> tensor = std::make_unique<Ort::Value>();
+    // Create the tensor and potentially convert it
+    std::unique_ptr<Ort::Value> tensor = std::make_unique<Ort::Value>(nullptr);
 
-    // Copy and potentially convert the data
-    void *new_data = malloc(data_size);
-    if (!new_data) {
-      if (error_out) {
-        *error_out = strdup("Failed to allocate memory for tensor data");
+    if (element_type == target_element_type) {
+      // No conversion needed, create the tensor directly
+      void *tensor_data = malloc(data_size);
+      if (!tensor_data) {
+        if (error_out) {
+          *error_out = strdup("Failed to allocate memory for tensor data");
+        }
+        return nullptr;
       }
-      return nullptr;
-    }
 
-    // First copy the data as-is
-    memcpy(new_data, data, data_size);
+      // Copy the data as-is
+      memcpy(tensor_data, data, data_size);
 
-    // Create the tensor with the copied data
-    Ort::Value ort_tensor =
-        Ort::Value::CreateTensor(memory_info, new_data, data_size, shape_vec.data(), shape_vec.size(), element_type);
+      // Create the tensor
+      *tensor = Ort::Value::CreateTensor(memory_info, tensor_data, data_size, shape_vec.data(), shape_vec.size(),
+                                         element_type);
+    } else {
+      // Need conversion
+      if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT &&
+          target_element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16) {
+        // Float32 to Float16 conversion
+        const float *float_data = static_cast<const float *>(data);
 
-    // If target type differs from source type, perform conversion
-    if (target_element_type != element_type) {
-      // In a complete implementation, you would convert between types here
-      // This would use ONNX Runtime APIs for type conversion
-      // For now, we'll just log the conversion request
-      std::cout << "Requested conversion from " << source_type << " to " << target_type
-                << " (not implemented in this example)" << std::endl;
+        // Allocate memory for float16 data
+        std::vector<uint16_t> float16_data(total_elements);
+
+        // Convert each float32 to float16
+        for (size_t i = 0; i < total_elements; i++) {
+          float16_data[i] = Float16Utils::floatToFloat16(float_data[i]);
+        }
+
+        // Create tensor with float16 data
+        *tensor = Ort::Value::CreateTensor(memory_info, float16_data.data(), float16_data.size() * sizeof(uint16_t),
+                                           shape_vec.data(), shape_vec.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
+      } else if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16 &&
+                 target_element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT) {
+        // Float16 to Float32 conversion
+        const uint16_t *float16_data = static_cast<const uint16_t *>(data);
+
+        // Allocate memory for float32 data
+        std::vector<float> float32_data(total_elements);
+
+        // Convert each float16 to float32
+        for (size_t i = 0; i < total_elements; i++) {
+          float32_data[i] = Float16Utils::float16ToFloat(float16_data[i]);
+        }
+
+        // Create tensor with float32 data
+        *tensor = Ort::Value::CreateTensor(memory_info, float32_data.data(), float32_data.size() * sizeof(float),
+                                           shape_vec.data(), shape_vec.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT);
+      } else {
+        // For other conversions, fallback to creating with source type and rely on later conversion
+        void *tensor_data = malloc(data_size);
+        if (!tensor_data) {
+          if (error_out) {
+            *error_out = strdup("Failed to allocate memory for tensor data");
+          }
+          return nullptr;
+        }
+
+        // Copy the data as-is
+        memcpy(tensor_data, data, data_size);
+
+        // Create the tensor
+        *tensor = Ort::Value::CreateTensor(memory_info, tensor_data, data_size, shape_vec.data(), shape_vec.size(),
+                                           element_type);
+      }
     }
 
     // Store the OrtValue
@@ -208,15 +254,154 @@ extern "C" char *ort_convert_tensor(const char *value_id, const char *target_typ
       return strdup(result.c_str());
     }
 
-    // In a real implementation, you would convert between types here
-    // This would use ONNX Runtime APIs for type conversion
-    // For now, we'll just create a new tensor ID for the "converted" tensor
+    // Calculate total number of elements
+    size_t total_elements = 1;
+    for (size_t i = 0; i < shape.size(); i++) {
+      total_elements *= shape[i];
+    }
 
-    // Generate a new UUID for the "converted" tensor
+    // Create memory info
+    Ort::MemoryInfo memory_info =
+        Ort::MemoryInfo::CreateCpu(OrtAllocatorType::OrtArenaAllocator, OrtMemType::OrtMemTypeDefault);
+
+    // Create a new tensor with the converted data
+    std::unique_ptr<Ort::Value> new_tensor = std::make_unique<Ort::Value>(nullptr);
+
+    // Perform conversion based on source and target types
+    if (current_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT &&
+        target_element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16) {
+      // Float32 to Float16 conversion
+      float *src_data = tensor->GetTensorMutableData<float>();
+
+      // Allocate memory for the float16 data
+      std::vector<uint16_t> float16_data(total_elements);
+
+      // Convert each float32 to float16
+      for (size_t i = 0; i < total_elements; i++) {
+        float16_data[i] = Float16Utils::floatToFloat16(src_data[i]);
+      }
+
+      // Create new tensor with float16 data
+      *new_tensor = Ort::Value::CreateTensor(memory_info, float16_data.data(), float16_data.size() * sizeof(uint16_t),
+                                             shape.data(), shape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
+    } else if (current_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16 &&
+               target_element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT) {
+      // Float16 to Float32 conversion
+      uint16_t *src_data = tensor->GetTensorMutableData<uint16_t>();
+
+      // Allocate memory for the float32 data
+      std::vector<float> float32_data(total_elements);
+
+      // Convert each float16 to float32
+      for (size_t i = 0; i < total_elements; i++) {
+        float32_data[i] = Float16Utils::float16ToFloat(src_data[i]);
+      }
+
+      // Create new tensor with float32 data
+      *new_tensor = Ort::Value::CreateTensor(memory_info, float32_data.data(), float32_data.size() * sizeof(float),
+                                             shape.data(), shape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT);
+    } else if (current_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT &&
+               target_element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32) {
+      // Float32 to Int32 conversion
+      float *src_data = tensor->GetTensorMutableData<float>();
+
+      // Allocate memory for the int32 data
+      std::vector<int32_t> int32_data(total_elements);
+
+      // Convert each float32 to int32
+      for (size_t i = 0; i < total_elements; i++) {
+        int32_data[i] = static_cast<int32_t>(src_data[i]);
+      }
+
+      // Create new tensor with int32 data
+      *new_tensor = Ort::Value::CreateTensor(memory_info, int32_data.data(), int32_data.size() * sizeof(int32_t),
+                                             shape.data(), shape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32);
+    } else if (current_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32 &&
+               target_element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT) {
+      // Int32 to Float32 conversion
+      int32_t *src_data = tensor->GetTensorMutableData<int32_t>();
+
+      // Allocate memory for the float32 data
+      std::vector<float> float32_data(total_elements);
+
+      // Convert each int32 to float32
+      for (size_t i = 0; i < total_elements; i++) {
+        float32_data[i] = static_cast<float>(src_data[i]);
+      }
+
+      // Create new tensor with float32 data
+      *new_tensor = Ort::Value::CreateTensor(memory_info, float32_data.data(), float32_data.size() * sizeof(float),
+                                             shape.data(), shape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT);
+    } else if (current_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32 &&
+               target_element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64) {
+      // Int32 to Int64 conversion
+      int32_t *src_data = tensor->GetTensorMutableData<int32_t>();
+
+      // Allocate memory for the int64 data
+      std::vector<int64_t> int64_data(total_elements);
+
+      // Convert each int32 to int64
+      for (size_t i = 0; i < total_elements; i++) {
+        int64_data[i] = static_cast<int64_t>(src_data[i]);
+      }
+
+      // Create new tensor with int64 data
+      *new_tensor = Ort::Value::CreateTensor(memory_info, int64_data.data(), int64_data.size() * sizeof(int64_t),
+                                             shape.data(), shape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64);
+    } else if (current_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64 &&
+               target_element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32) {
+      // Int64 to Int32 conversion
+      int64_t *src_data = tensor->GetTensorMutableData<int64_t>();
+
+      // Allocate memory for the int32 data
+      std::vector<int32_t> int32_data(total_elements);
+
+      // Convert each int64 to int32
+      for (size_t i = 0; i < total_elements; i++) {
+        int32_data[i] = static_cast<int32_t>(src_data[i]);
+      }
+
+      // Create new tensor with int32 data
+      *new_tensor = Ort::Value::CreateTensor(memory_info, int32_data.data(), int32_data.size() * sizeof(int32_t),
+                                             shape.data(), shape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32);
+    } else {
+      // Unsupported conversion
+      if (error_out) {
+        std::string error = "Unsupported conversion from ";
+        switch (current_type) {
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
+          error += "float32";
+          break;
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16:
+          error += "float16";
+          break;
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32:
+          error += "int32";
+          break;
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64:
+          error += "int64";
+          break;
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8:
+          error += "uint8";
+          break;
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL:
+          error += "bool";
+          break;
+        default:
+          error += "unknown";
+          break;
+        }
+        error += " to " + std::string(target_type);
+        *error_out = strdup(error.c_str());
+      }
+      return nullptr;
+    }
+
+    // Generate a new UUID for the new tensor
     std::string new_id = generate_ort_value_uuid();
 
-    // For demo purposes, we're not actually converting, just making a new reference
-    g_ort_values[new_id] = std::move(it->second);
+    // Store the new tensor
+    g_ort_values[new_id] = std::move(new_tensor);
 
     // Create result JSON
     std::string result = "{\"valueId\":\"" + new_id + "\",\"dataType\":\"";
@@ -247,7 +432,6 @@ extern "C" char *ort_convert_tensor(const char *value_id, const char *target_typ
 
 // Move an OrtValue to a different device
 extern "C" char *ort_move_tensor_to_device(const char *value_id, const char *target_device, char **error_out) {
-
   try {
     auto it = g_ort_values.find(value_id);
     if (it == g_ort_values.end()) {
@@ -258,7 +442,16 @@ extern "C" char *ort_move_tensor_to_device(const char *value_id, const char *tar
       return nullptr;
     }
 
-    // Currently, we only support CPU
+    Ort::Value *tensor = it->second.get();
+
+    // Get tensor info
+    Ort::TypeInfo type_info = tensor->GetTypeInfo();
+    auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
+    ONNXTensorElementDataType element_type = tensor_info.GetElementType();
+    std::vector<int64_t> shape = tensor_info.GetShape();
+
+    // Currently we only support CPU, so just return the same tensor
+    // In a full implementation, you would handle device transfer here
     if (strcmp(target_device, "cpu") != 0) {
       if (error_out) {
         std::string error = "Only CPU device is supported in this implementation";
@@ -267,44 +460,35 @@ extern "C" char *ort_move_tensor_to_device(const char *value_id, const char *tar
       return nullptr;
     }
 
-    Ort::Value *tensor = it->second.get();
-
-    // Get tensor info
-    Ort::TypeInfo type_info = tensor->GetTypeInfo();
-    auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
-
-    ONNXTensorElementDataType element_type = tensor_info.GetElementType();
-    std::vector<int64_t> shape = tensor_info.GetShape();
-
-    // Get data type string
-    std::string data_type;
+    // Get type string for response
+    std::string type_str;
     switch (element_type) {
     case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
-      data_type = "float32";
+      type_str = "float32";
       break;
     case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16:
-      data_type = "float16";
+      type_str = "float16";
       break;
     case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32:
-      data_type = "int32";
+      type_str = "int32";
       break;
     case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64:
-      data_type = "int64";
+      type_str = "int64";
       break;
     case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8:
-      data_type = "uint8";
+      type_str = "uint8";
       break;
     case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL:
-      data_type = "bool";
+      type_str = "bool";
       break;
     default:
-      data_type = "unknown";
+      type_str = "unknown";
       break;
     }
 
     // Create result JSON
     std::string result = "{\"valueId\":\"" + std::string(value_id) + "\",\"dataType\":\"";
-    result += data_type;
+    result += type_str;
     result += "\",\"shape\":[";
 
     for (size_t i = 0; i < shape.size(); i++) {
@@ -313,9 +497,7 @@ extern "C" char *ort_move_tensor_to_device(const char *value_id, const char *tar
       result += std::to_string(shape[i]);
     }
 
-    result += "],\"device\":\"";
-    result += target_device;
-    result += "\"}";
+    result += "],\"device\":\"cpu\"}";
 
     return strdup(result.c_str());
   } catch (const Ort::Exception &e) {
@@ -333,7 +515,6 @@ extern "C" char *ort_move_tensor_to_device(const char *value_id, const char *tar
 
 // Get data from an OrtValue
 extern "C" char *ort_get_tensor_data(const char *value_id, const char *data_type, char **error_out) {
-
   try {
     auto it = g_ort_values.find(value_id);
     if (it == g_ort_values.end()) {
@@ -349,7 +530,6 @@ extern "C" char *ort_get_tensor_data(const char *value_id, const char *data_type
     // Get tensor info
     Ort::TypeInfo type_info = tensor->GetTypeInfo();
     auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
-
     ONNXTensorElementDataType element_type = tensor_info.GetElementType();
     std::vector<int64_t> shape = tensor_info.GetShape();
 
@@ -359,151 +539,175 @@ extern "C" char *ort_get_tensor_data(const char *value_id, const char *data_type
       total_elements *= shape[i];
     }
 
-    // Get data based on requested type
-    std::string result = "{\"data\":[";
+    // Create result JSON manually
+    std::stringstream result;
+    result << "{\"shape\":[";
 
-    if (strcmp(data_type, "float32") == 0) {
-      if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT) {
-        // Direct access
-        float *data = tensor->GetTensorMutableData<float>();
-        for (size_t i = 0; i < total_elements; i++) {
-          if (i > 0)
-            result += ",";
-          result += std::to_string(data[i]);
+    for (size_t i = 0; i < shape.size(); i++) {
+      if (i > 0)
+        result << ",";
+      result << shape[i];
+    }
+
+    result << "],\"data\":[";
+
+    // Extract data according to requested type
+    try {
+      if (strcmp(data_type, "float32") == 0) {
+        // Handle float32 extraction/conversion
+        if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT) {
+          // Direct extraction if already float32
+          float *tensor_data = tensor->GetTensorMutableData<float>();
+          for (size_t i = 0; i < total_elements; i++) {
+            if (i > 0)
+              result << ",";
+            result << tensor_data[i];
+          }
+        } else if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16) {
+          // Convert from float16
+          uint16_t *tensor_data = tensor->GetTensorMutableData<uint16_t>();
+          for (size_t i = 0; i < total_elements; i++) {
+            if (i > 0)
+              result << ",";
+            result << Float16Utils::float16ToFloat(tensor_data[i]);
+          }
+        } else if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32) {
+          // Convert from int32
+          int32_t *tensor_data = tensor->GetTensorMutableData<int32_t>();
+          for (size_t i = 0; i < total_elements; i++) {
+            if (i > 0)
+              result << ",";
+            result << static_cast<float>(tensor_data[i]);
+          }
+        } else if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64) {
+          // Convert from int64
+          int64_t *tensor_data = tensor->GetTensorMutableData<int64_t>();
+          for (size_t i = 0; i < total_elements; i++) {
+            if (i > 0)
+              result << ",";
+            result << static_cast<float>(tensor_data[i]);
+          }
+        } else {
+          throw std::runtime_error("Unsupported conversion to float32");
         }
-      } else if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32) {
-        // Convert int32 to float32
-        int32_t *data = tensor->GetTensorMutableData<int32_t>();
-        for (size_t i = 0; i < total_elements; i++) {
-          if (i > 0)
-            result += ",";
-          result += std::to_string(static_cast<float>(data[i]));
+      } else if (strcmp(data_type, "float16") == 0) {
+        // Handle float16 extraction/conversion
+        if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16) {
+          // Direct extraction if already float16
+          uint16_t *tensor_data = tensor->GetTensorMutableData<uint16_t>();
+          for (size_t i = 0; i < total_elements; i++) {
+            if (i > 0)
+              result << ",";
+            result << static_cast<int>(tensor_data[i]);
+          }
+        } else if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT) {
+          // Convert from float32
+          float *tensor_data = tensor->GetTensorMutableData<float>();
+          for (size_t i = 0; i < total_elements; i++) {
+            if (i > 0)
+              result << ",";
+            result << static_cast<int>(Float16Utils::floatToFloat16(tensor_data[i]));
+          }
+        } else {
+          throw std::runtime_error("Unsupported conversion to float16");
         }
-      } else if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64) {
-        // Convert int64 to float32
-        int64_t *data = tensor->GetTensorMutableData<int64_t>();
-        for (size_t i = 0; i < total_elements; i++) {
-          if (i > 0)
-            result += ",";
-          result += std::to_string(static_cast<float>(data[i]));
+      } else if (strcmp(data_type, "int32") == 0) {
+        // Handle int32 extraction/conversion
+        if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32) {
+          // Direct extraction if already int32
+          int32_t *tensor_data = tensor->GetTensorMutableData<int32_t>();
+          for (size_t i = 0; i < total_elements; i++) {
+            if (i > 0)
+              result << ",";
+            result << tensor_data[i];
+          }
+        } else if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT) {
+          // Convert from float32
+          float *tensor_data = tensor->GetTensorMutableData<float>();
+          for (size_t i = 0; i < total_elements; i++) {
+            if (i > 0)
+              result << ",";
+            result << static_cast<int32_t>(tensor_data[i]);
+          }
+        } else if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64) {
+          // Convert from int64
+          int64_t *tensor_data = tensor->GetTensorMutableData<int64_t>();
+          for (size_t i = 0; i < total_elements; i++) {
+            if (i > 0)
+              result << ",";
+            result << static_cast<int32_t>(tensor_data[i]);
+          }
+        } else {
+          throw std::runtime_error("Unsupported conversion to int32");
+        }
+      } else if (strcmp(data_type, "int64") == 0) {
+        // Handle int64 extraction/conversion
+        if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64) {
+          // Direct extraction if already int64
+          int64_t *tensor_data = tensor->GetTensorMutableData<int64_t>();
+          for (size_t i = 0; i < total_elements; i++) {
+            if (i > 0)
+              result << ",";
+            result << tensor_data[i];
+          }
+        } else if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT) {
+          // Convert from float32
+          float *tensor_data = tensor->GetTensorMutableData<float>();
+          for (size_t i = 0; i < total_elements; i++) {
+            if (i > 0)
+              result << ",";
+            result << static_cast<int64_t>(tensor_data[i]);
+          }
+        } else if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32) {
+          // Convert from int32
+          int32_t *tensor_data = tensor->GetTensorMutableData<int32_t>();
+          for (size_t i = 0; i < total_elements; i++) {
+            if (i > 0)
+              result << ",";
+            result << static_cast<int64_t>(tensor_data[i]);
+          }
+        } else {
+          throw std::runtime_error("Unsupported conversion to int64");
+        }
+      } else if (strcmp(data_type, "uint8") == 0) {
+        // Handle uint8 extraction/conversion
+        if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8) {
+          // Direct extraction if already uint8
+          uint8_t *tensor_data = tensor->GetTensorMutableData<uint8_t>();
+          for (size_t i = 0; i < total_elements; i++) {
+            if (i > 0)
+              result << ",";
+            result << static_cast<int>(tensor_data[i]);
+          }
+        } else {
+          throw std::runtime_error("Unsupported conversion to uint8");
+        }
+      } else if (strcmp(data_type, "bool") == 0) {
+        // Handle bool extraction/conversion
+        if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL) {
+          // Direct extraction if already bool
+          bool *tensor_data = tensor->GetTensorMutableData<bool>();
+          for (size_t i = 0; i < total_elements; i++) {
+            if (i > 0)
+              result << ",";
+            result << (tensor_data[i] ? "true" : "false");
+          }
+        } else {
+          throw std::runtime_error("Unsupported conversion to bool");
         }
       } else {
-        if (error_out) {
-          *error_out = strdup("Cannot convert to float32");
-        }
-        return nullptr;
+        throw std::runtime_error(std::string("Unsupported data type: ") + data_type);
       }
-    } else if (strcmp(data_type, "int32") == 0) {
-      if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32) {
-        // Direct access
-        int32_t *data = tensor->GetTensorMutableData<int32_t>();
-        for (size_t i = 0; i < total_elements; i++) {
-          if (i > 0)
-            result += ",";
-          result += std::to_string(data[i]);
-        }
-      } else if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT) {
-        // Convert float to int32
-        float *data = tensor->GetTensorMutableData<float>();
-        for (size_t i = 0; i < total_elements; i++) {
-          if (i > 0)
-            result += ",";
-          result += std::to_string(static_cast<int32_t>(data[i]));
-        }
-      } else if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64) {
-        // Convert int64 to int32
-        int64_t *data = tensor->GetTensorMutableData<int64_t>();
-        for (size_t i = 0; i < total_elements; i++) {
-          if (i > 0)
-            result += ",";
-          result += std::to_string(static_cast<int32_t>(data[i]));
-        }
-      } else {
-        if (error_out) {
-          *error_out = strdup("Cannot convert to int32");
-        }
-        return nullptr;
-      }
-    } else if (strcmp(data_type, "int64") == 0) {
-      if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64) {
-        // Direct access
-        int64_t *data = tensor->GetTensorMutableData<int64_t>();
-        for (size_t i = 0; i < total_elements; i++) {
-          if (i > 0)
-            result += ",";
-          result += std::to_string(data[i]);
-        }
-      } else if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT) {
-        // Convert float to int64
-        float *data = tensor->GetTensorMutableData<float>();
-        for (size_t i = 0; i < total_elements; i++) {
-          if (i > 0)
-            result += ",";
-          result += std::to_string(static_cast<int64_t>(data[i]));
-        }
-      } else if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32) {
-        // Convert int32 to int64
-        int32_t *data = tensor->GetTensorMutableData<int32_t>();
-        for (size_t i = 0; i < total_elements; i++) {
-          if (i > 0)
-            result += ",";
-          result += std::to_string(static_cast<int64_t>(data[i]));
-        }
-      } else {
-        if (error_out) {
-          *error_out = strdup("Cannot convert to int64");
-        }
-        return nullptr;
-      }
-    } else if (strcmp(data_type, "uint8") == 0) {
-      if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8) {
-        // Direct access
-        uint8_t *data = tensor->GetTensorMutableData<uint8_t>();
-        for (size_t i = 0; i < total_elements; i++) {
-          if (i > 0)
-            result += ",";
-          result += std::to_string(data[i]);
-        }
-      } else {
-        if (error_out) {
-          *error_out = strdup("Cannot convert to uint8");
-        }
-        return nullptr;
-      }
-    } else if (strcmp(data_type, "bool") == 0) {
-      if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL) {
-        // Direct access
-        bool *data = tensor->GetTensorMutableData<bool>();
-        for (size_t i = 0; i < total_elements; i++) {
-          if (i > 0)
-            result += ",";
-          result += data[i] ? "true" : "false";
-        }
-      } else {
-        if (error_out) {
-          *error_out = strdup("Cannot convert to bool");
-        }
-        return nullptr;
-      }
-    } else {
+    } catch (const std::exception &e) {
       if (error_out) {
-        std::string error = "Unsupported data type: " + std::string(data_type);
+        std::string error = std::string("Data extraction error: ") + e.what();
         *error_out = strdup(error.c_str());
       }
       return nullptr;
     }
 
-    result += "],\"shape\":[";
-
-    for (size_t i = 0; i < shape.size(); i++) {
-      if (i > 0)
-        result += ",";
-      result += std::to_string(shape[i]);
-    }
-
-    result += "]}";
-
-    return strdup(result.c_str());
+    result << "]}";
+    return strdup(result.str().c_str());
   } catch (const Ort::Exception &e) {
     if (error_out) {
       *error_out = strdup(e.what());

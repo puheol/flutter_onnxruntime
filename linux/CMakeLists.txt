@@ -165,6 +165,7 @@ endif()
 list(APPEND PLUGIN_SOURCES
   "flutter_onnxruntime_plugin.cc"
   "ort_value.cc"
+  "float16_utils.cc"
 )
 
 # Define the plugin library target. Its name must not be changed (see comment
@@ -187,8 +188,49 @@ target_compile_definitions(${PLUGIN_NAME} PRIVATE FLUTTER_PLUGIN_IMPL)
 
 # Source include directories and library dependencies. Add any plugin-specific
 # dependencies here.
-target_include_directories(${PLUGIN_NAME} INTERFACE
-  "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_include_directories(${PLUGIN_NAME} PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}/include"
+  "${CMAKE_CURRENT_SOURCE_DIR}"
+  "${FLUTTER_EPHEMERAL_DIR}"
+  "${FLUTTER_EPHEMERAL_DIR}/cpp_client_wrapper/include"
+  "${ONNXRUNTIME_INCLUDE_DIRS}"
+)
+
+# Install debugging message
+message(STATUS "Include directories: ${CMAKE_CURRENT_SOURCE_DIR}/include")
+message(STATUS "Binary directory: ${CMAKE_CURRENT_BINARY_DIR}/include")
+message(STATUS "This file: ${CMAKE_CURRENT_LIST_FILE}")
+
+# Install public headers for the plugin
+install(
+  FILES
+    "include/flutter_onnxruntime/flutter_onnxruntime_plugin.h"
+  DESTINATION
+    "${CMAKE_BINARY_DIR}/include/flutter_onnxruntime"
+)
+
+# Install utility header files with the proper path
+install(
+  FILES
+    "float16_utils.h"
+    "ort_value.h"
+  DESTINATION
+    "${CMAKE_BINARY_DIR}/include"
+)
+
+# Also create symlinks in the build directory to ensure includes work during build
+execute_process(
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/include/flutter_onnxruntime"
+  COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/include/flutter_onnxruntime/flutter_onnxruntime_plugin.h" "${CMAKE_BINARY_DIR}/include/flutter_onnxruntime/"
+  COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/float16_utils.h" "${CMAKE_BINARY_DIR}/include/"
+  COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/ort_value.h" "${CMAKE_BINARY_DIR}/include/"
+)
+
+# Add include directories for the plugin
+target_include_directories(${PLUGIN_NAME} PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
 
 # Add ONNX Runtime include directories
 target_include_directories(${PLUGIN_NAME} PRIVATE ${ONNXRUNTIME_INCLUDE_DIRS})
