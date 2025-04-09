@@ -8,6 +8,10 @@
 #include <unordered_map>
 #include <vector>
 
+// Define debug macros
+#define DEBUG_LOG(msg) std::cout << "[OrtValue DEBUG] " << msg << std::endl
+#define ERROR_LOG(msg) std::cerr << "[OrtValue ERROR] " << msg << std::endl
+
 // Maintain global mappings for OrtValue objects
 std::unordered_map<std::string, std::unique_ptr<Ort::Value>> g_ort_values;
 
@@ -16,10 +20,36 @@ extern "C" char *ort_create_tensor(const char *source_type, const void *data, co
                                    const char *target_type, const char *device, char **error_out) {
 
   try {
+    DEBUG_LOG("ort_create_tensor called");
+    DEBUG_LOG("Source type: " << (source_type ? source_type : "null"));
+    DEBUG_LOG("Target type: " << (target_type ? target_type : "null (using source type)"));
+    DEBUG_LOG("Device: " << (device ? device : "null (using CPU)"));
+    DEBUG_LOG("Shape length: " << shape_len);
+
+    // Log the shape
+    std::ostringstream shape_str;
+    shape_str << "Shape: [";
+    for (int i = 0; i < shape_len; i++) {
+      shape_str << shape[i];
+      if (i < shape_len - 1)
+        shape_str << ", ";
+    }
+    shape_str << "]";
+    DEBUG_LOG(shape_str.str());
+
+    if (!data) {
+      ERROR_LOG("Data pointer is null");
+      if (error_out) {
+        *error_out = strdup("Data pointer is null");
+      }
+      return nullptr;
+    }
+
     // Create ORT environment and allocator if not initialized
     static Ort::Env *env = nullptr;
     static Ort::AllocatorWithDefaultOptions allocator;
     if (env == nullptr) {
+      DEBUG_LOG("Initializing ORT environment");
       env = new Ort::Env(ORT_LOGGING_LEVEL_WARNING, "OrtValue");
     }
 
@@ -49,6 +79,7 @@ extern "C" char *ort_create_tensor(const char *source_type, const void *data, co
       element_type = ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16;
       element_size = sizeof(uint16_t); // Float16 is stored as uint16_t
     } else {
+      ERROR_LOG("Unsupported source data type: " << source_type);
       if (error_out) {
         std::string error = "Unsupported source data type: " + std::string(source_type);
         *error_out = strdup(error.c_str());
@@ -61,8 +92,12 @@ extern "C" char *ort_create_tensor(const char *source_type, const void *data, co
     for (size_t i = 0; i < shape_vec.size(); i++) {
       total_elements *= shape_vec[i];
     }
+    DEBUG_LOG("Total elements: " << total_elements);
+    DEBUG_LOG("Element size: " << element_size << " bytes");
+    DEBUG_LOG("Total data size: " << (total_elements * element_size) << " bytes");
 
     // Create memory info for the target device
+    DEBUG_LOG("Creating memory info for device: " << (device ? device : "cpu"));
     Ort::MemoryInfo memory_info =
         Ort::MemoryInfo::CreateCpu(OrtAllocatorType::OrtArenaAllocator, OrtMemType::OrtMemTypeDefault);
 
@@ -72,6 +107,7 @@ extern "C" char *ort_create_tensor(const char *source_type, const void *data, co
     // Choose appropriate conversion based on target type
     ONNXTensorElementDataType target_element_type = element_type;
     if (target_type && *target_type) {
+      DEBUG_LOG("Target type specified: " << target_type);
       if (strcmp(target_type, "float32") == 0) {
         target_element_type = ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT;
       } else if (strcmp(target_type, "float16") == 0) {
@@ -91,9 +127,11 @@ extern "C" char *ort_create_tensor(const char *source_type, const void *data, co
     std::unique_ptr<Ort::Value> tensor = std::make_unique<Ort::Value>(nullptr);
 
     if (element_type == target_element_type) {
+      DEBUG_LOG("No conversion needed, creating tensor directly with type: " << element_type);
       // No conversion needed, create the tensor directly
       void *tensor_data = malloc(data_size);
       if (!tensor_data) {
+        ERROR_LOG("Failed to allocate memory for tensor data (" << data_size << " bytes)");
         if (error_out) {
           *error_out = strdup("Failed to allocate memory for tensor data");
         }
@@ -101,15 +139,20 @@ extern "C" char *ort_create_tensor(const char *source_type, const void *data, co
       }
 
       // Copy the data as-is
+      DEBUG_LOG("Copying data to tensor");
       memcpy(tensor_data, data, data_size);
 
       // Create the tensor
+      DEBUG_LOG("Creating tensor with CreateTensor API");
       *tensor = Ort::Value::CreateTensor(memory_info, tensor_data, data_size, shape_vec.data(), shape_vec.size(),
                                          element_type);
+      DEBUG_LOG("Tensor created successfully");
     } else {
+      DEBUG_LOG("Conversion needed from type " << element_type << " to " << target_element_type);
       // Need conversion
       if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT &&
           target_element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16) {
+        DEBUG_LOG("Converting from Float32 to Float16");
         // Float32 to Float16 conversion
         const float *float_data = static_cast<const float *>(data);
 
@@ -122,10 +165,12 @@ extern "C" char *ort_create_tensor(const char *source_type, const void *data, co
         }
 
         // Create tensor with float16 data
+        DEBUG_LOG("Creating tensor with float16 data");
         *tensor = Ort::Value::CreateTensor(memory_info, float16_data.data(), float16_data.size() * sizeof(uint16_t),
                                            shape_vec.data(), shape_vec.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16);
       } else if (element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16 &&
                  target_element_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT) {
+        DEBUG_LOG("Converting from Float16 to Float32");
         // Float16 to Float32 conversion
         const uint16_t *float16_data = static_cast<const uint16_t *>(data);
 
@@ -138,12 +183,15 @@ extern "C" char *ort_create_tensor(const char *source_type, const void *data, co
         }
 
         // Create tensor with float32 data
+        DEBUG_LOG("Creating tensor with float32 data");
         *tensor = Ort::Value::CreateTensor(memory_info, float32_data.data(), float32_data.size() * sizeof(float),
                                            shape_vec.data(), shape_vec.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT);
       } else {
+        DEBUG_LOG("Unsupported conversion, creating with source type for later conversion");
         // For other conversions, fallback to creating with source type and rely on later conversion
         void *tensor_data = malloc(data_size);
         if (!tensor_data) {
+          ERROR_LOG("Failed to allocate memory for tensor data (" << data_size << " bytes)");
           if (error_out) {
             *error_out = strdup("Failed to allocate memory for tensor data");
           }
@@ -154,6 +202,7 @@ extern "C" char *ort_create_tensor(const char *source_type, const void *data, co
         memcpy(tensor_data, data, data_size);
 
         // Create the tensor
+        DEBUG_LOG("Creating tensor with original type");
         *tensor = Ort::Value::CreateTensor(memory_info, tensor_data, data_size, shape_vec.data(), shape_vec.size(),
                                            element_type);
       }
@@ -161,7 +210,9 @@ extern "C" char *ort_create_tensor(const char *source_type, const void *data, co
 
     // Store the OrtValue
     std::string id = generate_ort_value_uuid();
+    DEBUG_LOG("Generated OrtValue ID: " << id);
     g_ort_values[id] = std::move(tensor);
+    DEBUG_LOG("Stored OrtValue in global map (count now: " << g_ort_values.size() << ")");
 
     // Create result JSON
     // Format: {"valueId":"uuid","dataType":"type","shape":[1,2,3],"device":"cpu"}
@@ -179,15 +230,24 @@ extern "C" char *ort_create_tensor(const char *source_type, const void *data, co
     result += device ? device : "cpu";
     result += "\"}";
 
+    DEBUG_LOG("Returning result: " << result);
     return strdup(result.c_str());
   } catch (const Ort::Exception &e) {
+    ERROR_LOG("ORT Exception: " << e.what());
     if (error_out) {
       *error_out = strdup(e.what());
     }
     return nullptr;
   } catch (const std::exception &e) {
+    ERROR_LOG("Standard Exception: " << e.what());
     if (error_out) {
       *error_out = strdup(e.what());
+    }
+    return nullptr;
+  } catch (...) {
+    ERROR_LOG("Unknown exception in ort_create_tensor");
+    if (error_out) {
+      *error_out = strdup("Unknown exception in ort_create_tensor");
     }
     return nullptr;
   }
