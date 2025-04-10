@@ -34,16 +34,28 @@ To get started with the Flutter ONNX Runtime plugin, see the [API Usage Guide](d
 
 ## Implementation Status
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| CPU Inference | ✅ Complete | Supported on all platforms |
-| GPU Inference | ⚠️ Partial | Currently limited to specific platforms |
-| Data Type Conversion | ✅ Complete | All major numeric types supported |
-| Memory Management | ✅ Complete | Automatic and manual cleanup options |
-| Model Metadata | ✅ Complete | Full access to model information (not available on iOS and macOS) |
-| FP16 support | 🚧 Ongoing | In active development |
-| Tensor manipulation | ❌ Planned | Scheduled for future release |
+| Feature | Android | iOS | Linux | macOS | Windows |
+|---------|:-------:|:---:|:-----:|:-----:|:-------:|
+| CPU Inference | ✅ | ✅ | ✅ | ✅ | ✍️ |
+| GPU Inference | 🚧 | 🚧 | 🚧 | 🚧 | ✍️ |
+| Data Type Conversion | ✅ | ✅ | ✅ | ✅ | ✍️ |
+| Memory Management | ✅ | ✅ | ✅ | ✅ | ✍️ |
+| Model Metadata | ✅ | ❌* | ✅ | ❌* | ✍️ |
+| FP16 Support | ✅ | ❌** | 🚧 | ❌** | ✍️ |
+| Inference on Emulator | ✅ | ✅ | ✅ | ✅ | ✍️ |
+| Tensor Manipulation | ✍️ | ✍️ | ✍️ | ✍️ | ✍️ |
 
+✅: Complete
+
+❌: Not supported
+
+🚧: Ongoing
+
+✍️: Planned
+
+`*`: iOS and macOS do not support retrieving model metadata, we can only retrieve the input/output names.
+
+`**`: Swift does not support FP16 type.
 
 ## Troubleshooting
 
