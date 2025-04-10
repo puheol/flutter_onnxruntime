@@ -40,19 +40,13 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
   }
 
   @override
-  Future<Map<String, dynamic>> createOrtValue(
-    String sourceType,
-    dynamic data,
-    List<int> shape,
-    String targetType,
-    String device,
-  ) {
+  Future<Map<String, dynamic>> createOrtValue(String sourceType, dynamic data, List<int> shape) {
     // Return a mock OrtValue map
     return Future.value({
       'valueId': 'test_value_id_${DateTime.now().millisecondsSinceEpoch}',
-      'dataType': targetType,
+      'dataType': sourceType,
       'shape': shape,
-      'device': device,
+      'device': 'cpu',
     });
   }
 
@@ -151,9 +145,9 @@ void main() {
   group('OrtSession with OrtValue integration', () {
     test('run() should accept OrtValue objects as inputs', () async {
       // Create OrtValue tensors
-      final tensor1 = await OrtValue.fromFloat32List(Float32List.fromList([1.0, 2.0, 3.0, 4.0]), [2, 2]);
+      final tensor1 = await OrtValue.fromList(Float32List.fromList([1.0, 2.0, 3.0, 4.0]), [2, 2]);
 
-      final tensor2 = await OrtValue.fromFloat32List(Float32List.fromList([5.0, 6.0, 7.0, 8.0]), [2, 2]);
+      final tensor2 = await OrtValue.fromList(Float32List.fromList([5.0, 6.0, 7.0, 8.0]), [2, 2]);
 
       // Use OrtValue objects in inputs map
       final inputs = {'input1': tensor1, 'input2': tensor2};
@@ -177,7 +171,7 @@ void main() {
 
     test('run() should accept mixed inputs (OrtValue and raw data)', () async {
       // Create one OrtValue tensor
-      final tensor = await OrtValue.fromFloat32List(Float32List.fromList([1.0, 2.0, 3.0, 4.0]), [2, 2]);
+      final tensor = await OrtValue.fromList(Float32List.fromList([1.0, 2.0, 3.0, 4.0]), [2, 2]);
 
       // Create inputs with both OrtValue and raw data
       final inputs = {
@@ -206,7 +200,7 @@ void main() {
       // This test verifies that dispose() can be called after using in session.run()
 
       // Create an OrtValue tensor
-      final tensor = await OrtValue.fromFloat32List(Float32List.fromList([1.0, 2.0, 3.0, 4.0]), [2, 2]);
+      final tensor = await OrtValue.fromList(Float32List.fromList([1.0, 2.0, 3.0, 4.0]), [2, 2]);
 
       // Use OrtValue in session.run()
       await session.run({'input1': tensor});

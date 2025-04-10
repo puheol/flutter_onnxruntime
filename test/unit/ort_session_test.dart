@@ -99,14 +99,8 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
   }
 
   @override
-  Future<Map<String, dynamic>> createOrtValue(
-    String sourceType,
-    dynamic data,
-    List<int> shape,
-    String targetType,
-    String device,
-  ) {
-    return Future.value({'valueId': 'test_value_id', 'dataType': targetType, 'shape': shape, 'device': device});
+  Future<Map<String, dynamic>> createOrtValue(String sourceType, dynamic data, List<int> shape) {
+    return Future.value({'valueId': 'test_value_id', 'dataType': sourceType, 'shape': shape, 'device': 'cpu'});
   }
 
   @override

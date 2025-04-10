@@ -73,19 +73,11 @@ class MethodChannelFlutterOnnxruntime extends FlutterOnnxruntimePlatform {
   // OrtValue operations
 
   @override
-  Future<Map<String, dynamic>> createOrtValue(
-    String sourceType,
-    dynamic data,
-    List<int> shape,
-    String targetType,
-    String device,
-  ) async {
+  Future<Map<String, dynamic>> createOrtValue(String sourceType, dynamic data, List<int> shape) async {
     final result = await methodChannel.invokeMethod<Map<Object?, Object?>>('createOrtValue', {
       'sourceType': sourceType,
       'data': data,
       'shape': shape,
-      'targetType': targetType,
-      'device': device,
     });
     return _convertMapToStringDynamic(result ?? {});
   }

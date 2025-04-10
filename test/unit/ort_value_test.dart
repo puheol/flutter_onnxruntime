@@ -10,8 +10,6 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
   String? lastSourceType;
   dynamic lastSourceData;
   List<int>? lastShape;
-  String? lastTargetType;
-  String? lastDevice;
   String? lastValueIdForConversion;
   String? lastValueIdForRelease;
   String? lastValueIdForData;
@@ -44,26 +42,20 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
   }
 
   @override
-  Future<Map<String, dynamic>> createOrtValue(
-    String sourceType,
-    dynamic data,
-    List<int> shape,
-    String targetType,
-    String device,
-  ) {
+  Future<Map<String, dynamic>> createOrtValue(String sourceType, dynamic data, List<int> shape) {
     // Track the call parameters
     lastSourceType = sourceType;
     lastSourceData = data;
     lastShape = shape;
-    lastTargetType = targetType;
-    lastDevice = device;
 
     // Return a mock OrtValue map
+    String dataType = sourceType;
+
     return Future.value({
       'valueId': 'test_value_id_${DateTime.now().millisecondsSinceEpoch}',
-      'dataType': targetType,
+      'dataType': dataType,
       'shape': shape,
-      'device': device,
+      'device': 'cpu',
     });
   }
 
@@ -71,7 +63,6 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
   Future<Map<String, dynamic>> convertOrtValue(String valueId, String targetType) {
     // Track the call
     lastValueIdForConversion = valueId;
-    lastTargetType = targetType;
 
     return Future.value({
       'valueId': 'converted_$valueId',
@@ -170,24 +161,17 @@ void main() {
     FlutterOnnxruntimePlatform.instance = initialPlatform;
   });
 
-  group('OrtValue creation', () {
-    test('fromFloat32List should create an OrtValue correctly', () async {
+  group('OrtValue creation with fromList', () {
+    test('fromList with Float32List should create OrtValue correctly', () async {
       final testData = Float32List.fromList([1.0, 2.0, 3.0, 4.0]);
       final testShape = [2, 2];
 
-      final tensor = await OrtValue.fromFloat32List(
-        testData,
-        testShape,
-        targetType: OrtDataType.float32,
-        device: OrtDevice.cpu,
-      );
+      final tensor = await OrtValue.fromList(testData, testShape);
 
       // Verify correct parameter forwarding
       expect(mockPlatform.lastSourceType, 'float32');
       expect(mockPlatform.lastSourceData, testData);
       expect(mockPlatform.lastShape, testShape);
-      expect(mockPlatform.lastTargetType, 'float32');
-      expect(mockPlatform.lastDevice, 'cpu');
 
       // Verify OrtValue properties
       expect(tensor.shape, testShape);
@@ -196,29 +180,43 @@ void main() {
       expect(tensor.id, isNotEmpty);
     });
 
-    test('fromInt32List should create an OrtValue correctly', () async {
+    test('fromList with Int32List should create OrtValue correctly', () async {
       final testData = Int32List.fromList([1, 2, 3, 4]);
       final testShape = [2, 2];
 
-      final tensor = await OrtValue.fromInt32List(testData, testShape);
+      final tensor = await OrtValue.fromList(testData, testShape);
 
       // Verify correct parameter forwarding
       expect(mockPlatform.lastSourceType, 'int32');
       expect(mockPlatform.lastSourceData, testData);
       expect(mockPlatform.lastShape, testShape);
-      expect(mockPlatform.lastTargetType, 'int32');
-      expect(mockPlatform.lastDevice, 'cpu');
 
       // Verify OrtValue properties
       expect(tensor.shape, testShape);
       expect(tensor.dataType, OrtDataType.int32);
     });
 
-    test('fromUint8List should create an OrtValue correctly', () async {
+    test('fromList with Int64List should create OrtValue correctly', () async {
+      final testData = Int64List.fromList([1, 2, 3, 4]);
+      final testShape = [2, 2];
+
+      final tensor = await OrtValue.fromList(testData, testShape);
+
+      // Verify correct parameter forwarding
+      expect(mockPlatform.lastSourceType, 'int64');
+      expect(mockPlatform.lastSourceData, testData);
+      expect(mockPlatform.lastShape, testShape);
+
+      // Verify OrtValue properties
+      expect(tensor.shape, testShape);
+      expect(tensor.dataType, OrtDataType.int64);
+    });
+
+    test('fromList with Uint8List should create OrtValue correctly', () async {
       final testData = Uint8List.fromList([1, 2, 3, 4]);
       final testShape = [2, 2];
 
-      final tensor = await OrtValue.fromUint8List(testData, testShape);
+      final tensor = await OrtValue.fromList(testData, testShape);
 
       // Verify correct parameter forwarding
       expect(mockPlatform.lastSourceType, 'uint8');
@@ -230,11 +228,11 @@ void main() {
       expect(tensor.dataType, OrtDataType.uint8);
     });
 
-    test('fromBoolList should create an OrtValue correctly', () async {
+    test('fromList with List<bool> should create OrtValue correctly', () async {
       final testData = [true, false, true, false];
       final testShape = [2, 2];
 
-      final tensor = await OrtValue.fromBoolList(testData, testShape);
+      final tensor = await OrtValue.fromList(testData, testShape);
 
       // Verify correct parameter forwarding
       expect(mockPlatform.lastSourceType, 'bool');
@@ -245,19 +243,96 @@ void main() {
       expect(tensor.shape, testShape);
       expect(tensor.dataType, OrtDataType.bool);
     });
+
+    test('fromList with List<double> should convert to Float32List', () async {
+      final testData = [1.0, 2.0, 3.0, 4.0];
+      final testShape = [2, 2];
+
+      final tensor = await OrtValue.fromList(testData, testShape);
+
+      // Verify correct parameter forwarding
+      expect(mockPlatform.lastSourceType, 'float32');
+      expect(mockPlatform.lastSourceData, isA<Float32List>());
+      expect(mockPlatform.lastShape, testShape);
+
+      // Verify OrtValue properties
+      expect(tensor.shape, testShape);
+      expect(tensor.dataType, OrtDataType.float32);
+    });
+
+    test('fromList with List<int> within int32 range should convert to Int32List', () async {
+      final testData = [1, 2, 3, 4];
+      final testShape = [2, 2];
+
+      final tensor = await OrtValue.fromList(testData, testShape);
+
+      // Verify correct parameter forwarding
+      expect(mockPlatform.lastSourceType, 'int32');
+      expect(mockPlatform.lastSourceData, isA<Int32List>());
+      expect(mockPlatform.lastShape, testShape);
+
+      // Verify OrtValue properties
+      expect(tensor.shape, testShape);
+      expect(tensor.dataType, OrtDataType.int32);
+    });
+
+    test('fromList with List<int> exceeding int32 range should convert to Int64List', () async {
+      final testData = [1, 2147483648, 3, 4]; // 2147483648 exceeds int32 range
+      final testShape = [2, 2];
+
+      final tensor = await OrtValue.fromList(testData, testShape);
+
+      // Verify correct parameter forwarding
+      expect(mockPlatform.lastSourceType, 'int64');
+      expect(mockPlatform.lastSourceData, isA<Int64List>());
+      expect(mockPlatform.lastShape, testShape);
+
+      // Verify OrtValue properties
+      expect(tensor.shape, testShape);
+      expect(tensor.dataType, OrtDataType.int64);
+    });
+
+    test('fromList with List<num> with mixed integers and decimals should convert to Float32List', () async {
+      final testData = [1, 2, 3.5, 4];
+      final testShape = [2, 2];
+
+      final tensor = await OrtValue.fromList(testData, testShape);
+
+      // Verify correct parameter forwarding
+      expect(mockPlatform.lastSourceType, 'float32');
+      expect(mockPlatform.lastSourceData, isA<Float32List>());
+      expect(mockPlatform.lastShape, testShape);
+
+      // Verify OrtValue properties
+      expect(tensor.shape, testShape);
+      expect(tensor.dataType, OrtDataType.float32);
+    });
+
+    test('fromList with empty list should throw ArgumentError', () async {
+      final testData = [];
+      final testShape = [0];
+
+      expect(() => OrtValue.fromList(testData, testShape), throwsArgumentError);
+    });
+
+    test('fromList with unsupported type should throw ArgumentError', () async {
+      final testData = ['string1', 'string2'];
+      final testShape = [2];
+
+      expect(() => OrtValue.fromList(testData, testShape), throwsArgumentError);
+    });
   });
 
   group('OrtValue conversion', () {
     test('to() should convert to a different data type', () async {
       // Create an OrtValue first
-      final tensor = await OrtValue.fromFloat32List(Float32List.fromList([1.0, 2.0, 3.0, 4.0]), [2, 2]);
+      final tensor = await OrtValue.fromList(Float32List.fromList([1.0, 2.0, 3.0, 4.0]), [2, 2]);
 
       // Convert to a different type
       final convertedTensor = await tensor.to(OrtDataType.int32);
 
       // Verify the conversion call
       expect(mockPlatform.lastValueIdForConversion, tensor.id);
-      expect(mockPlatform.lastTargetType, 'int32');
 
       // Verify the new tensor
       expect(convertedTensor.id, isNot(tensor.id));
@@ -267,7 +342,7 @@ void main() {
 
     test('toDevice() should move tensor to a different device', () async {
       // Create an OrtValue first
-      final tensor = await OrtValue.fromFloat32List(Float32List.fromList([1.0, 2.0, 3.0, 4.0]), [2, 2]);
+      final tensor = await OrtValue.fromList(Float32List.fromList([1.0, 2.0, 3.0, 4.0]), [2, 2]);
 
       // Move to a different device
       final deviceTensor = await tensor.toDevice(OrtDevice.cuda);
@@ -280,7 +355,7 @@ void main() {
   group('OrtValue data extraction', () {
     test('asFloat32List() should return Float32List data', () async {
       // Create an OrtValue
-      final tensor = await OrtValue.fromFloat32List(Float32List.fromList([1.0, 2.0, 3.0, 4.0]), [2, 2]);
+      final tensor = await OrtValue.fromList(Float32List.fromList([1.0, 2.0, 3.0, 4.0]), [2, 2]);
 
       // Get data as Float32List
       final data = await tensor.asFloat32List();
@@ -298,7 +373,7 @@ void main() {
 
     test('asInt32List() should return Int32List data', () async {
       // Create an OrtValue
-      final tensor = await OrtValue.fromInt32List(Int32List.fromList([1, 2, 3, 4]), [2, 2]);
+      final tensor = await OrtValue.fromList(Int32List.fromList([1, 2, 3, 4]), [2, 2]);
 
       // Get data as Int32List
       final data = await tensor.asInt32List();
@@ -316,7 +391,7 @@ void main() {
 
     test('asBoolList() should return bool list data', () async {
       // Create an OrtValue
-      final tensor = await OrtValue.fromBoolList([true, false, true, false], [2, 2]);
+      final tensor = await OrtValue.fromList([true, false, true, false], [2, 2]);
 
       // Get data as bool list
       final data = await tensor.asBoolList();
@@ -336,7 +411,7 @@ void main() {
   group('OrtValue memory management', () {
     test('dispose() should release native resources', () async {
       // Create an OrtValue
-      final tensor = await OrtValue.fromFloat32List(Float32List.fromList([1.0, 2.0, 3.0, 4.0]), [2, 2]);
+      final tensor = await OrtValue.fromList(Float32List.fromList([1.0, 2.0, 3.0, 4.0]), [2, 2]);
 
       final valueId = tensor.id;
 

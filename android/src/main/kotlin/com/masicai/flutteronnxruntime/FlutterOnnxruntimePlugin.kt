@@ -572,8 +572,6 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                     val sourceType = call.argument<String>("sourceType")
                     val data = call.argument<Any>("data")
                     val shape = call.argument<List<Int>>("shape")
-                    val targetType = call.argument<String>("targetType")
-                    val device = call.argument<String>("device")
 
                     if (sourceType == null || data == null || shape == null) {
                         result.error("INVALID_ARGS", "Missing required arguments", null)
@@ -715,9 +713,9 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                     val tensorInfo =
                         mapOf(
                             "valueId" to valueId,
-                            "dataType" to (targetType ?: sourceType),
+                            "dataType" to sourceType,
                             "shape" to shape,
-                            "device" to (device ?: "cpu"),
+                            "device" to "cpu",
                         )
 
                     result.success(tensorInfo)

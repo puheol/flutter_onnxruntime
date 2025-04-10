@@ -450,9 +450,6 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
       return
     }
 
-    let targetType = args["targetType"] as? String ?? sourceType
-    let device = args["device"] as? String ?? "cpu"
-
     // Convert shape to NSNumber array for ORTValue
     let shapeNumbers = shape.map { NSNumber(value: $0) }
 
@@ -572,10 +569,6 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
         return
       }
 
-      // Perform type conversion if needed
-      // Note: In ORTValue API, we can't directly convert tensor types
-      // so we'll just use the created tensor for now
-
       // Generate unique ID for the tensor
       let valueId = UUID().uuidString
       ortValues[valueId] = tensor
@@ -583,9 +576,9 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
       // Return tensor information
       let tensorInfo: [String: Any] = [
         "valueId": valueId,
-        "dataType": targetType,
+        "dataType": sourceType,
         "shape": shape,
-        "device": device
+        "device": "cpu"
       ]
 
       result(tensorInfo)

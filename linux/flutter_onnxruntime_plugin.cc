@@ -974,8 +974,6 @@ static void flutter_onnxruntime_plugin_handle_method_call(FlutterOnnxruntimePlug
       FlValue *source_type_value = fl_value_lookup_string(args, "sourceType");
       FlValue *data_value = fl_value_lookup_string(args, "data");
       FlValue *shape_value = fl_value_lookup_string(args, "shape");
-      FlValue *target_type_value = fl_value_lookup_string(args, "targetType");
-      FlValue *device_value = fl_value_lookup_string(args, "device");
 
       DEBUG_LOG("createOrtValue called with parameters:");
 
@@ -985,12 +983,8 @@ static void flutter_onnxruntime_plugin_handle_method_call(FlutterOnnxruntimePlug
             FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_ARGS", "Missing required arguments", nullptr));
       } else {
         const char *source_type = fl_value_get_string(source_type_value);
-        const char *target_type = (target_type_value != nullptr) ? fl_value_get_string(target_type_value) : nullptr;
-        const char *device = (device_value != nullptr) ? fl_value_get_string(device_value) : "cpu";
 
         DEBUG_LOG("  sourceType: " << source_type);
-        DEBUG_LOG("  targetType: " << (target_type ? target_type : "null (using sourceType)"));
-        DEBUG_LOG("  device: " << device);
         DEBUG_LOG("  data type: " << fl_value_type_to_string(fl_value_get_type(data_value)));
 
         // Get shape from argument
@@ -1062,6 +1056,9 @@ static void flutter_onnxruntime_plugin_handle_method_call(FlutterOnnxruntimePlug
             // std::string value_id = "tensor_" + generate_session_uuid();
             std::string value_id = generate_ort_value_uuid();
             g_ort_values[value_id] = std::make_unique<Ort::Value>(std::move(tensor));
+
+            // set device to cpu
+            const char *device = "cpu";
 
             // Create response
             FlValue *result_map = fl_value_new_map();

@@ -89,13 +89,7 @@ abstract class FlutterOnnxruntimePlatform extends PlatformInterface {
   /// [shape] is the shape of the tensor
   /// [targetType] is the target data type (e.g., 'float32', 'float16')
   /// [device] is the target device (e.g., 'cpu', 'cuda')
-  Future<Map<String, dynamic>> createOrtValue(
-    String sourceType,
-    dynamic data,
-    List<int> shape,
-    String targetType,
-    String device,
-  ) {
+  Future<Map<String, dynamic>> createOrtValue(String sourceType, dynamic data, List<int> shape) {
     throw UnimplementedError('createOrtValue() has not been implemented.');
   }
 
