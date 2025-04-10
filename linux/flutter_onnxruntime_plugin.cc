@@ -19,6 +19,9 @@
 
 #include "flutter_onnxruntime_plugin_private.h"
 
+// Extern declaration of g_ort_values defined in ort_value.cc
+extern std::unordered_map<std::string, std::unique_ptr<Ort::Value>> g_ort_values;
+
 // Structure to hold session information
 struct SessionInfo {
   std::unique_ptr<Ort::Session> session;
@@ -190,6 +193,40 @@ template <> FlValue *vector_to_fl_value<int>(const std::vector<int> &vec) {
   return list;
 }
 
+// Helper function to clone an Ort::Value tensor without moving it.
+// The cloned buffer is managed via the 'clonedBuffers' vector to keep it valid during inference.
+static Ort::Value cloneTensor(const Ort::Value &src, std::vector<std::shared_ptr<void>> &clonedBuffers) {
+  auto type_info = src.GetTypeInfo();
+  auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
+  std::vector<int64_t> shape = tensor_info.GetShape();
+  size_t total_elements = 1;
+  for (auto dim : shape) {
+    total_elements *= dim;
+  }
+  auto memory_info = Ort::MemoryInfo::CreateCpu(OrtAllocatorType::OrtArenaAllocator, OrtMemTypeDefault);
+  auto elem_type = tensor_info.GetElementType();
+  if (elem_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT) {
+    const float *data = src.GetTensorData<float>();
+    float *new_data = new float[total_elements];                 // allocate new buffer
+    std::memcpy(new_data, data, total_elements * sizeof(float)); // copy data
+
+    // Wrap buffer in a smart pointer with a custom deleter
+    std::shared_ptr<void> new_data_ptr(new_data, [](void *p) { delete[] static_cast<float *>(p); });
+    clonedBuffers.push_back(new_data_ptr);
+
+    return Ort::Value::CreateTensor<float>(memory_info, new_data, total_elements, shape.data(), shape.size());
+  } else if (elem_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32) {
+    const int32_t *data = src.GetTensorData<int32_t>();
+    int32_t *new_data = new int32_t[total_elements];
+    std::memcpy(new_data, data, total_elements * sizeof(int32_t));
+    std::shared_ptr<void> new_data_ptr(new_data, [](void *p) { delete[] static_cast<int32_t *>(p); });
+    clonedBuffers.push_back(new_data_ptr);
+    return Ort::Value::CreateTensor<int32_t>(memory_info, new_data, total_elements, shape.data(), shape.size());
+  } else {
+    throw std::runtime_error("cloneTensor: Unsupported tensor element type for cloning");
+  }
+}
+
 // Called when a method call is received from Flutter.
 static void flutter_onnxruntime_plugin_handle_method_call(FlutterOnnxruntimePlugin *self, FlMethodCall *method_call) {
   g_autoptr(FlMethodResponse) response = nullptr;
@@ -327,15 +364,17 @@ static void flutter_onnxruntime_plugin_handle_method_call(FlutterOnnxruntimePlug
           // store input buffers unless the values will be cleaned after the
           // current iteration
           std::vector<std::vector<float>> input_buffers;
+          // Vector to hold buffers for cloned tensors to insure memory remains valid during inference
+          std::vector<std::shared_ptr<void>> clonedBuffers;
 
-          // For simplicity, we'll just handle float inputs in this example
+          // For each input name in the session
           for (const auto &name : session_info.input_names) {
             DEBUG_LOG("Processing input: " << name);
             auto it = inputs_map.find(name);
 
             if (it != inputs_map.end()) {
               DEBUG_LOG("Found input in map: " << name);
-              // Check if this is an OrtValue reference
+              // Only process as OrtValue references
               if (fl_value_get_type(it->second) == FL_VALUE_TYPE_MAP) {
                 DEBUG_LOG("Input is an OrtValue reference");
                 // Check for valueId in the map
@@ -352,13 +391,9 @@ static void flutter_onnxruntime_plugin_handle_method_call(FlutterOnnxruntimePlug
                     if (ort_value_it->second && ort_value_it->second->IsTensor()) {
                       DEBUG_LOG("OrtValue is a valid tensor");
 
-                      // Use the actual tensor from the OrtValue instead of a dummy tensor
-                      DEBUG_LOG("Using actual OrtValue tensor");
-
                       // Get tensor info for debugging
                       Ort::TypeInfo type_info = ort_value_it->second->GetTypeInfo();
                       auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
-                      // ONNXTensorElementDataType element_type = tensor_info.GetElementType();
                       auto shape = tensor_info.GetShape();
 
                       // Log shape for debugging
@@ -372,12 +407,17 @@ static void flutter_onnxruntime_plugin_handle_method_call(FlutterOnnxruntimePlug
                       shape_str << "]";
                       DEBUG_LOG(shape_str.str());
 
+                      // // Debug: Print the actual input value
+                      // if (tensor_info.GetElementType() == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT) {
+                      //   const float* data = ort_value_it->second->GetTensorData<float>();
+                      //   if (data != nullptr) {
+                      //     DEBUG_LOG("Input value: " << data[0] << " (input name: " << name << ")");
+                      //   }
+                      // }
+
                       // Move the tensor to ort_inputs
-                      // Note: After this operation, the tensor in g_ort_values will be empty
-                      // This is fine if the tensor is only used for this inference
-                      ort_inputs.push_back(std::move(*ort_value_it->second));
+                      ort_inputs.push_back(cloneTensor(*ort_value_it->second, clonedBuffers));
                       input_names_cstr.push_back(name.c_str());
-                      continue;
                     } else {
                       // Handle invalid tensor
                       ERROR_LOG("The referenced tensor is not valid");
@@ -393,54 +433,17 @@ static void flutter_onnxruntime_plugin_handle_method_call(FlutterOnnxruntimePlug
                         nullptr));
                     return;
                   }
-                }
-              }
-
-              // TODO: only accept OrtValue input
-              // Handle regular list input if not an OrtValue
-              if (fl_value_get_type(it->second) == FL_VALUE_TYPE_LIST) {
-                DEBUG_LOG("Input is a regular list");
-                // Get shape if provided
-                std::vector<int64_t> shape;
-                auto shape_it = inputs_map.find(name + "_shape");
-                if (shape_it != inputs_map.end() && fl_value_get_type(shape_it->second) == FL_VALUE_TYPE_LIST) {
-                  shape = fl_value_to_vector<int64_t>(shape_it->second);
-                  DEBUG_LOG("Found custom shape for input");
                 } else {
-                  // Default shape: just a single dimension with the list length
-                  shape.push_back(fl_value_get_length(it->second));
-                  DEBUG_LOG("Using default shape with length: " << shape[0]);
+                  ERROR_LOG("Input does not contain a valid valueId");
+                  response = FL_METHOD_RESPONSE(fl_method_error_response_new(
+                      "INVALID_INPUT_FORMAT", "Input must be an OrtValue reference with valueId", nullptr));
+                  return;
                 }
-
-                // Log the shape
-                std::ostringstream shape_str;
-                shape_str << "Shape: [";
-                for (size_t i = 0; i < shape.size(); i++) {
-                  shape_str << shape[i];
-                  if (i < shape.size() - 1)
-                    shape_str << ", ";
-                }
-                shape_str << "]";
-                DEBUG_LOG(shape_str.str());
-
-                // Convert to float vector and persist it in the container
-                std::vector<float> data = fl_value_to_vector<float>(it->second);
-                DEBUG_LOG("Converted data to float vector with " << data.size() << " elements");
-
-                input_buffers.push_back(std::move(data));
-                auto &buffer = input_buffers.back();
-
-                // Create tensor
-                DEBUG_LOG("Creating tensor from data");
-                Ort::MemoryInfo memory_info =
-                    Ort::MemoryInfo::CreateCpu(OrtAllocatorType::OrtArenaAllocator, OrtMemType::OrtMemTypeDefault);
-
-                Ort::Value tensor = Ort::Value::CreateTensor<float>(memory_info, buffer.data(), buffer.size(),
-                                                                    shape.data(), shape.size());
-
-                DEBUG_LOG("Adding tensor to ort_inputs");
-                ort_inputs.push_back(std::move(tensor));
-                input_names_cstr.push_back(name.c_str());
+              } else {
+                ERROR_LOG("Input is not an OrtValue reference");
+                response = FL_METHOD_RESPONSE(fl_method_error_response_new(
+                    "INVALID_INPUT_FORMAT", "Input must be an OrtValue reference", nullptr));
+                return;
               }
             } else {
               DEBUG_LOG("Warning: Input name " << name << " not found in inputs map");
@@ -511,7 +514,19 @@ static void flutter_onnxruntime_plugin_handle_method_call(FlutterOnnxruntimePlug
               if (data != nullptr && tensor.IsTensor()) {
                 DEBUG_LOG("Copying data to vector");
                 // Copy data into a vector
-                std::vector<float> data_vec(data, data + flat_size);
+                std::vector<float> data_vec(flat_size);
+                for (size_t j = 0; j < flat_size; j++) {
+                  float val = data[j];
+                  // Check for NaN or Infinity in the output data
+                  if (std::isnan(val)) {
+                    DEBUG_LOG("Warning: NaN found in output at index " << j << ", replacing with 0.0");
+                    val = 0.0f;
+                  } else if (std::isinf(val)) {
+                    DEBUG_LOG("Warning: Infinity found in output at index " << j << ", replacing with max float");
+                    val = (val > 0) ? std::numeric_limits<float>::max() : -std::numeric_limits<float>::max();
+                  }
+                  data_vec[j] = val;
+                }
 
                 // Log a few values for debugging
                 std::ostringstream values_str;
@@ -1016,17 +1031,55 @@ static void flutter_onnxruntime_plugin_handle_method_call(FlutterOnnxruntimePlug
             DEBUG_LOG("Data type value: " << data_type_val);
 
             std::vector<float> float_data;
-            if (data_type == FL_VALUE_TYPE_FLOAT32_LIST) {
+            if (data_type_val == 11) { // FL_VALUE_TYPE_FLOAT32_LIST
               size_t length = fl_value_get_length(data_value);
               DEBUG_LOG("Float32List with length: " << length);
               float_data.reserve(length);
 
+              // Get direct access to the Dart Float32List data
               const float *float_array = fl_value_get_float32_list(data_value);
-              float_data.assign(float_array, float_array + length);
+              // Replace the existing handling with a direct approach that ensures
+              // IEEE 754 format is correctly preserved
+              for (size_t i = 0; i < length; i++) {
+                float val = float_array[i];
+                // Check for NaN or Infinity
+                if (std::isnan(val)) {
+                  DEBUG_LOG("Warning: NaN found in input data at index " << i);
+                  // Use 0.0f instead of NaN
+                  val = 0.0f;
+                } else if (std::isinf(val)) {
+                  DEBUG_LOG("Warning: Infinity found in input data at index " << i);
+                  // Use max/min float value instead of infinity
+                  val = (val > 0) ? std::numeric_limits<float>::max() : -std::numeric_limits<float>::max();
+                }
 
-              // Note: the fl_value_get_float() does not work for Float32List
+                // Store the value
+                float_data.push_back(val);
+              }
+
+              // Debug the value we're going to use
+              if (length > 0) {
+                DEBUG_LOG("Float value we'll use: " << float_data[0]);
+              }
+
+              DEBUG_LOG("Successfully got Float32List data");
+            } else if (data_type == FL_VALUE_TYPE_LIST) {
+              DEBUG_LOG("Converting regular list to float array");
+              // When converting from a regular list (which might contain doubles),
+              // we need to handle potential overflow/underflow
+              size_t length = fl_value_get_length(data_value);
+              float_data.reserve(length);
+
+              for (size_t i = 0; i < length; i++) {
+                FlValue *val = fl_value_get_list_value(data_value, i);
+                float float_val = fl_value_get_float(val);
+                float_data.push_back(float_val);
+              }
             } else {
-              ERROR_LOG("Expected Float32List, got " << fl_value_type_to_string(data_type));
+              ERROR_LOG("Expected Float32List or regular list, got " << fl_value_type_to_string(data_type));
+              response = FL_METHOD_RESPONSE(fl_method_error_response_new(
+                  "INVALID_DATA_TYPE", "Expected Float32List or regular list for float32 data", nullptr));
+              return;
             }
 
             DEBUG_LOG("Float data size: " << float_data.size());
@@ -1048,26 +1101,56 @@ static void flutter_onnxruntime_plugin_handle_method_call(FlutterOnnxruntimePlug
             Ort::MemoryInfo memory_info =
                 Ort::MemoryInfo::CreateCpu(OrtAllocatorType::OrtArenaAllocator, OrtMemType::OrtMemTypeDefault);
 
-            // tensor will be reshaped from a flatten list of floats
-            Ort::Value tensor = Ort::Value::CreateTensor<float>(memory_info, float_data.data(), float_data.size(),
-                                                                shape_vec.data(), shape_vec.size());
+            // Create a tensor directly from the vector's data
+            DEBUG_LOG("Creating tensor from float_data with size: " << float_data.size());
+            DEBUG_LOG("Shape: [" << shape_vec[0] << "]");
 
-            // Generate and store value ID
-            // std::string value_id = "tensor_" + generate_session_uuid();
-            std::string value_id = generate_ort_value_uuid();
-            g_ort_values[value_id] = std::make_unique<Ort::Value>(std::move(tensor));
+            try {
+              auto tensor = Ort::Value::CreateTensor<float>(memory_info, float_data.data(), float_data.size(),
+                                                            shape_vec.data(), shape_vec.size());
 
-            // set device to cpu
-            const char *device = "cpu";
+              // Generate and store value ID
+              std::string value_id = generate_ort_value_uuid();
+              DEBUG_LOG("Generated OrtValue ID: " << value_id);
 
-            // Create response
-            FlValue *result_map = fl_value_new_map();
-            fl_value_set_string_take(result_map, "valueId", fl_value_new_string(value_id.c_str()));
-            fl_value_set_string_take(result_map, "dataType", fl_value_new_string("float32"));
-            fl_value_set_string_take(result_map, "shape", vector_to_fl_value<int64_t>(shape_vec));
-            fl_value_set_string_take(result_map, "device", fl_value_new_string(device));
+              // Instead of moving the tensor, make a more robust copy
+              float *tensor_data = new float[float_data.size()];
+              for (size_t i = 0; i < float_data.size(); i++) {
+                tensor_data[i] = float_data[i];
+              }
 
-            response = FL_METHOD_RESPONSE(fl_method_success_response_new(result_map));
+              // Create a new tensor with our persistent copy of the data
+              auto persistent_tensor = Ort::Value::CreateTensor<float>(memory_info, tensor_data, float_data.size(),
+                                                                       shape_vec.data(), shape_vec.size());
+
+              // Store the tensor in the global map with direct ownership
+              g_ort_values[value_id] = std::make_unique<Ort::Value>(std::move(persistent_tensor));
+
+              // Store the tensor data buffer in a separate container to keep it alive
+              static std::vector<float *> tensor_buffers;
+              tensor_buffers.push_back(tensor_data);
+
+              DEBUG_LOG("Stored OrtValue in global map. Current map size: " << g_ort_values.size());
+
+              // set device to cpu
+              const char *device = "cpu";
+
+              // Create response
+              FlValue *result_map = fl_value_new_map();
+              fl_value_set_string_take(result_map, "valueId", fl_value_new_string(value_id.c_str()));
+              fl_value_set_string_take(result_map, "dataType", fl_value_new_string("float32"));
+              fl_value_set_string_take(result_map, "shape", vector_to_fl_value<int64_t>(shape_vec));
+              fl_value_set_string_take(result_map, "device", fl_value_new_string(device));
+
+              response = FL_METHOD_RESPONSE(fl_method_success_response_new(result_map));
+              DEBUG_LOG("Successfully created OrtValue");
+            } catch (const Ort::Exception &e) {
+              ERROR_LOG("ORT Exception creating tensor: " << e.what());
+              response = FL_METHOD_RESPONSE(fl_method_error_response_new("ORT_ERROR", e.what(), nullptr));
+            } catch (const std::exception &e) {
+              ERROR_LOG("Standard exception creating tensor: " << e.what());
+              response = FL_METHOD_RESPONSE(fl_method_error_response_new("STD_ERROR", e.what(), nullptr));
+            }
           } else if (strcmp(source_type, "int32") == 0) {
             DEBUG_LOG("int32");
           } else if (strcmp(source_type, "int64") == 0) {

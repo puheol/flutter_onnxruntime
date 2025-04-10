@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'dart:async';
 
@@ -46,16 +48,19 @@ class _MyAppState extends State<MyApp> {
       await _initializeSession();
     }
 
-    final inputs = {
-      'A': [a],
-      'B': [b],
-    };
+    final inputA = await OrtValue.fromList(Float32List.fromList([a]), [1]);
+    final inputB = await OrtValue.fromList(Float32List.fromList([b]), [1]);
+
+    final inputs = {'A': inputA, 'B': inputB};
 
     final outputs = await _session!.run(inputs);
-    // print(outputs);
     setState(() {
       _result = outputs['outputs']['C'][0].toString(); // Update the result with the output from the model
     });
+
+    // clean up
+    inputA.dispose();
+    inputB.dispose();
   }
 
   @override

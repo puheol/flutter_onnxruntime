@@ -1,3 +1,4 @@
+import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
 import 'package:flutter_onnxruntime/src/flutter_onnxruntime_method_channel.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
@@ -35,11 +36,11 @@ abstract class FlutterOnnxruntimePlatform extends PlatformInterface {
   /// Run inference on a session
   ///
   /// [sessionId] is the ID of the session to run inference on
-  /// [inputs] is a map of input names to input values
+  /// [inputs] is a map of input names to OrtValue objects
   /// [runOptions] is an optional map of run options
   Future<Map<String, dynamic>> runInference(
     String sessionId,
-    Map<String, dynamic> inputs, {
+    Map<String, OrtValue> inputs, {
     Map<String, dynamic>? runOptions,
   }) {
     throw UnimplementedError('runInference() has not been implemented.');

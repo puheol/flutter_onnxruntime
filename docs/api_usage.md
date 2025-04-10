@@ -86,19 +86,19 @@ The `OrtValue` class provides a more flexible way to manage tensors:
 
 ```dart
 // Create from Float32List
-final inputTensor = await OrtValue.fromFloat32List(
+final inputTensor = await OrtValue.fromList(
   Float32List.fromList([1.0, 2.0, 3.0, 4.0]),
   [2, 2], // Shape: 2x2 matrix
 );
 
 // Create from Int32List
-final intTensor = await OrtValue.fromInt32List(
+final intTensor = await OrtValue.fromList(
   Int32List.fromList([1, 2, 3, 4]),
   [4], // Shape: vector of 4 elements
 );
 
 // Create from Uint8List (for images)
-final imageTensor = await OrtValue.fromUint8List(
+final imageTensor = await OrtValue.fromList(
   imageBytes, // Uint8List from an image
   [1, height, width, channels],
 );
@@ -138,13 +138,13 @@ final intData = await intTensor.asInt32List();
 
 ```dart
 // Create OrtValue tensor
-final inputTensor = await OrtValue.fromFloat32List(
+final inputTensor = await OrtValue.fromList(
   Float32List.fromList([1.0, 2.0, 3.0, 4.0]),
   [2, 2],  // Shape: 2x2 matrix
 );
 
 // Create another tensor for a second input
-final inputTensor2 = await OrtValue.fromFloat32List(
+final inputTensor2 = await OrtValue.fromList(
   Float32List.fromList([5.0, 6.0, 7.0, 8.0]),
   [2, 2],
 );

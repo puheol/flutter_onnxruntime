@@ -54,30 +54,41 @@ void main() {
     });
 
     testWidgets('Add two numbers', (WidgetTester tester) async {
-      final inputs = {
-        'A': [3.0],
-        'B': [4.0],
-      };
+      // Create OrtValue inputs instead of raw arrays
+      final inputA = await OrtValue.fromList([3.0], [1]);
+      final inputB = await OrtValue.fromList([4.0], [1]);
+
+      final inputs = {'A': inputA, 'B': inputB};
 
       final outputs = await session.run(inputs);
       expect(outputs, isNotNull);
       expect(outputs['outputs']['C'][0], 7.0); // 3 + 4 = 7
+
+      // Clean up
+      await inputA.dispose();
+      await inputB.dispose();
     });
 
     testWidgets('Add two arrays of numbers', (WidgetTester tester) async {
-      final inputs = {
-        'A': [1.1, 2.2, 3.3],
-        'B': [4.4, 5.5, 6.6],
-      };
+      // Create OrtValue inputs instead of raw arrays
+      final inputA = await OrtValue.fromList([1.1, 2.2, 3.3], [3]);
+      final inputB = await OrtValue.fromList([4.4, 5.5, 6.6], [3]);
+
+      final inputs = {'A': inputA, 'B': inputB};
 
       final outputs = await session.run(inputs);
       expect(outputs, isNotNull);
 
       final result = outputs['outputs']['C'];
+
       expect(result.length, 3);
       expect(result[0], closeTo(5.5, 1e-5)); // 1.1 + 4.4 ≈ 5.5
       expect(result[1], closeTo(7.7, 1e-5)); // 2.2 + 5.5 ≈ 7.7
       expect(result[2], closeTo(9.9, 1e-5)); // 3.3 + 6.6 ≈ 9.9
+
+      // Clean up
+      await inputA.dispose();
+      await inputB.dispose();
     });
   });
 }

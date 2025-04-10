@@ -21,49 +21,22 @@ class OrtSession {
 
   /// Run inference on the session
   ///
-  /// [inputs] is a map of input names to input values
+  /// [inputs] is a map of input names to OrtValue objects
   /// [options] is an optional map of run options
   ///
-  /// `inputs` can contain either raw data (lists, arrays) or OrtValue objects:
-  ///
-  /// Example with raw data:
+  /// Example:
   /// ```dart
-  /// final inputs = {
-  ///   'input_name': [[1, 2], [3, 4]],
-  ///   'input_name_shape': [2, 2],
-  /// };
-  /// ```
-  ///
-  /// Example with OrtValue objects:
-  /// ```dart
-  /// final inputTensor = await OrtValue.fromFloat32List(
-  ///   Float32List.fromList([1.0, 2.0, 3.0, 4.0]),
+  /// final inputTensor = await OrtValue.fromList(
+  ///   [1.0, 2.0, 3.0, 4.0],
   ///   [2, 2]
   /// );
   /// final inputs = {
   ///   'input_name': inputTensor,
   /// };
+  /// final outputs = await session.run(inputs);
   /// ```
-  Future<Map<String, dynamic>> run(Map<String, dynamic> inputs, {OrtRunOptions? options}) async {
-    // Process inputs to handle OrtValue objects
-    final processedInputs = Map<String, dynamic>.from(inputs);
-
-    // Convert any OrtValue objects to their value IDs for platform channel transmission
-    for (final entry in inputs.entries) {
-      if (entry.value is OrtValue) {
-        final ortValue = entry.value as OrtValue;
-        // Replace OrtValue with its valueId for the platform channel
-        processedInputs[entry.key] = {'valueId': ortValue.id};
-        // Also include shape information
-        processedInputs['${entry.key}_shape'] = ortValue.shape;
-      }
-    }
-
-    return await FlutterOnnxruntimePlatform.instance.runInference(
-      id,
-      processedInputs,
-      runOptions: options?.toMap() ?? {},
-    );
+  Future<Map<String, dynamic>> run(Map<String, OrtValue> inputs, {OrtRunOptions? options}) async {
+    return await FlutterOnnxruntimePlatform.instance.runInference(id, inputs, runOptions: options?.toMap() ?? {});
   }
 
   Future<void> close() async {

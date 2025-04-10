@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
 
 import 'flutter_onnxruntime_platform_interface.dart';
 
@@ -36,12 +37,20 @@ class MethodChannelFlutterOnnxruntime extends FlutterOnnxruntimePlatform {
   @override
   Future<Map<String, dynamic>> runInference(
     String sessionId,
-    Map<String, dynamic> inputs, {
+    Map<String, OrtValue> inputs, {
     Map<String, dynamic>? runOptions,
   }) async {
+    // Convert OrtValue objects to valueId maps for platform channel
+    final processedInputs = <String, dynamic>{};
+
+    for (final entry in inputs.entries) {
+      // Convert each OrtValue to its valueId for the platform channel
+      processedInputs[entry.key] = {'valueId': entry.value.id};
+    }
+
     final result = await methodChannel.invokeMethod<Map<Object?, Object?>>('runInference', {
       'sessionId': sessionId,
-      'inputs': inputs,
+      'inputs': processedInputs,
       'runOptions': runOptions ?? {},
     });
     return _convertMapToStringDynamic(result ?? {});

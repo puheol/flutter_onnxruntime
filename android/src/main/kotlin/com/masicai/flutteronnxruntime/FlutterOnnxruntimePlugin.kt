@@ -212,102 +212,29 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                     val ortInputs = HashMap<String, OnnxValue>()
 
                     try {
-                        // Process inputs that aren't shape information
+                        // Process inputs - now expecting only OrtValue references
                         for ((name, value) in inputs) {
-                            if (name.endsWith("_shape")) continue
-
-                            // Get shape information if provided
-                            val shapeName = "${name}_shape"
-                            val shape =
-                                if (inputs.containsKey(shapeName) && inputs[shapeName] is List<*>) {
-                                    (inputs[shapeName] as List<*>).map { (it as Number).toLong() }.toLongArray()
+                            // Only process value as a Map with valueId
+                            if (value is Map<*, *> && value.containsKey("valueId")) {
+                                val valueId = value["valueId"] as String
+                                val existingTensor = ortValues[valueId]
+                                if (existingTensor != null) {
+                                    ortInputs[name] = existingTensor
                                 } else {
-                                    // Default shape for 1D data
-                                    when (value) {
-                                        is List<*> -> longArrayOf(value.size.toLong())
-                                        is ByteArray -> longArrayOf(value.size.toLong())
-                                        is FloatArray -> longArrayOf(value.size.toLong())
-                                        is IntArray -> longArrayOf(value.size.toLong())
-                                        else -> {
-                                            result.error(
-                                                "MISSING_SHAPE",
-                                                "Shape information required for input '$name' of type: ${value?.javaClass?.name}",
-                                                null,
-                                            )
-                                            return
-                                        }
-                                    }
-                                }
-
-                            // Create appropriate tensor based on input type
-                            when (value) {
-                                // Handle OrtValue reference (sent as Map with valueId)
-                                is Map<*, *> -> {
-                                    if (value.containsKey("valueId")) {
-                                        val valueId = value["valueId"] as String
-                                        val existingTensor = ortValues[valueId]
-                                        if (existingTensor != null) {
-                                            ortInputs[name] = existingTensor
-                                        } else {
-                                            result.error(
-                                                "INVALID_ORT_VALUE",
-                                                "OrtValue with ID $valueId not found",
-                                                null,
-                                            )
-                                            return
-                                        }
-                                    } else {
-                                        result.error(
-                                            "INVALID_INPUT_FORMAT",
-                                            "Input map for '$name' does not contain a valueId",
-                                            null,
-                                        )
-                                        return
-                                    }
-                                }
-                                is List<*> -> {
-                                    if (value.isEmpty()) {
-                                        result.error("EMPTY_INPUT", "Input '$name' is empty", null)
-                                        return
-                                    }
-
-                                    // Handle based on element type
-                                    when (val firstElement = value[0]) {
-                                        is Number -> {
-                                            val floatArray = value.map { (it as Number).toFloat() }.toFloatArray()
-                                            val tensor = OnnxTensor.createTensor(ortEnvironment, FloatBuffer.wrap(floatArray), shape)
-                                            ortInputs[name] = tensor
-                                        }
-                                        else -> {
-                                            result.error(
-                                                "UNSUPPORTED_INPUT_TYPE",
-                                                "Unsupported input element type for '$name': ${firstElement?.javaClass?.name}",
-                                                null,
-                                            )
-                                            return
-                                        }
-                                    }
-                                }
-                                is ByteArray -> {
-                                    val tensor = OnnxTensor.createTensor(ortEnvironment, ByteBuffer.wrap(value), shape)
-                                    ortInputs[name] = tensor
-                                }
-                                is FloatArray -> {
-                                    val tensor = OnnxTensor.createTensor(ortEnvironment, FloatBuffer.wrap(value), shape)
-                                    ortInputs[name] = tensor
-                                }
-                                is IntArray -> {
-                                    val tensor = OnnxTensor.createTensor(ortEnvironment, IntBuffer.wrap(value), shape)
-                                    ortInputs[name] = tensor
-                                }
-                                else -> {
                                     result.error(
-                                        "UNSUPPORTED_INPUT_TYPE",
-                                        "Unsupported input type for '$name': ${value?.javaClass?.name}",
+                                        "INVALID_ORT_VALUE",
+                                        "OrtValue with ID $valueId not found",
                                         null,
                                     )
                                     return
                                 }
+                            } else {
+                                result.error(
+                                    "INVALID_INPUT_FORMAT",
+                                    "Input for '$name' must be an OrtValue reference with valueId",
+                                    null,
+                                )
+                                return
                             }
                         }
 

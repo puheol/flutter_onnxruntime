@@ -1,6 +1,7 @@
 #include "ort_value.h"
 #include "float16_utils.h"
 #include <cstring>
+#include <ctime>
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -803,9 +804,8 @@ extern "C" bool ort_release_tensor(const char *value_id, char **error_out) {
   }
 }
 
-// Helper function to generate a UUID
-// This is a simple implementation, you may want to use a proper UUID library
+// Generate a UUID for OrtValue
 std::string generate_ort_value_uuid() {
   static int counter = 0;
-  return "tensor_" + std::to_string(counter++);
+  return "ort_value_" + std::to_string(time(nullptr)) + "_" + std::to_string(counter++);
 }

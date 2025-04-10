@@ -24,11 +24,18 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
   @override
   Future<Map<String, dynamic>> runInference(
     String sessionId,
-    Map<String, dynamic> inputs, {
+    Map<String, OrtValue> inputs, {
     Map<String, dynamic>? runOptions,
   }) {
     // Store the inputs for later assertions
-    lastRunInputs = inputs;
+    lastRunInputs = {
+      for (final entry in inputs.entries) entry.key: {'valueId': entry.value.id},
+    };
+
+    // Add shape info for each input
+    for (final entry in inputs.entries) {
+      lastRunInputs!['${entry.key}_shape'] = entry.value.shape;
+    }
 
     // Return mock outputs
     return Future.value({
@@ -143,10 +150,9 @@ void main() {
   });
 
   group('OrtSession with OrtValue integration', () {
-    test('run() should accept OrtValue objects as inputs', () async {
+    test('run() should accept only OrtValue objects as inputs', () async {
       // Create OrtValue tensors
       final tensor1 = await OrtValue.fromList(Float32List.fromList([1.0, 2.0, 3.0, 4.0]), [2, 2]);
-
       final tensor2 = await OrtValue.fromList(Float32List.fromList([5.0, 6.0, 7.0, 8.0]), [2, 2]);
 
       // Use OrtValue objects in inputs map
@@ -167,33 +173,6 @@ void main() {
       expect(mockPlatform.lastRunInputs!['input2'], isA<Map<String, dynamic>>());
       expect(mockPlatform.lastRunInputs!['input2']['valueId'], tensor2.id);
       expect(mockPlatform.lastRunInputs!['input2_shape'], tensor2.shape);
-    });
-
-    test('run() should accept mixed inputs (OrtValue and raw data)', () async {
-      // Create one OrtValue tensor
-      final tensor = await OrtValue.fromList(Float32List.fromList([1.0, 2.0, 3.0, 4.0]), [2, 2]);
-
-      // Create inputs with both OrtValue and raw data
-      final inputs = {
-        'input1': tensor,
-        'input2': [5.0, 6.0, 7.0, 8.0],
-        'input2_shape': [2, 2],
-      };
-
-      // Run inference with mixed inputs
-      await session.run(inputs);
-
-      // Verify the inputs were correctly processed
-      expect(mockPlatform.lastRunInputs, isNotNull);
-
-      // Check that the OrtValue was processed correctly
-      expect(mockPlatform.lastRunInputs!['input1'], isA<Map<String, dynamic>>());
-      expect(mockPlatform.lastRunInputs!['input1']['valueId'], tensor.id);
-      expect(mockPlatform.lastRunInputs!['input1_shape'], tensor.shape);
-
-      // Check that the raw data was passed through unchanged
-      expect(mockPlatform.lastRunInputs!['input2'], [5.0, 6.0, 7.0, 8.0]);
-      expect(mockPlatform.lastRunInputs!['input2_shape'], [2, 2]);
     });
 
     test('should properly clean up OrtValue resources', () async {

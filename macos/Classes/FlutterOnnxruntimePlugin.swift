@@ -138,31 +138,47 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
     guard let args = call.arguments as? [String: Any],
           let sessionId = args["sessionId"] as? String,
           let inputs = args["inputs"] as? [String: Any] else {
-      result(FlutterError(code: "INVALID_ARGS", message: "Session ID and inputs are required", details: nil))
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required arguments", details: nil))
       return
     }
-
-    guard let session = sessions[sessionId] else {
-      result(FlutterError(code: "INVALID_SESSION", message: "Session not found", details: nil))
-      return
-    }
-
+    
+    // Get run options if provided
+    let runOptions = args["runOptions"] as? [String: Any] ?? [:]
+    
     do {
-      // Create an input map for the ORT session
-      let ortInputs = try createORTValueInputs(inputs: inputs, session: session)
-
-      // Get output names
-      let outputNames = try session.outputNames()
-
+      // Get session
+      guard let session = sessions[sessionId] else {
+        throw OrtError.flutterError(FlutterError(code: "INVALID_SESSION", message: "Session not found", details: nil))
+      }
+      
+      // Process inputs - validate OrtValue references directly here
+      var ortInputs: [String: ORTValue] = [:]
+      
+      for (name, value) in inputs {
+        // Only process OrtValue references (sent as dictionary with valueId)
+        if let valueDict = value as? [String: Any], let valueId = valueDict["valueId"] as? String {
+          if let existingValue = ortValues[valueId] {
+            ortInputs[name] = existingValue
+          } else {
+            throw OrtError.flutterError(FlutterError(code: "INVALID_ORT_VALUE", message: "OrtValue with ID \(valueId) not found", details: nil))
+          }
+        } else {
+          throw OrtError.flutterError(FlutterError(code: "INVALID_INPUT_FORMAT", message: "Input for '\(name)' must be an OrtValue reference with valueId", details: nil))
+        }
+      }
+      
       // Run inference
-      let outputs = try session.run(withInputs: ortInputs, outputNames: Set(outputNames), runOptions: nil)
-
-      // Process outputs to Flutter-compatible format
+      let outputs = try session.run(withInputs: ortInputs, runOptions: ORTRunOptions(options: runOptions))
+      
+      // Convert outputs to Flutter format
       let flutterOutputs = try convertOutputsToFlutterFormat(outputs: outputs, session: session)
-
+      
+      // Return result
       result(["outputs": flutterOutputs])
+    } catch let error as FlutterError {
+      result(error)
     } catch {
-      result(FlutterError(code: "INFERENCE_ERROR", message: error.localizedDescription, details: nil))
+      result(FlutterError(code: "RUN_INFERENCE_ERROR", message: error.localizedDescription, details: nil))
     }
   }
 
@@ -253,77 +269,6 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
   }
 
   // Helper functions
-
-  // swiftlint:disable:next cyclomatic_complexity
-  private func createORTValueInputs(inputs: [String: Any], session: ORTSession) throws -> [String: ORTValue] {
-    var ortInputs: [String: ORTValue] = [:]
-
-    for (name, value) in inputs {
-      // Skip shape info
-      if name.hasSuffix("_shape") {
-        continue
-      }
-
-      // Check if the input is an OrtValue reference (sent as dictionary with valueId)
-      if let valueDict = value as? [String: Any], let valueId = valueDict["valueId"] as? String {
-        if let existingValue = ortValues[valueId] {
-          ortInputs[name] = existingValue
-          continue
-        } else {
-          throw OrtError.flutterError(FlutterError(code: "INVALID_ORT_VALUE", message: "OrtValue with ID \(valueId) not found", details: nil))
-        }
-      }
-
-      // Get shape if provided
-      let shapeName = "\(name)_shape"
-      let shape: [NSNumber]
-
-      if let shapeArray = inputs[shapeName] as? [NSNumber] {
-        shape = shapeArray
-      } else if let value = value as? [Any] {
-        // Default to 1D shape if not provided
-        shape = [NSNumber(value: value.count)]
-      } else {
-        throw OrtError.flutterError(FlutterError(code: "INVALID_SHAPE", message: "Shape information required for input '\(name)'", details: nil))
-      }
-
-      // Create tensor based on input type
-      if let floatArray = value as? [Float] {
-        let data = NSMutableData(bytes: floatArray, length: floatArray.count * MemoryLayout<Float>.stride)
-        let tensor = try ORTValue(tensorData: data, elementType: .float, shape: shape)
-        ortInputs[name] = tensor
-      } else if let intArray = value as? [Int32] {
-        let data = NSMutableData(bytes: intArray, length: intArray.count * MemoryLayout<Int32>.stride)
-        let tensor = try ORTValue(tensorData: data, elementType: .int32, shape: shape)
-        ortInputs[name] = tensor
-      } else if let doubleArray = value as? [Double] {
-        // Convert double to float as ORTTensorElementDataType may not support double
-        let floatArray = doubleArray.map { Float($0) }
-        let data = NSMutableData(bytes: floatArray, length: floatArray.count * MemoryLayout<Float>.stride)
-        let tensor = try ORTValue(tensorData: data, elementType: .float, shape: shape)
-        ortInputs[name] = tensor
-      } else if let numberArray = value as? [NSNumber] {
-        // Convert NSNumber array to float array
-        let floatArray = numberArray.map { $0.floatValue }
-        let data = NSMutableData(bytes: floatArray, length: floatArray.count * MemoryLayout<Float>.stride)
-        let tensor = try ORTValue(tensorData: data, elementType: .float, shape: shape)
-        ortInputs[name] = tensor
-      } else if let typedData = value as? FlutterStandardTypedData {
-        if typedData.data.count % 4 == 0 {
-          // Assuming float32 data
-          let mutableData = NSMutableData(data: typedData.data)
-          let tensor = try ORTValue(tensorData: mutableData, elementType: .float, shape: shape)
-          ortInputs[name] = tensor
-        } else {
-          throw OrtError.flutterError(FlutterError(code: "UNSUPPORTED_INPUT_TYPE", message: "Unsupported input type for '\(name)'", details: nil))
-        }
-      } else {
-        throw OrtError.flutterError(FlutterError(code: "UNSUPPORTED_INPUT_TYPE", message: "Unsupported input type for '\(name)'", details: nil))
-      }
-    }
-
-    return ortInputs
-  }
 
   // swiftlint:disable:next cyclomatic_complexity
   private func convertOutputsToFlutterFormat(outputs: [String: ORTValue], session: ORTSession) throws -> [String: Any] {
