@@ -141,19 +141,20 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
       result(FlutterError(code: "INVALID_ARGS", message: "Missing required arguments", details: nil))
       return
     }
-    
+
     // Get run options if provided
+    // To Do: process and pass the runOptions to session.run()
     let runOptions = args["runOptions"] as? [String: Any] ?? [:]
-    
+
     do {
       // Get session
       guard let session = sessions[sessionId] else {
         throw OrtError.flutterError(FlutterError(code: "INVALID_SESSION", message: "Session not found", details: nil))
       }
-      
+
       // Process inputs - validate OrtValue references directly here
       var ortInputs: [String: ORTValue] = [:]
-      
+
       for (name, value) in inputs {
         // Only process OrtValue references (sent as dictionary with valueId)
         if let valueDict = value as? [String: Any], let valueId = valueDict["valueId"] as? String {
@@ -163,16 +164,21 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
             throw OrtError.flutterError(FlutterError(code: "INVALID_ORT_VALUE", message: "OrtValue with ID \(valueId) not found", details: nil))
           }
         } else {
-          throw OrtError.flutterError(FlutterError(code: "INVALID_INPUT_FORMAT", message: "Input for '\(name)' must be an OrtValue reference with valueId", details: nil))
+          throw OrtError.flutterError(FlutterError(code: "INVALID_INPUT_FORMAT",
+            message: "Input for '\(name)' must be an OrtValue reference with valueId",
+            details: nil))
         }
       }
-      
-      // Run inference
-      let outputs = try session.run(withInputs: ortInputs, runOptions: ORTRunOptions(options: runOptions))
-      
+
+      // Get output names
+      let outputNames = try session.outputNames()
+
+      // Run inference with prepared output containers
+      let outputs = try session.run(withInputs: ortInputs, outputNames: Set(outputNames), runOptions: nil)
+
       // Convert outputs to Flutter format
       let flutterOutputs = try convertOutputsToFlutterFormat(outputs: outputs, session: session)
-      
+
       // Return result
       result(["outputs": flutterOutputs])
     } catch let error as FlutterError {
@@ -535,7 +541,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
     do {
       // Get tensor information
       let tensorInfo = try tensor.tensorTypeAndShapeInfo()
-      let shape = try tensorInfo.shape.map { Int(truncating: $0) }
+      let shape = tensorInfo.shape.map { Int(truncating: $0) }
 
       // In ORTValue, direct type conversion isn't available
       // We would need to extract data and create a new tensor
@@ -581,7 +587,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
     do {
       // Get tensor information
       let tensorInfo = try tensor.tensorTypeAndShapeInfo()
-      let shape = try tensorInfo.shape.map { Int(truncating: $0) }
+      let shape = tensorInfo.shape.map { Int(truncating: $0) }
 
       // Return tensor information (no actual device transfer needed as we're staying on CPU)
       let resultInfo: [String: Any] = [
@@ -614,7 +620,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
     do {
       // Get tensor information
       let tensorInfo = try tensor.tensorTypeAndShapeInfo()
-      let shape = try tensorInfo.shape.map { Int(truncating: $0) }
+      let shape = tensorInfo.shape.map { Int(truncating: $0) }
 
       // Calculate element count
       let elementCount = shape.reduce(1, *)
