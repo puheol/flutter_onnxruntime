@@ -25,21 +25,25 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
   @override
   Future<Map<String, dynamic>> runInference(
     String sessionId,
-    Map<String, dynamic> inputs, {
+    Map<String, OrtValue> inputs, {
     Map<String, dynamic>? runOptions,
   }) {
     // Track the invocation for verification
     lastSessionIdForRun = sessionId;
-    lastInputsForRun = inputs;
+    lastInputsForRun = {
+      for (final entry in inputs.entries) entry.key: {'valueId': entry.value.id},
+    };
     lastRunOptions = runOptions;
 
     // Return mock output
     return Future.value({
-      'output1': [1.0, 2.0, 3.0],
-      'output2': [
-        [4.0, 5.0],
-        [6.0, 7.0],
-      ],
+      'outputs': {
+        'output1': [1.0, 2.0, 3.0],
+        'output2': [
+          [4.0, 5.0],
+          [6.0, 7.0],
+        ],
+      },
     });
   }
 
@@ -95,6 +99,23 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
       },
     ]);
   }
+
+  @override
+  Future<Map<String, dynamic>> createOrtValue(String sourceType, dynamic data, List<int> shape) {
+    return Future.value({'valueId': 'test_value_id', 'dataType': sourceType, 'shape': shape, 'device': 'cpu'});
+  }
+
+  @override
+  Future<Map<String, dynamic>> convertOrtValue(String valueId, String targetType) => Future.value({});
+
+  @override
+  Future<Map<String, dynamic>> getOrtValueData(String valueId, String dataType) => Future.value({});
+
+  @override
+  Future<Map<String, dynamic>> moveOrtValueToDevice(String valueId, String targetDevice) => Future.value({});
+
+  @override
+  Future<void> releaseOrtValue(String valueId) => Future.value();
 }
 
 void main() {
@@ -139,12 +160,22 @@ void main() {
 
   group('OrtSession run method', () {
     test('run passes correct parameters to platform', () async {
-      final inputs = {
-        'input1': [1.0, 2.0, 3.0],
-        'input1_shape': [1, 3],
-        'input2': [4, 5, 6],
-        'input2_shape': [1, 3],
-      };
+      // Create mock OrtValues
+      final ortValue1 = OrtValue.fromMap({
+        'valueId': 'test_value_1',
+        'dataType': 'float32',
+        'shape': [1, 3],
+        'device': 'cpu',
+      });
+
+      final ortValue2 = OrtValue.fromMap({
+        'valueId': 'test_value_2',
+        'dataType': 'float32',
+        'shape': [1, 3],
+        'device': 'cpu',
+      });
+
+      final inputs = {'input1': ortValue1, 'input2': ortValue2};
 
       final runOptions = OrtRunOptions(logSeverityLevel: true, logVerbosityLevel: false, terminate: true);
 
@@ -152,20 +183,91 @@ void main() {
 
       // Verify the correct parameters were passed to the platform implementation
       expect(mockPlatform.lastSessionIdForRun, 'test_session_id');
-      expect(mockPlatform.lastInputsForRun, inputs);
+      expect(mockPlatform.lastInputsForRun!['input1'], {'valueId': 'test_value_1'});
+      expect(mockPlatform.lastInputsForRun!['input2'], {'valueId': 'test_value_2'});
       expect(mockPlatform.lastRunOptions, runOptions.toMap());
     });
 
     test('run returns correct output structure', () async {
-      final outputs = await session.run({
-        'input1': [1.0, 2.0, 3.0],
+      // Create a mock OrtValue
+      final ortValue = OrtValue.fromMap({
+        'valueId': 'test_value_id',
+        'dataType': 'float32',
+        'shape': [1, 3],
+        'device': 'cpu',
       });
 
+      final outputs = await session.run({'input1': ortValue});
+
       expect(outputs, isNotNull);
-      expect(outputs.keys, containsAll(['output1', 'output2']));
-      expect(outputs['output1'], [1.0, 2.0, 3.0]);
-      expect(outputs['output2'], isA<List>());
-      expect(outputs['output2'][0], isA<List>());
+      expect(outputs.keys, contains('outputs'));
+      expect(outputs['outputs'], isA<Map<String, dynamic>>());
+      expect(outputs['outputs'].keys, containsAll(['output1', 'output2']));
+      expect(outputs['outputs']['output1'], [1.0, 2.0, 3.0]);
+      expect(outputs['outputs']['output2'], isA<List>());
+      expect(outputs['outputs']['output2'][0], isA<List>());
+    });
+
+    test('run processes OrtValue inputs correctly', () async {
+      // Create a mock OrtValue
+      final mockOrtValue = OrtValue.fromMap({
+        'valueId': 'test_value_id',
+        'dataType': 'float32',
+        'shape': [2, 2],
+        'device': 'cpu',
+      });
+
+      // Use the OrtValue in session.run()
+      await session.run({'input1': mockOrtValue});
+
+      // Verify the processed inputs
+      expect(mockPlatform.lastInputsForRun, isNotNull);
+      expect(mockPlatform.lastInputsForRun!['input1'], isA<Map<String, dynamic>>());
+      expect(mockPlatform.lastInputsForRun!['input1']['valueId'], 'test_value_id');
+    });
+
+    test('run with invalid inputs should be caught at compile time', () {
+      // This test doesn't need assertions because it checks compile-time type safety
+      // If we tried to pass Map<String, dynamic> with non-OrtValue objects,
+      // it would fail at compile time with the new interface
+
+      // Create a mock OrtValue
+      final ortValue = OrtValue.fromMap({
+        'valueId': 'test_value_id',
+        'dataType': 'float32',
+        'shape': [2, 2],
+        'device': 'cpu',
+      });
+
+      // This should work fine
+      session.run({'input1': ortValue});
+
+      // The following would not compile with our new interface:
+      // session.run({'input1': [1.0, 2.0]}); // Compile error expected
+    });
+
+    test('run with multiple OrtValue inputs of different types', () async {
+      // Create mock OrtValues with different data types
+      final float32Value = OrtValue.fromMap({
+        'valueId': 'float32_value',
+        'dataType': 'float32',
+        'shape': [2, 2],
+        'device': 'cpu',
+      });
+
+      final int32Value = OrtValue.fromMap({
+        'valueId': 'int32_value',
+        'dataType': 'int32',
+        'shape': [3, 3],
+        'device': 'cpu',
+      });
+
+      await session.run({'input1': float32Value, 'input2': int32Value});
+
+      // Verify the processed inputs
+      expect(mockPlatform.lastInputsForRun, isNotNull);
+      expect(mockPlatform.lastInputsForRun!['input1'], {'valueId': 'float32_value'});
+      expect(mockPlatform.lastInputsForRun!['input2'], {'valueId': 'int32_value'});
     });
   });
 

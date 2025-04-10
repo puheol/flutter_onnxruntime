@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_onnxruntime/src/flutter_onnxruntime_method_channel.dart';
 
@@ -91,13 +92,23 @@ void main() {
       expect(result['outputNames'], ['output1', 'output2']);
     });
 
-    test('runInference returns expected outputs', () async {
-      final inputs = {
-        'input1': [1.0, 2.0, 3.0],
-        'input1_shape': [1, 3],
-        'input2': [4, 5, 6],
-        'input2_shape': [1, 3],
-      };
+    test('runInference with OrtValues returns expected outputs', () async {
+      // Create mock OrtValue by using the fromMap constructor
+      final ortValue1 = OrtValue.fromMap({
+        'valueId': 'test_value_1',
+        'dataType': 'float32',
+        'shape': [1, 3],
+        'device': 'cpu',
+      });
+
+      final ortValue2 = OrtValue.fromMap({
+        'valueId': 'test_value_2',
+        'dataType': 'float32',
+        'shape': [1, 3],
+        'device': 'cpu',
+      });
+
+      final inputs = {'input1': ortValue1, 'input2': ortValue2};
 
       final outputs = await platform.runInference('test_session_id', inputs);
 
@@ -143,6 +154,56 @@ void main() {
 
     test('closeSession completes without error', () async {
       await expectLater(platform.closeSession('test_session_id'), completes);
+    });
+
+    test('runInference processes OrtValue inputs correctly', () async {
+      // Set up a mock implementation for the method channel
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+        MethodCall methodCall,
+      ) async {
+        // Verify methodCall.arguments for OrtValue format
+        if (methodCall.method == 'runInference') {
+          final args = methodCall.arguments as Map<Object?, Object?>;
+          final inputs = args['inputs'] as Map<Object?, Object?>;
+
+          // Check that the inputs contain valueId maps
+          expect(inputs['input1'], isA<Map>());
+          expect((inputs['input1'] as Map)['valueId'], 'test_value_1');
+
+          expect(inputs['input2'], isA<Map>());
+          expect((inputs['input2'] as Map)['valueId'], 'test_value_2');
+
+          return {
+            'outputs': {
+              'output1': [1.0, 2.0, 3.0],
+            },
+          };
+        }
+        return null;
+      });
+
+      // Create mock OrtValues
+      final ortValue1 = OrtValue.fromMap({
+        'valueId': 'test_value_1',
+        'dataType': 'float32',
+        'shape': [1, 3],
+        'device': 'cpu',
+      });
+
+      final ortValue2 = OrtValue.fromMap({
+        'valueId': 'test_value_2',
+        'dataType': 'float32',
+        'shape': [1, 3],
+        'device': 'cpu',
+      });
+
+      // Run inference with the mock OrtValues
+      final result = await platform.runInference('test_session_id', {'input1': ortValue1, 'input2': ortValue2});
+
+      // Verify the result
+      expect(result, isA<Map<String, dynamic>>());
+      expect(result['outputs'], isA<Map>());
+      expect(result['outputs']['output1'], [1.0, 2.0, 3.0]);
     });
   });
 }

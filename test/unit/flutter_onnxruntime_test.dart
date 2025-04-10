@@ -80,6 +80,21 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
       },
     ]);
   }
+
+  @override
+  Future<Map<String, dynamic>> convertOrtValue(String valueId, String targetType) => Future.value({});
+
+  @override
+  Future<Map<String, dynamic>> createOrtValue(String sourceType, data, List<int> shape) => Future.value({});
+
+  @override
+  Future<Map<String, dynamic>> getOrtValueData(String valueId, String dataType) => Future.value({});
+
+  @override
+  Future<Map<String, dynamic>> moveOrtValueToDevice(String valueId, String targetDevice) => Future.value({});
+
+  @override
+  Future<void> releaseOrtValue(String valueId) => Future.value();
 }
 
 void main() {
@@ -138,13 +153,23 @@ void main() {
       session = await onnxRuntime.createSession('test_model.onnx');
     });
 
+    // Create mock OrtValues
+    final ortValue1 = OrtValue.fromMap({
+      'valueId': 'test_value_1',
+      'dataType': 'float32',
+      'shape': [1, 3],
+      'device': 'cpu',
+    });
+
+    final ortValue2 = OrtValue.fromMap({
+      'valueId': 'test_value_2',
+      'dataType': 'float32',
+      'shape': [1, 3],
+      'device': 'cpu',
+    });
+
     test('run performs inference with correct inputs', () async {
-      final inputs = {
-        'input1': [1.0, 2.0, 3.0],
-        'input1_shape': [1, 3],
-        'input2': [4, 5, 6],
-        'input2_shape': [1, 3],
-      };
+      final inputs = {'input1': ortValue1, 'input2': ortValue2};
 
       final outputs = await session.run(inputs);
 

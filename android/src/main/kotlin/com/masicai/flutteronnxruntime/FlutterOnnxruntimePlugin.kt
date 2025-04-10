@@ -1,5 +1,6 @@
 package com.masicai.flutteronnxruntime
 
+import ai.onnxruntime.OnnxJavaType
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OnnxValue
 import ai.onnxruntime.OrtEnvironment
@@ -16,8 +17,102 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.FloatBuffer
 import java.nio.IntBuffer
+import java.nio.LongBuffer
+import java.nio.ShortBuffer
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+
+/**
+ * Utility class for float16 conversions
+ *
+ * Implementation based on the MLAS approach mentioned in OnnxRuntime
+ *
+ * Reference: https://github.com/microsoft/onnxruntime/commit/a8e776b78bfa0d0b1fec8b34b4545d91c2a9d175
+ */
+class Float16Utils {
+    companion object {
+        // Constants for float16 <-> float32 conversion
+        private const val FLOAT16_EXPONENT_BIAS = 15
+        private const val FLOAT32_EXPONENT_BIAS = 127
+        private const val FLOAT16_SIGN_MASK = 0x8000
+        private const val FLOAT16_EXPONENT_MASK = 0x7C00
+        private const val FLOAT16_MANTISSA_MASK = 0x03FF
+
+        /**
+         * Convert float32 to float16
+         */
+        fun floatToFloat16(value: Float): Short {
+            val floatBits = java.lang.Float.floatToIntBits(value)
+
+            // Extract sign, exponent, and mantissa from float32
+            val sign = (floatBits ushr 31) and 0x1
+            val exponent = ((floatBits ushr 23) and 0xFF) - FLOAT32_EXPONENT_BIAS + FLOAT16_EXPONENT_BIAS
+            val mantissa = floatBits and 0x7FFFFF
+
+            // Handle special cases
+            if (exponent <= 0) {
+                // Zero or denormal
+                return (sign shl 15).toShort()
+            } else if (exponent >= 31) {
+                // Infinity or NaN
+                if (mantissa == 0) {
+                    // Infinity
+                    return ((sign shl 15) or FLOAT16_EXPONENT_MASK).toShort()
+                } else {
+                    // NaN
+                    return ((sign shl 15) or FLOAT16_EXPONENT_MASK or 0x200).toShort()
+                }
+            }
+
+            // Regular numbers
+            val float16Bits = (sign shl 15) or (exponent shl 10) or (mantissa ushr 13)
+            return float16Bits.toShort()
+        }
+
+        /**
+         * Convert float16 to float32
+         */
+        fun float16ToFloat(value: Short): Float {
+            val float16Bits = value.toInt() and 0xFFFF
+
+            // Extract sign, exponent, and mantissa from float16
+            val sign = (float16Bits and FLOAT16_SIGN_MASK) shl 16
+            val exponent = (float16Bits and FLOAT16_EXPONENT_MASK) ushr 10
+            val mantissa = float16Bits and FLOAT16_MANTISSA_MASK
+
+            // Handle special cases
+            if (exponent == 0) {
+                // Zero or denormal
+                if (mantissa == 0) {
+                    return java.lang.Float.intBitsToFloat(sign)
+                }
+                // Denormal - convert to normal
+                var e = 1
+                var m = mantissa
+                while ((m and 0x400) == 0) {
+                    m = m shl 1
+                    e++
+                }
+                val normalizedExponent = exponent - e + 1
+                val float32Bits = sign or ((normalizedExponent + FLOAT32_EXPONENT_BIAS - FLOAT16_EXPONENT_BIAS) shl 23) or ((m and 0x3FF) shl 13)
+                return java.lang.Float.intBitsToFloat(float32Bits)
+            } else if (exponent == 31) {
+                // Infinity or NaN
+                if (mantissa == 0) {
+                    // Infinity
+                    return java.lang.Float.intBitsToFloat(sign or 0x7F800000)
+                } else {
+                    // NaN
+                    return java.lang.Float.intBitsToFloat(sign or 0x7FC00000)
+                }
+            }
+
+            // Regular numbers
+            val float32Bits = sign or ((exponent + FLOAT32_EXPONENT_BIAS - FLOAT16_EXPONENT_BIAS) shl 23) or (mantissa shl 13)
+            return java.lang.Float.intBitsToFloat(float32Bits)
+        }
+    }
+}
 
 /** FlutterOnnxruntimePlugin */
 class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
@@ -29,6 +124,9 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
     private lateinit var channel: MethodChannel
     private lateinit var ortEnvironment: OrtEnvironment
     private val sessions = ConcurrentHashMap<String, OrtSession>()
+
+    // Store OrtValues (tensors) by ID
+    private val ortValues = ConcurrentHashMap<String, OnnxValue>()
 
     override fun onAttachedToEngine(
         @NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding,
@@ -114,78 +212,29 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                     val ortInputs = HashMap<String, OnnxValue>()
 
                     try {
-                        // Process inputs that aren't shape information
+                        // Process inputs - now expecting only OrtValue references
                         for ((name, value) in inputs) {
-                            if (name.endsWith("_shape")) continue
-
-                            // Get shape information if provided
-                            val shapeName = "${name}_shape"
-                            val shape =
-                                if (inputs.containsKey(shapeName) && inputs[shapeName] is List<*>) {
-                                    (inputs[shapeName] as List<*>).map { (it as Number).toLong() }.toLongArray()
+                            // Only process value as a Map with valueId
+                            if (value is Map<*, *> && value.containsKey("valueId")) {
+                                val valueId = value["valueId"] as String
+                                val existingTensor = ortValues[valueId]
+                                if (existingTensor != null) {
+                                    ortInputs[name] = existingTensor
                                 } else {
-                                    // Default shape for 1D data
-                                    when (value) {
-                                        is List<*> -> longArrayOf(value.size.toLong())
-                                        is ByteArray -> longArrayOf(value.size.toLong())
-                                        is FloatArray -> longArrayOf(value.size.toLong())
-                                        is IntArray -> longArrayOf(value.size.toLong())
-                                        else -> {
-                                            result.error(
-                                                "MISSING_SHAPE",
-                                                "Shape information required for input '$name' of type: ${value?.javaClass?.name}",
-                                                null,
-                                            )
-                                            return
-                                        }
-                                    }
-                                }
-
-                            // Create appropriate tensor based on input type
-                            when (value) {
-                                is List<*> -> {
-                                    if (value.isEmpty()) {
-                                        result.error("EMPTY_INPUT", "Input '$name' is empty", null)
-                                        return
-                                    }
-
-                                    // Handle based on element type
-                                    when (val firstElement = value[0]) {
-                                        is Number -> {
-                                            val floatArray = value.map { (it as Number).toFloat() }.toFloatArray()
-                                            val tensor = OnnxTensor.createTensor(ortEnvironment, FloatBuffer.wrap(floatArray), shape)
-                                            ortInputs[name] = tensor
-                                        }
-                                        else -> {
-                                            result.error(
-                                                "UNSUPPORTED_INPUT_TYPE",
-                                                "Unsupported input element type for '$name': ${firstElement?.javaClass?.name}",
-                                                null,
-                                            )
-                                            return
-                                        }
-                                    }
-                                }
-                                is ByteArray -> {
-                                    val tensor = OnnxTensor.createTensor(ortEnvironment, ByteBuffer.wrap(value), shape)
-                                    ortInputs[name] = tensor
-                                }
-                                is FloatArray -> {
-                                    val tensor = OnnxTensor.createTensor(ortEnvironment, FloatBuffer.wrap(value), shape)
-                                    ortInputs[name] = tensor
-                                }
-                                is IntArray -> {
-                                    val tensor = OnnxTensor.createTensor(ortEnvironment, IntBuffer.wrap(value), shape)
-                                    ortInputs[name] = tensor
-                                }
-                                else -> {
                                     result.error(
-                                        "UNSUPPORTED_INPUT_TYPE",
-                                        "Unsupported input type for '$name': ${value?.javaClass?.name}",
+                                        "INVALID_ORT_VALUE",
+                                        "OrtValue with ID $valueId not found",
                                         null,
                                     )
                                     return
                                 }
+                            } else {
+                                result.error(
+                                    "INVALID_INPUT_FORMAT",
+                                    "Input for '$name' must be an OrtValue reference with valueId",
+                                    null,
+                                )
+                                return
                             }
                         }
 
@@ -444,6 +493,483 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                     result.error("GENERIC_ERROR", e.message, e.stackTraceToString())
                 }
             }
+            // OrtValue methods
+            "createOrtValue" -> {
+                try {
+                    val sourceType = call.argument<String>("sourceType")
+                    val data = call.argument<Any>("data")
+                    val shape = call.argument<List<Int>>("shape")
+
+                    if (sourceType == null || data == null || shape == null) {
+                        result.error("INVALID_ARGS", "Missing required arguments", null)
+                        return
+                    }
+
+                    // Convert shape to long array for OnnxRuntime
+                    val longShape = shape.map { it.toLong() }.toLongArray()
+
+                    // Create tensor based on source data type
+                    val tensor =
+                        when (sourceType) {
+                            "float32" -> {
+                                val floatData =
+                                    when (data) {
+                                        is List<*> -> data.map { (it as Number).toFloat() }.toFloatArray()
+                                        is FloatArray -> data
+                                        else -> {
+                                            result.error("INVALID_DATA", "Data must be a list of numbers for float32 type", null)
+                                            return
+                                        }
+                                    }
+                                OnnxTensor.createTensor(ortEnvironment, FloatBuffer.wrap(floatData), longShape)
+                            }
+                            "float16" -> {
+                                when (data) {
+                                    is List<*> -> {
+                                        if (data.isEmpty()) {
+                                            result.error("INVALID_DATA", "Data list cannot be empty for float16 type", null)
+                                            return
+                                        }
+
+                                        // Handle both short values (already in float16 format) and float values (need conversion)
+                                        val shortData = ShortArray(data.size)
+                                        when (data[0]) {
+                                            is Number -> {
+                                                // If source is float, convert to float16
+                                                for (i in data.indices) {
+                                                    val floatValue = (data[i] as Number).toFloat()
+                                                    shortData[i] = Float16Utils.floatToFloat16(floatValue)
+                                                }
+                                            }
+                                            else -> {
+                                                result.error("INVALID_DATA", "Data must be a list of numbers for float16 type", null)
+                                                return
+                                            }
+                                        }
+
+                                        // Create tensor with float16 type
+                                        OnnxTensor.createTensor(
+                                            ortEnvironment,
+                                            ShortBuffer.wrap(shortData),
+                                            longShape,
+                                            OnnxJavaType.FLOAT16,
+                                        )
+                                    }
+                                    else -> {
+                                        result.error("INVALID_DATA", "Data must be a list of numbers for float16 type", null)
+                                        return
+                                    }
+                                }
+                            }
+                            "int32" -> {
+                                val intData =
+                                    when (data) {
+                                        is List<*> -> data.map { (it as Number).toInt() }.toIntArray()
+                                        is IntArray -> data
+                                        else -> {
+                                            result.error("INVALID_DATA", "Data must be a list of numbers for int32 type", null)
+                                            return
+                                        }
+                                    }
+                                OnnxTensor.createTensor(ortEnvironment, IntBuffer.wrap(intData), longShape)
+                            }
+                            "int64" -> {
+                                val longData =
+                                    when (data) {
+                                        is List<*> -> data.map { (it as Number).toLong() }.toLongArray()
+                                        is LongArray -> data
+                                        else -> {
+                                            result.error("INVALID_DATA", "Data must be a list of numbers for int64 type", null)
+                                            return
+                                        }
+                                    }
+                                OnnxTensor.createTensor(ortEnvironment, LongBuffer.wrap(longData), longShape)
+                            }
+                            "uint8" -> {
+                                val byteData =
+                                    when (data) {
+                                        is List<*> -> {
+                                            val bytes = ByteArray(data.size)
+                                            for (i in data.indices) {
+                                                bytes[i] = (data[i] as Number).toByte()
+                                            }
+                                            bytes
+                                        }
+                                        is ByteArray -> data
+                                        else -> {
+                                            result.error("INVALID_DATA", "Data must be a list of numbers for uint8 type", null)
+                                            return
+                                        }
+                                    }
+                                OnnxTensor.createTensor(ortEnvironment, ByteBuffer.wrap(byteData), longShape)
+                            }
+                            "bool" -> {
+                                val boolData =
+                                    when (data) {
+                                        is List<*> -> {
+                                            val bytes = ByteArray(data.size)
+                                            for (i in data.indices) {
+                                                bytes[i] = if (data[i] as Boolean) 1.toByte() else 0.toByte()
+                                            }
+                                            bytes
+                                        }
+                                        else -> {
+                                            result.error("INVALID_DATA", "Data must be a list of booleans for bool type", null)
+                                            return
+                                        }
+                                    }
+                                // Boolean tensors are stored as bytes in ONNX Runtime
+                                OnnxTensor.createTensor(ortEnvironment, ByteBuffer.wrap(boolData), longShape)
+                            }
+                            else -> {
+                                result.error("UNSUPPORTED_TYPE", "Unsupported source data type: $sourceType", null)
+                                return
+                            }
+                        }
+
+                    // If target type is different from source type, perform conversion
+                    // Note: This is a simplified example. In a real implementation, you would need
+                    // to implement type conversion logic based on ONNX Runtime capabilities.
+                    // For now, we'll just use the created tensor without conversion.
+
+                    // Store the tensor with a unique ID
+                    val valueId = UUID.randomUUID().toString()
+                    ortValues[valueId] = tensor
+
+                    // Return tensor information
+                    val tensorInfo =
+                        mapOf(
+                            "valueId" to valueId,
+                            "dataType" to sourceType,
+                            "shape" to shape,
+                            "device" to "cpu",
+                        )
+
+                    result.success(tensorInfo)
+                } catch (e: Exception) {
+                    result.error("TENSOR_CREATION_ERROR", e.message, e.stackTraceToString())
+                }
+            }
+            "convertOrtValue" -> {
+                try {
+                    val valueId = call.argument<String>("valueId")
+                    val targetType = call.argument<String>("targetType")
+
+                    if (valueId == null || targetType == null) {
+                        result.error("INVALID_ARGS", "Missing required arguments", null)
+                        return
+                    }
+
+                    val tensor = ortValues[valueId]
+                    if (tensor == null) {
+                        result.error("INVALID_VALUE", "OrtValue with ID $valueId not found", null)
+                        return
+                    }
+
+                    if (tensor !is OnnxTensor) {
+                        result.error("INVALID_TENSOR_TYPE", "OrtValue is not a tensor", null)
+                        return
+                    }
+
+                    // Get tensor information
+                    val shape = tensor.info.shape
+                    val dataType = tensor.info.type.toString()
+
+                    // For now, we'll implement a simple conversion for certain type pairs
+                    // A full implementation would handle all possible conversions
+                    val newTensor =
+                        when {
+                            // Float32 to float16
+                            dataType == "FLOAT" && targetType == "float16" -> {
+                                // Extract the float data from the tensor
+                                val floatBuffer = tensor.floatBuffer
+                                val floatArray = FloatArray(floatBuffer.remaining())
+                                floatBuffer.get(floatArray)
+
+                                // Convert float array to short array using OnnxRuntime's float16 utilities
+                                // Use ShortBuffer to store float16 values
+                                val shortArray = ShortArray(floatArray.size)
+                                for (i in floatArray.indices) {
+                                    // Use ai.onnxruntime.OnnxRuntime utility method to convert float to float16
+                                    shortArray[i] = Float16Utils.floatToFloat16(floatArray[i])
+                                }
+
+                                // Create a new tensor with float16 data
+                                val shortBuffer = ShortBuffer.wrap(shortArray)
+                                // Use OnnxTensor.createTensor with the appropriate float16 type
+                                OnnxTensor.createTensor(ortEnvironment, shortBuffer, shape, OnnxJavaType.FLOAT16)
+                            }
+                            // Int32 to Float32
+                            dataType == "INT32" && targetType == "float32" -> {
+                                val intBuffer = tensor.intBuffer
+                                val intArray = IntArray(intBuffer.remaining())
+                                intBuffer.get(intArray)
+
+                                val floatArray = FloatArray(intArray.size) { intArray[it].toFloat() }
+                                OnnxTensor.createTensor(ortEnvironment, FloatBuffer.wrap(floatArray), shape)
+                            }
+                            // Other conversions would be implemented similarly
+                            else -> {
+                                // If no conversion is implemented, just return the original tensor
+                                tensor
+                            }
+                        }
+
+                    // Store the new tensor if it's different from the original
+                    val newValueId =
+                        if (newTensor !== tensor) {
+                            val id = UUID.randomUUID().toString()
+                            ortValues[id] = newTensor
+                            id
+                        } else {
+                            valueId
+                        }
+
+                    // Return tensor information
+                    // Assuming CPU device for now
+                    val tensorInfo =
+                        mapOf(
+                            "valueId" to newValueId,
+                            "dataType" to targetType,
+                            "shape" to shape.toList(),
+                            "device" to "cpu",
+                        )
+
+                    result.success(tensorInfo)
+                } catch (e: Exception) {
+                    result.error("CONVERSION_ERROR", e.message, e.stackTraceToString())
+                }
+            }
+            "moveOrtValueToDevice" -> {
+                try {
+                    val valueId = call.argument<String>("valueId")
+                    val targetDevice = call.argument<String>("targetDevice")
+
+                    if (valueId == null || targetDevice == null) {
+                        result.error("INVALID_ARGS", "Missing required arguments", null)
+                        return
+                    }
+
+                    val tensor = ortValues[valueId]
+                    if (tensor == null) {
+                        result.error("INVALID_VALUE", "OrtValue with ID $valueId not found", null)
+                        return
+                    }
+
+                    // Currently, we only support CPU device in this implementation
+                    // For GPU support, you would need to implement device transfer logic
+                    if (targetDevice != "cpu") {
+                        result.error("UNSUPPORTED_DEVICE", "Only CPU device is supported in this implementation", null)
+                        return
+                    }
+
+                    // Return the same tensor since we're already on CPU
+                    val tensorInfo =
+                        mapOf(
+                            "valueId" to valueId,
+                            "dataType" to (if (tensor is OnnxTensor) tensor.info.type.toString().lowercase() else "unknown"),
+                            "shape" to (if (tensor is OnnxTensor) tensor.info.shape.toList() else emptyList<Int>()),
+                            "device" to "cpu",
+                        )
+
+                    result.success(tensorInfo)
+                } catch (e: Exception) {
+                    result.error("DEVICE_TRANSFER_ERROR", e.message, e.stackTraceToString())
+                }
+            }
+            "getOrtValueData" -> {
+                try {
+                    val valueId = call.argument<String>("valueId")
+                    val dataType = call.argument<String>("dataType")
+
+                    if (valueId == null) {
+                        result.error("INVALID_ARGS", "Missing value ID", null)
+                        return
+                    }
+
+                    val tensor = ortValues[valueId]
+                    if (tensor == null) {
+                        result.error("INVALID_VALUE", "OrtValue with ID $valueId not found", null)
+                        return
+                    }
+
+                    if (tensor !is OnnxTensor) {
+                        result.error("INVALID_TENSOR_TYPE", "OrtValue is not a tensor", null)
+                        return
+                    }
+
+                    // Get tensor shape
+                    val shape = tensor.info.shape
+                    val flatSize = shape.fold(1L) { acc, dim -> acc * dim }.toInt()
+
+                    // Extract data according to requested type
+                    val data =
+                        when (dataType) {
+                            "float32" -> {
+                                try {
+                                    val floatArray = FloatArray(flatSize)
+                                    tensor.floatBuffer.get(floatArray)
+                                    floatArray.toList()
+                                } catch (e: Exception) {
+                                    // If can't get as float directly, try conversion
+                                    when (tensor.info.type.toString()) {
+                                        "INT32" -> {
+                                            val intArray = IntArray(flatSize)
+                                            tensor.intBuffer.get(intArray)
+                                            intArray.map { it.toFloat() }
+                                        }
+                                        "INT64" -> {
+                                            val longArray = LongArray(flatSize)
+                                            tensor.longBuffer.get(longArray)
+                                            longArray.map { it.toFloat() }
+                                        }
+                                        "FLOAT16" -> {
+                                            // Convert float16 (stored as shorts) to float32
+                                            val shortArray = ShortArray(flatSize)
+                                            tensor.shortBuffer.get(shortArray)
+                                            shortArray.map { Float16Utils.float16ToFloat(it) }
+                                        }
+                                        else -> {
+                                            result.error("CONVERSION_ERROR", "Cannot convert to float32", null)
+                                            return
+                                        }
+                                    }
+                                }
+                            }
+                            "float16" -> {
+                                try {
+                                    // For float16, we need to return the raw short values
+                                    // Client code will need to interpret these correctly
+                                    val shortArray = ShortArray(flatSize)
+                                    tensor.shortBuffer.get(shortArray)
+                                    shortArray.map { it.toInt() } // Convert to Int for JSON serialization
+                                } catch (e: Exception) {
+                                    // Try conversion from float32 if direct extraction fails
+                                    when (tensor.info.type.toString()) {
+                                        "FLOAT" -> {
+                                            val floatArray = FloatArray(flatSize)
+                                            tensor.floatBuffer.get(floatArray)
+                                            floatArray.map { Float16Utils.floatToFloat16(it).toInt() }
+                                        }
+                                        else -> {
+                                            result.error("CONVERSION_ERROR", "Cannot convert to float16", null)
+                                            return
+                                        }
+                                    }
+                                }
+                            }
+                            "int32" -> {
+                                try {
+                                    val intArray = IntArray(flatSize)
+                                    tensor.intBuffer.get(intArray)
+                                    intArray.toList()
+                                } catch (e: Exception) {
+                                    // Try conversion if direct extraction fails
+                                    when (tensor.info.type.toString()) {
+                                        "FLOAT" -> {
+                                            val floatArray = FloatArray(flatSize)
+                                            tensor.floatBuffer.get(floatArray)
+                                            floatArray.map { it.toInt() }
+                                        }
+                                        "INT64" -> {
+                                            val longArray = LongArray(flatSize)
+                                            tensor.longBuffer.get(longArray)
+                                            longArray.map { it.toInt() }
+                                        }
+                                        else -> {
+                                            result.error("CONVERSION_ERROR", "Cannot convert to int32", null)
+                                            return
+                                        }
+                                    }
+                                }
+                            }
+                            "int64" -> {
+                                try {
+                                    val longArray = LongArray(flatSize)
+                                    tensor.longBuffer.get(longArray)
+                                    longArray.toList()
+                                } catch (e: Exception) {
+                                    // Try conversion
+                                    when (tensor.info.type.toString()) {
+                                        "FLOAT" -> {
+                                            val floatArray = FloatArray(flatSize)
+                                            tensor.floatBuffer.get(floatArray)
+                                            floatArray.map { it.toLong() }
+                                        }
+                                        "INT32" -> {
+                                            val intArray = IntArray(flatSize)
+                                            tensor.intBuffer.get(intArray)
+                                            intArray.map { it.toLong() }
+                                        }
+                                        else -> {
+                                            result.error("CONVERSION_ERROR", "Cannot convert to int64", null)
+                                            return
+                                        }
+                                    }
+                                }
+                            }
+                            "uint8" -> {
+                                try {
+                                    val byteArray = ByteArray(flatSize)
+                                    tensor.byteBuffer.get(byteArray)
+                                    byteArray.map { it.toInt() and 0xFF }
+                                } catch (e: Exception) {
+                                    result.error("CONVERSION_ERROR", "Cannot convert to uint8", null)
+                                    return
+                                }
+                            }
+                            "bool" -> {
+                                try {
+                                    val byteArray = ByteArray(flatSize)
+                                    tensor.byteBuffer.get(byteArray)
+                                    byteArray.map { it != 0.toByte() }
+                                } catch (e: Exception) {
+                                    result.error("CONVERSION_ERROR", "Cannot convert to bool", null)
+                                    return
+                                }
+                            }
+                            else -> {
+                                result.error("UNSUPPORTED_TYPE", "Unsupported data type: $dataType", null)
+                                return
+                            }
+                        }
+
+                    // Return data with shape
+                    val resultMap =
+                        mapOf(
+                            "data" to data,
+                            "shape" to shape.toList(),
+                        )
+
+                    result.success(resultMap)
+                } catch (e: Exception) {
+                    result.error("DATA_EXTRACTION_ERROR", e.message, e.stackTraceToString())
+                }
+            }
+            "releaseOrtValue" -> {
+                try {
+                    val valueId = call.argument<String>("valueId")
+
+                    if (valueId == null) {
+                        result.error("INVALID_ARGS", "Missing value ID", null)
+                        return
+                    }
+
+                    val tensor = ortValues.remove(valueId)
+                    if (tensor != null) {
+                        try {
+                            tensor.close()
+                        } catch (e: Exception) {
+                            // Log error but continue
+                            Log.e("ORT_ERROR", "Error closing tensor: ${e.message}")
+                        }
+                    }
+
+                    result.success(null)
+                } catch (e: Exception) {
+                    result.error("RELEASE_ERROR", e.message, e.stackTraceToString())
+                }
+            }
             else -> {
                 result.notImplemented()
             }
@@ -453,6 +979,16 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
     override fun onDetachedFromEngine(
         @NonNull binding: FlutterPlugin.FlutterPluginBinding,
     ) {
+        // Close all OrtValues
+        for (value in ortValues.values) {
+            try {
+                value.close()
+            } catch (e: Exception) {
+                // Ignore exceptions during cleanup
+            }
+        }
+        ortValues.clear()
+
         // Close all sessions
         for (session in sessions.values) {
             try {

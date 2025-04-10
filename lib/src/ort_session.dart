@@ -1,5 +1,6 @@
 import 'package:flutter_onnxruntime/src/flutter_onnxruntime_platform_interface.dart';
 import 'package:flutter_onnxruntime/src/ort_model_metadata.dart';
+import 'package:flutter_onnxruntime/src/ort_value.dart';
 
 class OrtSession {
   final String id;
@@ -20,19 +21,21 @@ class OrtSession {
 
   /// Run inference on the session
   ///
-  /// [inputs] is a map of input names to input values
+  /// [inputs] is a map of input names to OrtValue objects
   /// [options] is an optional map of run options
-  ///
-  /// `inputs` should be a map of input names to input values. Input shape could be provided with `_shape` suffix.
   ///
   /// Example:
   /// ```dart
+  /// final inputTensor = await OrtValue.fromList(
+  ///   [1.0, 2.0, 3.0, 4.0],
+  ///   [2, 2]
+  /// );
   /// final inputs = {
-  ///   'input_name': [[1, 2], [3, 4]],
-  ///   'input_name_shape': [2, 2],
+  ///   'input_name': inputTensor,
   /// };
+  /// final outputs = await session.run(inputs);
   /// ```
-  Future<Map<String, dynamic>> run(Map<String, dynamic> inputs, {OrtRunOptions? options}) async {
+  Future<Map<String, dynamic>> run(Map<String, OrtValue> inputs, {OrtRunOptions? options}) async {
     return await FlutterOnnxruntimePlatform.instance.runInference(id, inputs, runOptions: options?.toMap() ?? {});
   }
 
