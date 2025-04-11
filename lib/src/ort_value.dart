@@ -104,6 +104,42 @@ class OrtValue {
     return OrtValue.fromMap(result);
   }
 
+  /// Convert this tensor to a different data type
+  ///
+  /// [targetType] is the target data type to convert to
+  Future<OrtValue> to(OrtDataType targetType) async {
+    final result = await FlutterOnnxruntimePlatform.instance.convertOrtValue(id, targetType.toString().split('.').last);
+    return OrtValue.fromMap(result);
+  }
+
+  /// Move this tensor to a different device
+  ///
+  /// [targetDevice] is the target device to move to
+  Future<OrtValue> toDevice(OrtDevice targetDevice) async {
+    final result = await FlutterOnnxruntimePlatform.instance.moveOrtValueToDevice(
+      id,
+      targetDevice.toString().split('.').last,
+    );
+    return OrtValue.fromMap(result);
+  }
+
+  /// Get the data from this tensor as a list with the native data type
+  ///
+  /// Returns the data in its original type:
+  /// - Float values for float32 and float16 tensors
+  /// - Int values for int32, int64, int16, int8, uint8, uint16, uint32, uint64 tensors
+  /// - Boolean values for bool tensors
+  /// - String values for string tensors
+  Future<List<dynamic>> asList() async {
+    final data = await FlutterOnnxruntimePlatform.instance.getOrtValueData(id);
+    return List<dynamic>.from(data['data']);
+  }
+
+  /// Release native resources associated with this tensor
+  Future<void> dispose() async {
+    await FlutterOnnxruntimePlatform.instance.releaseOrtValue(id);
+  }
+
   /// Converts a regular List to appropriate TypedData based on content
   static dynamic _convertListToTypedData(List data) {
     if (data.isEmpty) {
@@ -150,69 +186,5 @@ class OrtValue {
     }
 
     throw ArgumentError('Unsupported element type: ${firstElement.runtimeType} in list');
-  }
-
-  /// Convert this tensor to a different data type
-  ///
-  /// [targetType] is the target data type to convert to
-  Future<OrtValue> to(OrtDataType targetType) async {
-    final result = await FlutterOnnxruntimePlatform.instance.convertOrtValue(id, targetType.toString().split('.').last);
-    return OrtValue.fromMap(result);
-  }
-
-  /// Move this tensor to a different device
-  ///
-  /// [targetDevice] is the target device to move to
-  Future<OrtValue> toDevice(OrtDevice targetDevice) async {
-    final result = await FlutterOnnxruntimePlatform.instance.moveOrtValueToDevice(
-      id,
-      targetDevice.toString().split('.').last,
-    );
-    return OrtValue.fromMap(result);
-  }
-
-  /// Get the data from this tensor as a Float32List
-  ///
-  /// This method will convert the tensor to float32 if it's not already
-  Future<Float32List> asFloat32List() async {
-    final data = await FlutterOnnxruntimePlatform.instance.getOrtValueData(id, 'float32');
-    return Float32List.fromList(List<double>.from(data['data']));
-  }
-
-  /// Get the data from this tensor as an Int32List
-  ///
-  /// This method will convert the tensor to int32 if it's not already
-  Future<Int32List> asInt32List() async {
-    final data = await FlutterOnnxruntimePlatform.instance.getOrtValueData(id, 'int32');
-    return Int32List.fromList(List<int>.from(data['data']));
-  }
-
-  /// Get the data from this tensor as an Int64List
-  ///
-  /// This method will convert the tensor to int64 if it's not already
-  Future<Int64List> asInt64List() async {
-    final data = await FlutterOnnxruntimePlatform.instance.getOrtValueData(id, 'int64');
-    return Int64List.fromList(List<int>.from(data['data']));
-  }
-
-  /// Get the data from this tensor as a Uint8List
-  ///
-  /// This method will convert the tensor to uint8 if it's not already
-  Future<Uint8List> asUint8List() async {
-    final data = await FlutterOnnxruntimePlatform.instance.getOrtValueData(id, 'uint8');
-    return Uint8List.fromList(List<int>.from(data['data']));
-  }
-
-  /// Get the data from this tensor as a list of booleans
-  ///
-  /// This method will convert the tensor to boolean if it's not already
-  Future<List<bool>> asBoolList() async {
-    final data = await FlutterOnnxruntimePlatform.instance.getOrtValueData(id, 'bool');
-    return List<bool>.from(data['data']);
-  }
-
-  /// Release native resources associated with this tensor
-  Future<void> dispose() async {
-    await FlutterOnnxruntimePlatform.instance.releaseOrtValue(id);
   }
 }

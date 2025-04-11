@@ -1213,9 +1213,9 @@ static void flutter_onnxruntime_plugin_handle_method_call(FlutterOnnxruntimePlug
         // Extract dataType from JSON
         size_t type_pos = result_str.find("\"dataType\":\"") + 12;
         size_t type_end = result_str.find("\"", type_pos);
-        std::string data_type = result_str.substr(type_pos, type_end - type_pos);
+        std::string data_type_str = result_str.substr(type_pos, type_end - type_pos);
 
-        fl_value_set_string_take(result_map, "dataType", fl_value_new_string(data_type.c_str()));
+        fl_value_set_string_take(result_map, "dataType", fl_value_new_string(data_type_str.c_str()));
 
         // Extract shape from JSON and convert to vector
         size_t shape_pos = result_str.find("\"shape\":[") + 9;
@@ -1238,6 +1238,49 @@ static void flutter_onnxruntime_plugin_handle_method_call(FlutterOnnxruntimePlug
         std::string device = result_str.substr(device_pos, device_end - device_pos);
 
         fl_value_set_string_take(result_map, "device", fl_value_new_string(device.c_str()));
+
+        // Extract data from JSON and convert to appropriate type based on data_type_str
+        size_t data_pos = result_str.find("\"data\":[") + 8;
+        size_t data_end = result_str.find("]", data_pos);
+        std::string data_str = result_str.substr(data_pos, data_end - data_pos);
+
+        if (data_type_str == "float32") {
+          // Parse as float
+          std::vector<float> data_vec;
+          std::istringstream data_stream(data_str);
+          std::string value;
+          while (std::getline(data_stream, value, ',')) {
+            if (!value.empty()) {
+              data_vec.push_back(std::stof(value));
+            }
+          }
+
+          fl_value_set_string_take(result_map, "data", vector_to_fl_value<float>(data_vec));
+        } else if (data_type_str == "int32") {
+          // Parse as int
+          std::vector<int> data_vec;
+          std::istringstream data_stream(data_str);
+          std::string value;
+          while (std::getline(data_stream, value, ',')) {
+            if (!value.empty()) {
+              data_vec.push_back(std::stoi(value));
+            }
+          }
+
+          fl_value_set_string_take(result_map, "data", vector_to_fl_value<int>(data_vec));
+        } else {
+          // Default to float
+          std::vector<float> data_vec;
+          std::istringstream data_stream(data_str);
+          std::string value;
+          while (std::getline(data_stream, value, ',')) {
+            if (!value.empty()) {
+              data_vec.push_back(std::stof(value));
+            }
+          }
+
+          fl_value_set_string_take(result_map, "data", vector_to_fl_value<float>(data_vec));
+        }
 
         // Create success response
         response = FL_METHOD_RESPONSE(fl_method_success_response_new(result_map));
@@ -1326,7 +1369,6 @@ static void flutter_onnxruntime_plugin_handle_method_call(FlutterOnnxruntimePlug
     try {
       // Extract arguments
       FlValue *value_id_value = fl_value_lookup_string(args, "valueId");
-      FlValue *data_type_value = fl_value_lookup_string(args, "dataType");
 
       if (value_id_value == nullptr) {
         response = FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_ARGS", "Missing value ID", nullptr));
@@ -1334,11 +1376,10 @@ static void flutter_onnxruntime_plugin_handle_method_call(FlutterOnnxruntimePlug
       }
 
       const char *value_id = fl_value_get_string(value_id_value);
-      const char *data_type = (data_type_value != nullptr) ? fl_value_get_string(data_type_value) : nullptr;
 
       // Call C function to get tensor data
       char *error_ptr = nullptr;
-      char *result_json = ort_get_tensor_data(value_id, data_type, &error_ptr);
+      char *result_json = ort_get_tensor_data(value_id, &error_ptr);
 
       if (result_json == nullptr) {
         if (error_ptr != nullptr) {
@@ -1356,8 +1397,13 @@ static void flutter_onnxruntime_plugin_handle_method_call(FlutterOnnxruntimePlug
         // Create a map to return
         FlValue *result_map = fl_value_new_map();
 
-        // For actual implementation, you would need a proper JSON parser
-        // This simplified approach works for the expected format but is not robust
+        // Extract data type from JSON - simplified parsing
+        size_t data_type_pos = result_str.find("\"dataType\":\"") + 12;
+        size_t data_type_end = result_str.find("\"", data_type_pos);
+        std::string data_type_str = result_str.substr(data_type_pos, data_type_end - data_type_pos);
+
+        // Add data type to result map
+        fl_value_set_string_take(result_map, "dataType", fl_value_new_string(data_type_str.c_str()));
 
         // Extract shape from JSON - simplified parsing
         size_t shape_pos = result_str.find("\"shape\":[") + 9;
@@ -1381,8 +1427,8 @@ static void flutter_onnxruntime_plugin_handle_method_call(FlutterOnnxruntimePlug
         size_t data_end = result_str.find("]", data_pos);
         std::string data_str = result_str.substr(data_pos, data_end - data_pos);
 
-        // Parse data string into appropriate type based on data_type
-        if (data_type == nullptr || strcmp(data_type, "float32") == 0) {
+        // Parse data string into appropriate type based on data_type_str
+        if (data_type_str == "float32") {
           // Parse as float
           std::vector<float> data_vec;
           std::istringstream data_stream(data_str);
@@ -1394,7 +1440,7 @@ static void flutter_onnxruntime_plugin_handle_method_call(FlutterOnnxruntimePlug
           }
 
           fl_value_set_string_take(result_map, "data", vector_to_fl_value<float>(data_vec));
-        } else if (strcmp(data_type, "int32") == 0) {
+        } else if (data_type_str == "int32") {
           // Parse as int
           std::vector<int> data_vec;
           std::istringstream data_stream(data_str);

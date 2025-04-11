@@ -110,11 +110,8 @@ class MethodChannelFlutterOnnxruntime extends FlutterOnnxruntimePlatform {
   }
 
   @override
-  Future<Map<String, dynamic>> getOrtValueData(String valueId, String dataType) async {
-    final result = await methodChannel.invokeMethod<Map<Object?, Object?>>('getOrtValueData', {
-      'valueId': valueId,
-      'dataType': dataType,
-    });
+  Future<Map<String, dynamic>> getOrtValueData(String valueId) async {
+    final result = await methodChannel.invokeMethod<Map<Object?, Object?>>('getOrtValueData', {'valueId': valueId});
     return _convertMapToStringDynamic(result ?? {});
   }
 

@@ -619,9 +619,8 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
   // swiftlint:disable:next cyclomatic_complexity
   private func handleGetOrtValueData(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = call.arguments as? [String: Any],
-          let valueId = args["valueId"] as? String,
-          let dataType = args["dataType"] as? String else {
-      result(FlutterError(code: "INVALID_ARGS", message: "Missing required arguments", details: nil))
+          let valueId = args["valueId"] as? String else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing valueId", details: nil))
       return
     }
 
@@ -634,91 +633,55 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
       // Get tensor information
       let tensorInfo = try tensor.tensorTypeAndShapeInfo()
       let shape = try tensorInfo.shape.map { Int(truncating: $0) }
-
-      // Calculate element count
       let elementCount = shape.reduce(1, *)
-
-      // Extract data according to requested type
       var data: Any
+      let dataType = _getDataTypeName(from: tensorInfo.elementType)
 
-      // Extract data based on the tensor's type and requested type
-      switch dataType {
-      case "float32":
-        if tensorInfo.elementType == .float {
-          // Get float data directly
-          let dataPtr = try tensor.tensorData()
-          let floatPtr = dataPtr.bytes.bindMemory(to: Float.self, capacity: elementCount)
-          let floatBuffer = UnsafeBufferPointer(start: floatPtr, count: elementCount)
-          data = Array(floatBuffer)
-        } else {
-          // For other types, we need to convert to float
-          // This is a simplified implementation
-          result(FlutterError(code: "CONVERSION_ERROR",
-                             message: "Conversion from \(tensorInfo.elementType) to float32 not implemented",
-                             details: nil))
-          return
-        }
+      // Extract data based on the tensor's native type
+      switch tensorInfo.elementType {
+      case .float:
+        let dataPtr = try tensor.tensorData()
+        let floatPtr = dataPtr.bytes.bindMemory(to: Float.self, capacity: elementCount)
+        let floatBuffer = UnsafeBufferPointer(start: floatPtr, count: elementCount)
+        data = Array(floatBuffer)
 
-      case "int32":
-        if tensorInfo.elementType == .int32 {
-          // Get int32 data directly
-          let dataPtr = try tensor.tensorData()
-          let intPtr = dataPtr.bytes.bindMemory(to: Int32.self, capacity: elementCount)
-          let intBuffer = UnsafeBufferPointer(start: intPtr, count: elementCount)
-          data = Array(intBuffer)
-        } else {
-          // For other types, we need to convert to int32
-          result(FlutterError(code: "CONVERSION_ERROR", message: "Conversion from \(tensorInfo.elementType) to int32 not implemented", details: nil))
-          return
-        }
+      case .int32:
+        let dataPtr = try tensor.tensorData()
+        let intPtr = dataPtr.bytes.bindMemory(to: Int32.self, capacity: elementCount)
+        let intBuffer = UnsafeBufferPointer(start: intPtr, count: elementCount)
+        data = Array(intBuffer)
 
-      case "int64":
-        if tensorInfo.elementType == .int64 {
-          // Get int64 data directly
-          let dataPtr = try tensor.tensorData()
-          let int64Ptr = dataPtr.bytes.bindMemory(to: Int64.self, capacity: elementCount)
-          let int64Buffer = UnsafeBufferPointer(start: int64Ptr, count: elementCount)
-          data = Array(int64Buffer)
-        } else {
-          // For other types, we need to convert to int64
-          result(FlutterError(code: "CONVERSION_ERROR", message: "Conversion from \(tensorInfo.elementType) to int64 not implemented", details: nil))
-          return
-        }
+      case .int64:
+        let dataPtr = try tensor.tensorData()
+        let int64Ptr = dataPtr.bytes.bindMemory(to: Int64.self, capacity: elementCount)
+        let int64Buffer = UnsafeBufferPointer(start: int64Ptr, count: elementCount)
+        data = Array(int64Buffer)
 
-      case "uint8":
-        if tensorInfo.elementType == .uInt8 {
-          // Get uint8 data directly
-          let dataPtr = try tensor.tensorData()
-          let uint8Ptr = dataPtr.bytes.bindMemory(to: UInt8.self, capacity: elementCount)
-          let uint8Buffer = UnsafeBufferPointer(start: uint8Ptr, count: elementCount)
-          data = Array(uint8Buffer)
-        } else {
-          result(FlutterError(code: "CONVERSION_ERROR", message: "Conversion from \(tensorInfo.elementType) to uint8 not implemented", details: nil))
-          return
-        }
+      case .uInt8:
+        let dataPtr = try tensor.tensorData()
+        let uint8Ptr = dataPtr.bytes.bindMemory(to: UInt8.self, capacity: elementCount)
+        let uint8Buffer = UnsafeBufferPointer(start: uint8Ptr, count: elementCount)
+        data = Array(uint8Buffer)
 
-      case "bool":
-        if tensorInfo.elementType == .uInt8 {
-          // Get bool data as uint8 (0 = false, non-zero = true)
-          let dataPtr = try tensor.tensorData()
-          let uint8Ptr = dataPtr.bytes.bindMemory(to: UInt8.self, capacity: elementCount)
-          let uint8Buffer = UnsafeBufferPointer(start: uint8Ptr, count: elementCount)
-          // Convert UInt8 to Bool
-          data = uint8Buffer.map { $0 != 0 }
-        } else {
-          result(FlutterError(code: "CONVERSION_ERROR", message: "Conversion from \(tensorInfo.elementType) to bool not implemented", details: nil))
-          return
-        }
+      case .int8:
+        let dataPtr = try tensor.tensorData()
+        let int8Ptr = dataPtr.bytes.bindMemory(to: Int8.self, capacity: elementCount)
+        let int8Buffer = UnsafeBufferPointer(start: int8Ptr, count: elementCount)
+        data = Array(int8Buffer)
 
       default:
-        result(FlutterError(code: "UNSUPPORTED_TYPE", message: "Unsupported data type: \(dataType)", details: nil))
-        return
+        // Try to extract as float for unsupported types
+        let dataPtr = try tensor.tensorData()
+        let floatPtr = dataPtr.bytes.bindMemory(to: Float.self, capacity: elementCount)
+        let floatBuffer = UnsafeBufferPointer(start: floatPtr, count: elementCount)
+        data = Array(floatBuffer)
       }
 
-      // Return data with shape
+      // Also include the data type in the result
       let resultMap: [String: Any] = [
         "data": data,
-        "shape": shape
+        "shape": shape,
+        "dataType": dataType
       ]
 
       result(resultMap)

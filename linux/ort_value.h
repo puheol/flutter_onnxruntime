@@ -9,6 +9,9 @@
 // Helper function to generate a UUID for OrtValue
 std::string generate_ort_value_uuid();
 
+// Helper function to convert ONNX tensor element data type to string
+std::string get_element_type_name(ONNXTensorElementDataType type);
+
 // Global map to store OrtValue objects - accessible from other files
 extern std::unordered_map<std::string, std::unique_ptr<Ort::Value>> g_ort_values;
 
@@ -41,9 +44,8 @@ char *ort_move_tensor_to_device(const char *value_id,      // ID of the OrtValue
 
 // Get data from an OrtValue
 // Returns a JSON string with data and shape or nullptr on error
-char *ort_get_tensor_data(const char *value_id,  // ID of the OrtValue to get data from
-                          const char *data_type, // Requested data type
-                          char **error_out       // Error message (out parameter)
+char *ort_get_tensor_data(const char *value_id, // ID of the OrtValue to get data from
+                          char **error_out      // Error message (out parameter)
 );
 
 // Release an OrtValue

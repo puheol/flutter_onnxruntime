@@ -780,7 +780,6 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
             "getOrtValueData" -> {
                 try {
                     val valueId = call.argument<String>("valueId")
-                    val dataType = call.argument<String>("dataType")
 
                     if (valueId == null) {
                         result.error("INVALID_ARGS", "Missing value ID", null)
@@ -802,138 +801,50 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                     val shape = tensor.info.shape
                     val flatSize = shape.fold(1L) { acc, dim -> acc * dim }.toInt()
 
-                    // Extract data according to requested type
+                    // Return data in its native type without conversion
                     val data =
-                        when (dataType) {
-                            "float32" -> {
-                                try {
-                                    val floatArray = FloatArray(flatSize)
-                                    tensor.floatBuffer.get(floatArray)
-                                    floatArray.toList()
-                                } catch (e: Exception) {
-                                    // If can't get as float directly, try conversion
-                                    when (tensor.info.type.toString()) {
-                                        "INT32" -> {
-                                            val intArray = IntArray(flatSize)
-                                            tensor.intBuffer.get(intArray)
-                                            intArray.map { it.toFloat() }
-                                        }
-                                        "INT64" -> {
-                                            val longArray = LongArray(flatSize)
-                                            tensor.longBuffer.get(longArray)
-                                            longArray.map { it.toFloat() }
-                                        }
-                                        "FLOAT16" -> {
-                                            // Convert float16 (stored as shorts) to float32
-                                            val shortArray = ShortArray(flatSize)
-                                            tensor.shortBuffer.get(shortArray)
-                                            shortArray.map { Float16Utils.float16ToFloat(it) }
-                                        }
-                                        else -> {
-                                            result.error("CONVERSION_ERROR", "Cannot convert to float32", null)
-                                            return
-                                        }
-                                    }
-                                }
+                        when (tensor.info.type.toString()) {
+                            "FLOAT" -> {
+                                val floatArray = FloatArray(flatSize)
+                                tensor.floatBuffer.get(floatArray)
+                                floatArray.toList()
                             }
-                            "float16" -> {
-                                try {
-                                    // For float16, we need to return the raw short values
-                                    // Client code will need to interpret these correctly
-                                    val shortArray = ShortArray(flatSize)
-                                    tensor.shortBuffer.get(shortArray)
-                                    shortArray.map { it.toInt() } // Convert to Int for JSON serialization
-                                } catch (e: Exception) {
-                                    // Try conversion from float32 if direct extraction fails
-                                    when (tensor.info.type.toString()) {
-                                        "FLOAT" -> {
-                                            val floatArray = FloatArray(flatSize)
-                                            tensor.floatBuffer.get(floatArray)
-                                            floatArray.map { Float16Utils.floatToFloat16(it).toInt() }
-                                        }
-                                        else -> {
-                                            result.error("CONVERSION_ERROR", "Cannot convert to float16", null)
-                                            return
-                                        }
-                                    }
-                                }
+                            "FLOAT16" -> {
+                                // For float16, convert to float32 for easier use in Dart
+                                val shortArray = ShortArray(flatSize)
+                                tensor.shortBuffer.get(shortArray)
+                                shortArray.map { Float16Utils.float16ToFloat(it) }
                             }
-                            "int32" -> {
-                                try {
-                                    val intArray = IntArray(flatSize)
-                                    tensor.intBuffer.get(intArray)
-                                    intArray.toList()
-                                } catch (e: Exception) {
-                                    // Try conversion if direct extraction fails
-                                    when (tensor.info.type.toString()) {
-                                        "FLOAT" -> {
-                                            val floatArray = FloatArray(flatSize)
-                                            tensor.floatBuffer.get(floatArray)
-                                            floatArray.map { it.toInt() }
-                                        }
-                                        "INT64" -> {
-                                            val longArray = LongArray(flatSize)
-                                            tensor.longBuffer.get(longArray)
-                                            longArray.map { it.toInt() }
-                                        }
-                                        else -> {
-                                            result.error("CONVERSION_ERROR", "Cannot convert to int32", null)
-                                            return
-                                        }
-                                    }
-                                }
+                            "INT32" -> {
+                                val intArray = IntArray(flatSize)
+                                tensor.intBuffer.get(intArray)
+                                intArray.toList()
                             }
-                            "int64" -> {
-                                try {
-                                    val longArray = LongArray(flatSize)
-                                    tensor.longBuffer.get(longArray)
-                                    longArray.toList()
-                                } catch (e: Exception) {
-                                    // Try conversion
-                                    when (tensor.info.type.toString()) {
-                                        "FLOAT" -> {
-                                            val floatArray = FloatArray(flatSize)
-                                            tensor.floatBuffer.get(floatArray)
-                                            floatArray.map { it.toLong() }
-                                        }
-                                        "INT32" -> {
-                                            val intArray = IntArray(flatSize)
-                                            tensor.intBuffer.get(intArray)
-                                            intArray.map { it.toLong() }
-                                        }
-                                        else -> {
-                                            result.error("CONVERSION_ERROR", "Cannot convert to int64", null)
-                                            return
-                                        }
-                                    }
-                                }
+                            "INT64" -> {
+                                val longArray = LongArray(flatSize)
+                                tensor.longBuffer.get(longArray)
+                                longArray.toList()
                             }
-                            "uint8" -> {
-                                try {
-                                    val byteArray = ByteArray(flatSize)
-                                    tensor.byteBuffer.get(byteArray)
-                                    byteArray.map { it.toInt() and 0xFF }
-                                } catch (e: Exception) {
-                                    result.error("CONVERSION_ERROR", "Cannot convert to uint8", null)
-                                    return
-                                }
+                            "INT16", "UINT16" -> {
+                                val shortArray = ShortArray(flatSize)
+                                tensor.shortBuffer.get(shortArray)
+                                shortArray.map { it.toInt() }
                             }
-                            "bool" -> {
-                                try {
-                                    val byteArray = ByteArray(flatSize)
-                                    tensor.byteBuffer.get(byteArray)
-                                    byteArray.map { it != 0.toByte() }
-                                } catch (e: Exception) {
-                                    result.error("CONVERSION_ERROR", "Cannot convert to bool", null)
-                                    return
-                                }
+                            "INT8", "UINT8" -> {
+                                val byteArray = ByteArray(flatSize)
+                                tensor.byteBuffer.get(byteArray)
+                                byteArray.map { it.toInt() and 0xFF }
+                            }
+                            "BOOL" -> {
+                                val byteArray = ByteArray(flatSize)
+                                tensor.byteBuffer.get(byteArray)
+                                byteArray.map { it != 0.toByte() }
                             }
                             else -> {
-                                result.error("UNSUPPORTED_TYPE", "Unsupported data type: $dataType", null)
+                                result.error("UNSUPPORTED_NATIVE_TYPE", "Unsupported native data type: ${tensor.info.type}", null)
                                 return
                             }
                         }
-
                     // Return data with shape
                     val resultMap =
                         mapOf(
