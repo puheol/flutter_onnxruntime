@@ -314,39 +314,289 @@ static FlValue *get_metadata(FlutterOnnxruntimePlugin *self, FlValue *args) {
 }
 
 static FlValue *get_input_info(FlutterOnnxruntimePlugin *self, FlValue *args) {
-  // Return dummy input info
-  g_autoptr(FlValue) input = fl_value_new_map();
-  fl_value_set_string_take(input, "name", fl_value_new_string("input"));
-  fl_value_set_string_take(input, "type", fl_value_new_string("float"));
+  // Extract the session ID
+  FlValue *session_id_value = fl_value_lookup_string(args, "sessionId");
 
-  g_autoptr(FlValue) shape = fl_value_new_list();
-  fl_value_append_take(shape, fl_value_new_int(1));
-  fl_value_append_take(shape, fl_value_new_int(3));
-  fl_value_append_take(shape, fl_value_new_int(224));
-  fl_value_append_take(shape, fl_value_new_int(224));
-  fl_value_set_string(input, "shape", shape);
+  if (session_id_value == nullptr || fl_value_get_type(session_id_value) != FL_VALUE_TYPE_STRING) {
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "error", fl_value_new_string("Invalid session ID"));
+    return fl_value_ref(result);
+  }
 
-  g_autoptr(FlValue) result = fl_value_new_list();
-  fl_value_append(result, input);
+  const char *session_id = fl_value_get_string(session_id_value);
 
-  return fl_value_ref(result);
+  // Check if the session exists
+  if (!self->session_manager->hasSession(session_id)) {
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "error", fl_value_new_string("Session not found"));
+    return fl_value_ref(result);
+  }
+
+  try {
+    // Get the session
+    Ort::Session *session = self->session_manager->getSession(session_id);
+    if (!session) {
+      g_autoptr(FlValue) result = fl_value_new_map();
+      fl_value_set_string_take(result, "error", fl_value_new_string("Session is invalid"));
+      return fl_value_ref(result);
+    }
+
+    // Get all input info
+    size_t num_inputs = session->GetInputCount();
+    Ort::AllocatorWithDefaultOptions allocator;
+    g_autoptr(FlValue) result = fl_value_new_list();
+
+    for (size_t i = 0; i < num_inputs; i++) {
+      try {
+        auto input_name = session->GetInputNameAllocated(i, allocator);
+        auto type_info = session->GetInputTypeInfo(i);
+
+        FlValue *info_map = fl_value_new_map();
+        fl_value_set_string_take(info_map, "name", fl_value_new_string(input_name.get()));
+
+        // Check if it's a tensor type
+        ONNXType onnx_type = type_info.GetONNXType();
+
+        if (onnx_type == ONNX_TYPE_TENSOR) {
+          auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
+          auto shape = tensor_info.GetShape();
+
+          // Convert shape to list
+          FlValue *shape_list = fl_value_new_list();
+          for (const auto &dim : shape) {
+            fl_value_append_take(shape_list, fl_value_new_int(dim));
+          }
+          fl_value_set_string_take(info_map, "shape", shape_list);
+
+          // Add type info
+          ONNXTensorElementDataType element_type = tensor_info.GetElementType();
+
+          // Convert element type to string
+          const char *type_str = "unknown";
+          switch (element_type) {
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
+            type_str = "float";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8:
+            type_str = "uint8";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8:
+            type_str = "int8";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT16:
+            type_str = "uint16";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT16:
+            type_str = "int16";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32:
+            type_str = "int32";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64:
+            type_str = "int64";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING:
+            type_str = "string";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL:
+            type_str = "bool";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16:
+            type_str = "float16";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE:
+            type_str = "double";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT32:
+            type_str = "uint32";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT64:
+            type_str = "uint64";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_COMPLEX64:
+            type_str = "complex64";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_COMPLEX128:
+            type_str = "complex128";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_BFLOAT16:
+            type_str = "bfloat16";
+            break;
+          default:
+            type_str = "unknown";
+            break;
+          }
+
+          fl_value_set_string_take(info_map, "type", fl_value_new_string(type_str));
+        } else {
+          // Non-tensor type
+          fl_value_set_string_take(info_map, "type", fl_value_new_string("non-tensor"));
+
+          // Empty shape for non-tensor types
+          FlValue *shape_list = fl_value_new_list();
+          fl_value_set_string_take(info_map, "shape", shape_list);
+        }
+
+        fl_value_append_take(result, info_map);
+      } catch (const Ort::Exception &e) {
+        // Skip this input if there's an error
+        continue;
+      }
+    }
+
+    return fl_value_ref(result);
+  } catch (const Ort::Exception &e) {
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "error", fl_value_new_string(e.what()));
+    return fl_value_ref(result);
+  } catch (const std::exception &e) {
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "error", fl_value_new_string(e.what()));
+    return fl_value_ref(result);
+  }
 }
 
 static FlValue *get_output_info(FlutterOnnxruntimePlugin *self, FlValue *args) {
-  // Return dummy output info
-  g_autoptr(FlValue) output = fl_value_new_map();
-  fl_value_set_string_take(output, "name", fl_value_new_string("output"));
-  fl_value_set_string_take(output, "type", fl_value_new_string("float"));
+  // Extract the session ID
+  FlValue *session_id_value = fl_value_lookup_string(args, "sessionId");
 
-  g_autoptr(FlValue) shape = fl_value_new_list();
-  fl_value_append_take(shape, fl_value_new_int(1));
-  fl_value_append_take(shape, fl_value_new_int(1000));
-  fl_value_set_string(output, "shape", shape);
+  if (session_id_value == nullptr || fl_value_get_type(session_id_value) != FL_VALUE_TYPE_STRING) {
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "error", fl_value_new_string("Invalid session ID"));
+    return fl_value_ref(result);
+  }
 
-  g_autoptr(FlValue) result = fl_value_new_list();
-  fl_value_append(result, output);
+  const char *session_id = fl_value_get_string(session_id_value);
 
-  return fl_value_ref(result);
+  // Check if the session exists
+  if (!self->session_manager->hasSession(session_id)) {
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "error", fl_value_new_string("Session not found"));
+    return fl_value_ref(result);
+  }
+
+  try {
+    // Get the session
+    Ort::Session *session = self->session_manager->getSession(session_id);
+    if (!session) {
+      g_autoptr(FlValue) result = fl_value_new_map();
+      fl_value_set_string_take(result, "error", fl_value_new_string("Session is invalid"));
+      return fl_value_ref(result);
+    }
+
+    // Get all output info
+    size_t num_outputs = session->GetOutputCount();
+    Ort::AllocatorWithDefaultOptions allocator;
+    g_autoptr(FlValue) result = fl_value_new_list();
+
+    for (size_t i = 0; i < num_outputs; i++) {
+      try {
+        auto output_name = session->GetOutputNameAllocated(i, allocator);
+        auto type_info = session->GetOutputTypeInfo(i);
+
+        FlValue *info_map = fl_value_new_map();
+        fl_value_set_string_take(info_map, "name", fl_value_new_string(output_name.get()));
+
+        // Check if it's a tensor type
+        ONNXType onnx_type = type_info.GetONNXType();
+
+        if (onnx_type == ONNX_TYPE_TENSOR) {
+          auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
+          auto shape = tensor_info.GetShape();
+
+          // Convert shape to list
+          FlValue *shape_list = fl_value_new_list();
+          for (const auto &dim : shape) {
+            fl_value_append_take(shape_list, fl_value_new_int(dim));
+          }
+          fl_value_set_string_take(info_map, "shape", shape_list);
+
+          // Add type info
+          ONNXTensorElementDataType element_type = tensor_info.GetElementType();
+
+          // Convert element type to string
+          const char *type_str = "unknown";
+          switch (element_type) {
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
+            type_str = "float";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8:
+            type_str = "uint8";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8:
+            type_str = "int8";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT16:
+            type_str = "uint16";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT16:
+            type_str = "int16";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32:
+            type_str = "int32";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64:
+            type_str = "int64";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING:
+            type_str = "string";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL:
+            type_str = "bool";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16:
+            type_str = "float16";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE:
+            type_str = "double";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT32:
+            type_str = "uint32";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT64:
+            type_str = "uint64";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_COMPLEX64:
+            type_str = "complex64";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_COMPLEX128:
+            type_str = "complex128";
+            break;
+          case ONNX_TENSOR_ELEMENT_DATA_TYPE_BFLOAT16:
+            type_str = "bfloat16";
+            break;
+          default:
+            type_str = "unknown";
+            break;
+          }
+
+          fl_value_set_string_take(info_map, "type", fl_value_new_string(type_str));
+        } else {
+          // Non-tensor type
+          fl_value_set_string_take(info_map, "type", fl_value_new_string("non-tensor"));
+
+          // Empty shape for non-tensor types
+          FlValue *shape_list = fl_value_new_list();
+          fl_value_set_string_take(info_map, "shape", shape_list);
+        }
+
+        fl_value_append_take(result, info_map);
+      } catch (const Ort::Exception &e) {
+        // Skip this output if there's an error
+        continue;
+      }
+    }
+
+    return fl_value_ref(result);
+  } catch (const Ort::Exception &e) {
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "error", fl_value_new_string(e.what()));
+    return fl_value_ref(result);
+  } catch (const std::exception &e) {
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "error", fl_value_new_string(e.what()));
+    return fl_value_ref(result);
+  }
 }
 
 static FlValue *create_ort_value(FlutterOnnxruntimePlugin *self, FlValue *args) {
