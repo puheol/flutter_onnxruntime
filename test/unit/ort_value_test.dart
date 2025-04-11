@@ -13,7 +13,6 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
   String? lastValueIdForConversion;
   String? lastValueIdForRelease;
   String? lastValueIdForData;
-  String? lastRequestedDataType;
 
   @override
   Future<String?> getPlatformVersion() => Future.value('42');
@@ -73,44 +72,15 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
   }
 
   @override
-  Future<Map<String, dynamic>> getOrtValueData(String valueId, String dataType) {
+  Future<Map<String, dynamic>> getOrtValueData(String valueId) {
     // Track the call
     lastValueIdForData = valueId;
-    lastRequestedDataType = dataType;
 
-    // Return different data based on the requested type
-    switch (dataType) {
-      case 'float32':
-        return Future.value({
-          'data': [1.0, 2.0, 3.0, 4.0],
-          'shape': [2, 2],
-        });
-      case 'int32':
-        return Future.value({
-          'data': [1, 2, 3, 4],
-          'shape': [2, 2],
-        });
-      case 'int64':
-        return Future.value({
-          'data': [1, 2, 3, 4],
-          'shape': [2, 2],
-        });
-      case 'uint8':
-        return Future.value({
-          'data': [1, 2, 3, 4],
-          'shape': [2, 2],
-        });
-      case 'bool':
-        return Future.value({
-          'data': [true, false, true, false],
-          'shape': [2, 2],
-        });
-      default:
-        return Future.value({
-          'data': [],
-          'shape': [0],
-        });
-    }
+    // Return data in a format that works for all types
+    return Future.value({
+      'data': [1.0, 2.0, 3.0, 4.0],
+      'shape': [2, 2],
+    });
   }
 
   @override
@@ -353,58 +323,21 @@ void main() {
   });
 
   group('OrtValue data extraction', () {
-    test('asFloat32List() should return Float32List data', () async {
+    test('asList() should return data in native format', () async {
       // Create an OrtValue
       final tensor = await OrtValue.fromList(Float32List.fromList([1.0, 2.0, 3.0, 4.0]), [2, 2]);
 
-      // Get data as Float32List
-      final data = await tensor.asFloat32List();
+      // Get data in native format
+      final data = await tensor.asList();
 
       // Verify the call
       expect(mockPlatform.lastValueIdForData, tensor.id);
-      expect(mockPlatform.lastRequestedDataType, 'float32');
 
       // Verify the returned data
-      expect(data, isA<Float32List>());
+      expect(data, isA<List>());
       expect(data.length, 4);
       expect(data[0], 1.0);
       expect(data[3], 4.0);
-    });
-
-    test('asInt32List() should return Int32List data', () async {
-      // Create an OrtValue
-      final tensor = await OrtValue.fromList(Int32List.fromList([1, 2, 3, 4]), [2, 2]);
-
-      // Get data as Int32List
-      final data = await tensor.asInt32List();
-
-      // Verify the call
-      expect(mockPlatform.lastValueIdForData, tensor.id);
-      expect(mockPlatform.lastRequestedDataType, 'int32');
-
-      // Verify the returned data
-      expect(data, isA<Int32List>());
-      expect(data.length, 4);
-      expect(data[0], 1);
-      expect(data[3], 4);
-    });
-
-    test('asBoolList() should return bool list data', () async {
-      // Create an OrtValue
-      final tensor = await OrtValue.fromList([true, false, true, false], [2, 2]);
-
-      // Get data as bool list
-      final data = await tensor.asBoolList();
-
-      // Verify the call
-      expect(mockPlatform.lastValueIdForData, tensor.id);
-      expect(mockPlatform.lastRequestedDataType, 'bool');
-
-      // Verify the returned data
-      expect(data, isA<List<bool>>());
-      expect(data.length, 4);
-      expect(data[0], true);
-      expect(data[1], false);
     });
   });
 

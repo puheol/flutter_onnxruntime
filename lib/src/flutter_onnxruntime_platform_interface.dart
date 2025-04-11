@@ -113,8 +113,7 @@ abstract class FlutterOnnxruntimePlatform extends PlatformInterface {
   /// Gets the data from an OrtValue
   ///
   /// [valueId] is the ID of the OrtValue to get data from
-  /// [dataType] is the requested data type (e.g., 'float32', 'int32')
-  Future<Map<String, dynamic>> getOrtValueData(String valueId, String dataType) {
+  Future<Map<String, dynamic>> getOrtValueData(String valueId) {
     throw UnimplementedError('getOrtValueData() has not been implemented.');
   }
 

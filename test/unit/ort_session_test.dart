@@ -109,7 +109,10 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
   Future<Map<String, dynamic>> convertOrtValue(String valueId, String targetType) => Future.value({});
 
   @override
-  Future<Map<String, dynamic>> getOrtValueData(String valueId, String dataType) => Future.value({});
+  Future<Map<String, dynamic>> getOrtValueData(String valueId) => Future.value({
+    'data': [1.0, 2.0, 3.0, 4.0],
+    'shape': [2, 2],
+  });
 
   @override
   Future<Map<String, dynamic>> moveOrtValueToDevice(String valueId, String targetDevice) => Future.value({});
