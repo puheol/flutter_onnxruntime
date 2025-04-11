@@ -699,6 +699,15 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                 // Use OnnxTensor.createTensor with the appropriate float16 type
                                 OnnxTensor.createTensor(ortEnvironment, shortBuffer, shape, OnnxJavaType.FLOAT16)
                             }
+                            // Float16 to float32
+                            dataType == "FLOAT16" && targetType == "float32" -> {
+                                val shortBuffer = tensor.shortBuffer
+                                val shortArray = ShortArray(shortBuffer.remaining())
+                                shortBuffer.get(shortArray)
+
+                                val floatArray = FloatArray(shortArray.size) { Float16Utils.float16ToFloat(shortArray[it]) }
+                                OnnxTensor.createTensor(ortEnvironment, FloatBuffer.wrap(floatArray), shape)
+                            }
                             // Int32 to Float32
                             dataType == "INT32" && targetType == "float32" -> {
                                 val intBuffer = tensor.intBuffer
@@ -708,10 +717,104 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                 val floatArray = FloatArray(intArray.size) { intArray[it].toFloat() }
                                 OnnxTensor.createTensor(ortEnvironment, FloatBuffer.wrap(floatArray), shape)
                             }
-                            // Other conversions would be implemented similarly
-                            else -> {
-                                // If no conversion is implemented, just return the original tensor
+                            // Int64 to Float32
+                            dataType == "INT64" && targetType == "float32" -> {
+                                val longBuffer = tensor.longBuffer
+                                val longArray = LongArray(longBuffer.remaining())
+                                longBuffer.get(longArray)
+
+                                val floatArray = FloatArray(longArray.size) { longArray[it].toFloat() }
+                                OnnxTensor.createTensor(ortEnvironment, FloatBuffer.wrap(floatArray), shape)
+                            }
+                            // Uint8 to Float32
+                            dataType == "UINT8" && targetType == "float32" -> {
+                                val byteBuffer = tensor.byteBuffer
+                                val byteArray = ByteArray(byteBuffer.remaining())
+                                byteBuffer.get(byteArray)
+
+                                val floatArray = FloatArray(byteArray.size) { (byteArray[it].toInt() and 0xFF).toFloat() }
+                                OnnxTensor.createTensor(ortEnvironment, FloatBuffer.wrap(floatArray), shape)
+                            }
+                            // Float32 to Int32
+                            dataType == "FLOAT" && targetType == "int32" -> {
+                                val floatBuffer = tensor.floatBuffer
+                                val floatArray = FloatArray(floatBuffer.remaining())
+                                floatBuffer.get(floatArray)
+
+                                val intArray = IntArray(floatArray.size) { floatArray[it].toInt() }
+                                OnnxTensor.createTensor(ortEnvironment, IntBuffer.wrap(intArray), shape)
+                            }
+                            // Float32 to Int64
+                            dataType == "FLOAT" && targetType == "int64" -> {
+                                val floatBuffer = tensor.floatBuffer
+                                val floatArray = FloatArray(floatBuffer.remaining())
+                                floatBuffer.get(floatArray)
+
+                                val longArray = LongArray(floatArray.size) { floatArray[it].toLong() }
+                                OnnxTensor.createTensor(ortEnvironment, LongBuffer.wrap(longArray), shape)
+                            }
+                            // Int32 to Int64
+                            dataType == "INT32" && targetType == "int64" -> {
+                                val intBuffer = tensor.intBuffer
+                                val intArray = IntArray(intBuffer.remaining())
+                                intBuffer.get(intArray)
+
+                                val longArray = LongArray(intArray.size) { intArray[it].toLong() }
+                                OnnxTensor.createTensor(ortEnvironment, LongBuffer.wrap(longArray), shape)
+                            }
+                            // Int64 to Int32 (with potential loss of precision)
+                            dataType == "INT64" && targetType == "int32" -> {
+                                val longBuffer = tensor.longBuffer
+                                val longArray = LongArray(longBuffer.remaining())
+                                longBuffer.get(longArray)
+
+                                // Check for potential data loss
+                                val hasDataLoss = longArray.any { it > Int.MAX_VALUE || it < Int.MIN_VALUE }
+                                if (hasDataLoss) {
+                                    Log.w("ORT_CONVERSION", "Converting Int64 to Int32 with data loss")
+                                }
+
+                                val intArray = IntArray(longArray.size) { longArray[it].toInt() }
+                                OnnxTensor.createTensor(ortEnvironment, IntBuffer.wrap(intArray), shape)
+                            }
+                            // Boolean to Int8/Uint8
+                            dataType == "BOOL" && (targetType == "int8" || targetType == "uint8") -> {
+                                val byteBuffer = tensor.byteBuffer
+                                val byteArray = ByteArray(byteBuffer.remaining())
+                                byteBuffer.get(byteArray)
+
+                                // Boolean values are already stored as bytes (0 or 1)
+                                OnnxTensor.createTensor(ortEnvironment, ByteBuffer.wrap(byteArray), shape)
+                            }
+                            // Int8/Uint8 to Boolean
+                            (dataType == "INT8" || dataType == "UINT8") && targetType == "bool" -> {
+                                val byteBuffer = tensor.byteBuffer
+                                val byteArray = ByteArray(byteBuffer.remaining())
+                                byteBuffer.get(byteArray)
+
+                                // Convert to boolean representation (non-zero values become true)
+                                val boolArray = ByteArray(byteArray.size) { if (byteArray[it] != 0.toByte()) 1.toByte() else 0.toByte() }
+                                OnnxTensor.createTensor(ortEnvironment, ByteBuffer.wrap(boolArray), shape)
+                            }
+                            // Same type conversion (no-op)
+                            (dataType == "FLOAT" && targetType == "float32") ||
+                                (dataType == "FLOAT16" && targetType == "float16") ||
+                                (dataType == "INT32" && targetType == "int32") ||
+                                (dataType == "INT64" && targetType == "int64") ||
+                                (dataType == "UINT8" && targetType == "uint8") ||
+                                (dataType == "INT8" && targetType == "int8") ||
+                                (dataType == "BOOL" && targetType == "bool") -> {
+                                // Return the original tensor if target type matches current type
                                 tensor
+                            }
+                            else -> {
+                                // Unsupported conversion
+                                result.error(
+                                    "UNSUPPORTED_CONVERSION",
+                                    "Conversion from $dataType to $targetType is not supported",
+                                    null,
+                                )
+                                return
                             }
                         }
 
