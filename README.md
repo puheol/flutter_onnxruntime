@@ -46,12 +46,14 @@ To get started with the Flutter ONNX Runtime plugin, see the [API Usage Guide](d
 | Feature | Android | iOS | Linux | macOS | Windows |
 |---------|:-------:|:---:|:-----:|:-----:|:-------:|
 | CPU Inference | ✅ | ✅ | ✅ | ✅ | ✍️ |
-| GPU Inference | 🚧 | 🚧 | 🚧 | 🚧 | ✍️ |
-| Data Type Conversion | ✅ | ✅ | ✅ | ✅ | ✍️ |
-| Memory Management | ✅ | ✅ | ✅ | ✅ | ✍️ |
-| Model Metadata | ✅ | ❌* | ✅ | ❌* | ✍️ |
-| FP16 Support | ✅ | ❌** | 🚧 | ❌** | ✍️ |
 | Inference on Emulator | ✅ | ✅ | ✅ | ✅ | ✍️ |
+| GPU Inference | 🚧 | 🚧 | 🚧 | 🚧 | ✍️ |
+| Input/Output names | ✅ | ✅ | ✅ | ✅ | ✍️ |
+| Input/Output Info | ✅ | ❌* | ✅ | ❌* | ✍️ |
+| Model Metadata | ✅ | ❌* | ✅ | ❌* | ✍️ |
+| Tensor Management | ✅ | ✅ | ✅ | ✅ | ✍️ |
+| Data Type Conversion | ✅ | ✅ | ✅ | ✅ | ✍️ |
+| FP16 Support | ✅ | ❌** | 🚧 | ❌** | ✍️ |
 | Tensor Manipulation | ✍️ | ✍️ | ✍️ | ✍️ | ✍️ |
 
 ✅: Complete
@@ -62,35 +64,13 @@ To get started with the Flutter ONNX Runtime plugin, see the [API Usage Guide](d
 
 ✍️: Planned
 
-`*`: iOS and macOS do not support retrieving model metadata, we can only retrieve the input/output names.
+`*`: ORT does not support retrieving model metadata and input/output info, we can only retrieve the input/output names.
 
 `**`: Swift does not support FP16 type.
 
 ## Troubleshooting
 
-### iOS
-* Target minimum version: iOS 16
-* "The 'Pods-Runner' target has transitive dependencies that include statically linked binaries: (onnxruntime-objc and onnxruntime-c)". In `Podfile` change:
-    ```
-    target 'Runner' do
-    use_frameworks! :linkage => :static
-    ```
-
-### MacOS
-* Target minimum version: MacOS 14
-* "The 'Pods-Runner' target has transitive dependencies that include statically linked binaries: (onnxruntime-objc and onnxruntime-c)". In `Podfile` change:
-    ```
-    target 'Runner' do
-    use_frameworks! :linkage => :static
-    ```
-* "error: compiling for macOS 10.14, but module 'flutter_onnxruntime' has a minimum deployment target of macOS 14.0". In terminal, cd to the `macos` directory and run the XCode to open the project:
-    ```
-    open Runner.xcworkspace
-    ```
-    Then change the "Minimum Deployments" to 14.0.
-
-### Linux
-* When running with ONNX Runtime 1.21.0, you may see reference counting warnings related to FlValue objects. These don't prevent the app from running but may be addressed in future updates.
+For troubleshooting, see the [troubleshooting.md](docs/troubleshooting.md) file.
 
 ## Contributing
 Contributions to the Flutter ONNX Runtime plugin are welcome. Please see the [contributing.md](docs/contributing.md) file for more information.
@@ -100,9 +80,3 @@ Contributions to the Flutter ONNX Runtime plugin are welcome. Please see the [co
    - [Linux Development Setup Guide](docs/linux/LINUX_SETUP.md)
    - [ONNX Runtime C++ API Guide](docs/linux/ONNX_RUNTIME_API.md)
    - [Flutter Linux Plugin Architecture](docs/linux/FLUTTER_LINUX_PLUGINS.md)
-
-### Development Workflow
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Make your changes and test on multiple platforms if possible
-4. Submit a pull request with a clear description of your changes

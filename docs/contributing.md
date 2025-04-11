@@ -1,9 +1,9 @@
 
 We welcome contributions to improve the flutter_onnxruntime plugin! Whether you're fixing bugs, adding features, or improving documentation, your help is appreciated.
 
-### Setting Up Development Environment
+## Setting Up Development Environment
 
-#### Pre-commit Setup
+### Pre-commit Setup
 We use a pre-commit hook to ensure code quality and consistency. Follow these steps to set it up:
 
 1. Install required tools:
@@ -39,7 +39,7 @@ The pre-commit hook will:
 - Run Flutter analyze
 - Prevent commits with formatting errors
 
-#### Testing
+## Testing
 
 For testing, we use the `scripts/run_tests.sh` script to run unit and integration tests on all available platforms.
 
@@ -56,10 +56,17 @@ You can also manually run tests for a specific platform:
 2. Run integration tests:
     ```
     cd example
-    flutter test integration_test/onnxruntime_integration_test.dart -d <device_id>
+    flutter test integration_test/ -d <device_id>
     ```
     or running via flutter drive:
     ```
     cd example
-    flutter drive --driver=test_driver/integration_test.dart --target=integration_test/onnxruntime_integration_test.dart -d <device_id>
+    flutter drive --driver=test_driver/integration_test.dart --target=integration_test/ -d <device_id>
     ```
+
+## Contributing
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/my-feature`
+3. Make your changes and test on multiple platforms if possible
+4. Submit a pull request with a clear description of your changes
+
