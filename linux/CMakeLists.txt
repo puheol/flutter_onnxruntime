@@ -163,9 +163,9 @@ endif()
 
 # Any new source files that you add to the plugin should be added here.
 list(APPEND PLUGIN_SOURCES
-  "flutter_onnxruntime_plugin.cc"
-  "ort_value.cc"
-  "float16_utils.cc"
+  "src/flutter_onnxruntime_plugin.cc"
+  "src/session_manager.cc"
+  "src/value_conversion.cc"
 )
 
 # Define the plugin library target. Its name must not be changed (see comment
@@ -212,8 +212,6 @@ install(
 # Install utility header files with the proper path
 install(
   FILES
-    "float16_utils.h"
-    "ort_value.h"
   DESTINATION
     "${CMAKE_BINARY_DIR}/include"
 )
@@ -222,8 +220,6 @@ install(
 execute_process(
   COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/include/flutter_onnxruntime"
   COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/include/flutter_onnxruntime/flutter_onnxruntime_plugin.h" "${CMAKE_BINARY_DIR}/include/flutter_onnxruntime/"
-  COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/float16_utils.h" "${CMAKE_BINARY_DIR}/include/"
-  COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/ort_value.h" "${CMAKE_BINARY_DIR}/include/"
 )
 
 # Add include directories for the plugin
