@@ -186,6 +186,13 @@ static FlValue *create_session(FlutterOnnxruntimePlugin *self, FlValue *args) {
   // Create session using session manager
   std::string session_id = self->session_manager->createSession(model_path, nullptr);
 
+  // Check if session creation failed
+  if (session_id.empty()) {
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "error", fl_value_new_string("Failed to create session"));
+    return fl_value_ref(result);
+  }
+
   // Get input and output names
   std::vector<std::string> input_names = self->session_manager->getInputNames(session_id);
   std::vector<std::string> output_names = self->session_manager->getOutputNames(session_id);
@@ -262,20 +269,48 @@ static FlValue *get_metadata(FlutterOnnxruntimePlugin *self, FlValue *args) {
     return fl_value_ref(result);
   }
 
-  // Create dummy metadata response
-  g_autoptr(FlValue) result = fl_value_new_map();
-  fl_value_set_string_take(result, "producerName", fl_value_new_string("ONNX Runtime Dummy Producer"));
-  fl_value_set_string_take(result, "graphName", fl_value_new_string("Dummy Graph"));
-  fl_value_set_string_take(result, "domain", fl_value_new_string("ai.onnx"));
-  fl_value_set_string_take(result, "description", fl_value_new_string("Dummy model description"));
-  fl_value_set_string_take(result, "version", fl_value_new_int(1));
+  try {
+    // Get the session
+    Ort::Session *session = self->session_manager->getSession(session_id);
+    if (!session) {
+      g_autoptr(FlValue) result = fl_value_new_map();
+      fl_value_set_string_take(result, "error", fl_value_new_string("Session is invalid"));
+      return fl_value_ref(result);
+    }
 
-  // Create custom metadata map
-  g_autoptr(FlValue) custom_metadata_map = fl_value_new_map();
-  fl_value_set_string_take(custom_metadata_map, "dummy_key", fl_value_new_string("dummy_value"));
-  fl_value_set_string(result, "customMetadataMap", custom_metadata_map);
+    // Get metadata for the model
+    Ort::ModelMetadata model_metadata = session->GetModelMetadata();
+    Ort::AllocatorWithDefaultOptions allocator;
 
-  return fl_value_ref(result);
+    // Extract metadata details
+    auto producer_name = model_metadata.GetProducerNameAllocated(allocator);
+    auto graph_name = model_metadata.GetGraphNameAllocated(allocator);
+    auto domain = model_metadata.GetDomainAllocated(allocator);
+    auto description = model_metadata.GetDescriptionAllocated(allocator);
+    int64_t version = model_metadata.GetVersion();
+
+    // Create empty custom metadata map
+    g_autoptr(FlValue) custom_metadata_map = fl_value_new_map();
+
+    // Create response
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "producerName", fl_value_new_string(producer_name.get()));
+    fl_value_set_string_take(result, "graphName", fl_value_new_string(graph_name.get()));
+    fl_value_set_string_take(result, "domain", fl_value_new_string(domain.get()));
+    fl_value_set_string_take(result, "description", fl_value_new_string(description.get()));
+    fl_value_set_string_take(result, "version", fl_value_new_int(version));
+    fl_value_set_string(result, "customMetadataMap", custom_metadata_map);
+
+    return fl_value_ref(result);
+  } catch (const Ort::Exception &e) {
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "error", fl_value_new_string(e.what()));
+    return fl_value_ref(result);
+  } catch (const std::exception &e) {
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "error", fl_value_new_string(e.what()));
+    return fl_value_ref(result);
+  }
 }
 
 static FlValue *get_input_info(FlutterOnnxruntimePlugin *self, FlValue *args) {

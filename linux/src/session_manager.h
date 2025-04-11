@@ -4,12 +4,13 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <onnxruntime_cxx_api.h>
 #include <string>
 #include <vector>
 
 // Session information structure
 struct SessionInfo {
-  void *session;
+  std::unique_ptr<Ort::Session> session;
   std::vector<std::string> input_names;
   std::vector<std::string> output_names;
 };
@@ -24,7 +25,7 @@ public:
   std::string createSession(const char *model_path, void *options);
 
   // Get a session by ID
-  void *getSession(const std::string &session_id);
+  Ort::Session *getSession(const std::string &session_id);
 
   // Close and remove a session
   bool closeSession(const std::string &session_id);
@@ -53,6 +54,9 @@ private:
 
   // Mutex for thread safety
   std::mutex mutex_;
+
+  // ONNX Runtime environment
+  Ort::Env env_;
 };
 
 #endif // SESSION_MANAGER_H
