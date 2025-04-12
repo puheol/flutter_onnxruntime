@@ -37,12 +37,13 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
       lastRunInputs!['${entry.key}_shape'] = entry.value.shape;
     }
 
-    // Return mock outputs
+    // Return mock outputs - now with OrtValue properties
     return Future.value({
-      'outputs': {
-        'output1': [1.0, 2.0, 3.0, 4.0],
-        'output1_shape': [2, 2],
-      },
+      'output1': [
+        'tensor_001',
+        'float32',
+        [2, 2],
+      ],
     });
   }
 
@@ -131,6 +132,25 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
   Future<void> releaseOrtValue(String valueId) => Future.value();
 }
 
+class ConversionTrackingMock extends MockFlutterOnnxruntimePlatform {
+  String? lastConvertedValueId;
+  String? lastConvertedTargetType;
+
+  @override
+  Future<Map<String, dynamic>> convertOrtValue(String valueId, String targetType) {
+    // Track the conversion operation for assertion
+    lastConvertedValueId = valueId;
+    lastConvertedTargetType = targetType;
+
+    return Future.value({
+      'valueId': 'converted_$valueId',
+      'dataType': targetType,
+      'shape': [2, 2],
+      'device': 'cpu',
+    });
+  }
+}
+
 void main() {
   late OrtSession session;
   late MockFlutterOnnxruntimePlatform mockPlatform;
@@ -159,7 +179,7 @@ void main() {
       final inputs = {'input1': tensor1, 'input2': tensor2};
 
       // Run inference with OrtValues
-      await session.run(inputs);
+      final outputs = await session.run(inputs);
 
       // Verify that the inputs were correctly processed
       expect(mockPlatform.lastRunInputs, isNotNull);
@@ -173,6 +193,12 @@ void main() {
       expect(mockPlatform.lastRunInputs!['input2'], isA<Map<String, dynamic>>());
       expect(mockPlatform.lastRunInputs!['input2']['valueId'], tensor2.id);
       expect(mockPlatform.lastRunInputs!['input2_shape'], tensor2.shape);
+
+      // Verify output format
+      expect(outputs, isA<Map<String, OrtValue>>());
+      expect(outputs.keys, contains('output1'));
+      expect(outputs['output1']!.id, 'tensor_001');
+      expect(outputs['output1']!.shape, [2, 2]);
     });
 
     test('should properly clean up OrtValue resources', () async {
@@ -186,6 +212,35 @@ void main() {
 
       // Should be able to dispose without errors
       await expectLater(tensor.dispose(), completes);
+    });
+
+    test('run output should be OrtValue that can be used in subsequent operations', () async {
+      // Use custom mock that tracks conversion operations
+      final conversionMock = ConversionTrackingMock();
+      FlutterOnnxruntimePlatform.instance = conversionMock;
+
+      // Setup the createSession and runInference methods
+      final onnxRuntime = OnnxRuntime();
+      final testSession = await onnxRuntime.createSession('test_model.onnx');
+
+      // Create input tensor
+      final inputTensor = await OrtValue.fromList(Float32List.fromList([1.0, 2.0, 3.0, 4.0]), [2, 2]);
+
+      // Run inference
+      final outputs = await testSession.run({'input1': inputTensor});
+
+      // Get the output tensor
+      final outputTensor = outputs['output1']!;
+
+      // Use the output tensor in another operation (e.g., convert to int32)
+      await outputTensor.to(OrtDataType.int32);
+
+      // Verify that the conversion was called with the right parameters
+      expect(conversionMock.lastConvertedValueId, 'tensor_001');
+      expect(conversionMock.lastConvertedTargetType, 'int32');
+
+      // Restore original mock
+      FlutterOnnxruntimePlatform.instance = mockPlatform;
     });
   });
 }
