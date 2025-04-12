@@ -11,8 +11,19 @@ template <> FlValue *vector_to_fl_value<std::string>(const std::vector<std::stri
   return list;
 }
 
-// Implementation of the vector_to_fl_value specialization for ints
-template <> FlValue *vector_to_fl_value<int>(const std::vector<int> &vec) {
+// Implementation of the vector_to_fl_value specialization for floats
+template <> FlValue *vector_to_fl_value<float>(const std::vector<float> &vec) {
+  FlValue *list = fl_value_new_list();
+
+  for (const auto &val : vec) {
+    fl_value_append_take(list, fl_value_new_float(val));
+  }
+
+  return list;
+}
+
+// Implementation of the vector_to_fl_value specialization for int32_t
+template <> FlValue *vector_to_fl_value<int32_t>(const std::vector<int32_t> &vec) {
   FlValue *list = fl_value_new_list();
 
   for (const auto &val : vec) {
@@ -22,12 +33,35 @@ template <> FlValue *vector_to_fl_value<int>(const std::vector<int> &vec) {
   return list;
 }
 
-// Implementation of the vector_to_fl_value specialization for floats
-template <> FlValue *vector_to_fl_value<float>(const std::vector<float> &vec) {
+// Implementation of the vector_to_fl_value specialization for int64_t
+template <> FlValue *vector_to_fl_value<int64_t>(const std::vector<int64_t> &vec) {
   FlValue *list = fl_value_new_list();
 
   for (const auto &val : vec) {
-    fl_value_append_take(list, fl_value_new_float(val));
+    fl_value_append_take(list, fl_value_new_int(val));
+  }
+
+  return list;
+}
+
+// Implementation of the vector_to_fl_value specialization for uint8_t
+template <> FlValue *vector_to_fl_value<uint8_t>(const std::vector<uint8_t> &vec) {
+  FlValue *list = fl_value_new_list();
+
+  for (const auto &val : vec) {
+    fl_value_append_take(list, fl_value_new_int(val));
+  }
+
+  return list;
+}
+
+// Implementation of the vector_to_fl_value specialization for bool
+template <> FlValue *vector_to_fl_value<bool>(const std::vector<bool> &vec) {
+  FlValue *list = fl_value_new_list();
+
+  for (size_t i = 0; i < vec.size(); i++) {
+    // Convert bool to int as Flutter expects
+    fl_value_append_take(list, fl_value_new_int(vec[i] ? 1 : 0));
   }
 
   return list;

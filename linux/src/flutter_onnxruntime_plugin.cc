@@ -636,10 +636,11 @@ static FlValue *create_ort_value(FlutterOnnxruntimePlugin *self, FlValue *args) 
   }
 
   std::string valueId;
-  std::vector<float> data_vec;
 
   // Handle data according to source type
   if (strcmp(source_type, "float32") == 0) {
+    std::vector<float> data_vec;
+
     // Convert data to vector of floats
     if (fl_value_get_type(data_value) == FL_VALUE_TYPE_FLOAT32_LIST) {
       size_t data_size = fl_value_get_length(data_value);
@@ -665,6 +666,121 @@ static FlValue *create_ort_value(FlutterOnnxruntimePlugin *self, FlValue *args) 
     }
     // Create tensor
     valueId = self->tensor_manager->createFloat32Tensor(data_vec, shape);
+  } else if (strcmp(source_type, "int32") == 0) {
+    std::vector<int32_t> data_vec;
+
+    // Convert data to vector of int32
+    if (fl_value_get_type(data_value) == FL_VALUE_TYPE_INT32_LIST) {
+      size_t data_size = fl_value_get_length(data_value);
+      // Get direct access to the Dart Int32List data
+      const int32_t *int_array = fl_value_get_int32_list(data_value);
+      for (size_t i = 0; i < data_size; i++) {
+        int32_t val = int_array[i];
+        data_vec.push_back(val);
+      }
+    } else if (fl_value_get_type(data_value) == FL_VALUE_TYPE_LIST) { // regular int list array
+      size_t length = fl_value_get_length(data_value);
+      data_vec.reserve(length);
+
+      for (size_t i = 0; i < length; i++) {
+        FlValue *val = fl_value_get_list_value(data_value, i);
+        int32_t int_val = static_cast<int32_t>(fl_value_get_int(val));
+        data_vec.push_back(int_val);
+      }
+    } else {
+      g_autoptr(FlValue) result = fl_value_new_map();
+      fl_value_set_string_take(result, "error", fl_value_new_string("Data must be a typed list or a list"));
+      return fl_value_ref(result);
+    }
+    // Create tensor
+    valueId = self->tensor_manager->createInt32Tensor(data_vec, shape);
+  } else if (strcmp(source_type, "int64") == 0) {
+    std::vector<int64_t> data_vec;
+
+    // Convert data to vector of int64
+    if (fl_value_get_type(data_value) == FL_VALUE_TYPE_INT64_LIST) {
+      size_t data_size = fl_value_get_length(data_value);
+      // Get direct access to the Dart Int64List data
+      const int64_t *int_array = fl_value_get_int64_list(data_value);
+      for (size_t i = 0; i < data_size; i++) {
+        int64_t val = int_array[i];
+        data_vec.push_back(val);
+      }
+    } else if (fl_value_get_type(data_value) == FL_VALUE_TYPE_LIST) { // regular int list array
+      size_t length = fl_value_get_length(data_value);
+      data_vec.reserve(length);
+
+      for (size_t i = 0; i < length; i++) {
+        FlValue *val = fl_value_get_list_value(data_value, i);
+        int64_t int_val = fl_value_get_int(val);
+        data_vec.push_back(int_val);
+      }
+    } else {
+      g_autoptr(FlValue) result = fl_value_new_map();
+      fl_value_set_string_take(result, "error", fl_value_new_string("Data must be a typed list or a list"));
+      return fl_value_ref(result);
+    }
+    // Create tensor
+    valueId = self->tensor_manager->createInt64Tensor(data_vec, shape);
+  } else if (strcmp(source_type, "uint8") == 0) {
+    std::vector<uint8_t> data_vec;
+
+    // Convert data to vector of uint8
+    if (fl_value_get_type(data_value) == FL_VALUE_TYPE_UINT8_LIST) {
+      size_t data_size = fl_value_get_length(data_value);
+      // Get direct access to the Dart Uint8List data
+      const uint8_t *uint_array = fl_value_get_uint8_list(data_value);
+      for (size_t i = 0; i < data_size; i++) {
+        uint8_t val = uint_array[i];
+        data_vec.push_back(val);
+      }
+    } else if (fl_value_get_type(data_value) == FL_VALUE_TYPE_LIST) { // regular int list array
+      size_t length = fl_value_get_length(data_value);
+      data_vec.reserve(length);
+
+      for (size_t i = 0; i < length; i++) {
+        FlValue *val = fl_value_get_list_value(data_value, i);
+        uint8_t uint_val = static_cast<uint8_t>(fl_value_get_int(val));
+        data_vec.push_back(uint_val);
+      }
+    } else {
+      g_autoptr(FlValue) result = fl_value_new_map();
+      fl_value_set_string_take(result, "error", fl_value_new_string("Data must be a typed list or a list"));
+      return fl_value_ref(result);
+    }
+    // Create tensor
+    valueId = self->tensor_manager->createUint8Tensor(data_vec, shape);
+  } else if (strcmp(source_type, "bool") == 0) {
+    std::vector<bool> data_vec;
+
+    // Convert data to vector of bool
+    if (fl_value_get_type(data_value) == FL_VALUE_TYPE_LIST) {
+      size_t length = fl_value_get_length(data_value);
+      data_vec.reserve(length);
+
+      for (size_t i = 0; i < length; i++) {
+        FlValue *val = fl_value_get_list_value(data_value, i);
+        if (fl_value_get_type(val) == FL_VALUE_TYPE_BOOL) {
+          bool bool_val = fl_value_get_bool(val);
+          data_vec.push_back(bool_val);
+        } else if (fl_value_get_type(val) == FL_VALUE_TYPE_INT) {
+          // Handle case where booleans might be represented as integers
+          bool bool_val = fl_value_get_int(val) != 0;
+          data_vec.push_back(bool_val);
+        } else {
+          g_autoptr(FlValue) result = fl_value_new_map();
+          fl_value_set_string_take(result, "error",
+                                   fl_value_new_string("Boolean data must be a list of booleans or integers"));
+          return fl_value_ref(result);
+        }
+      }
+    } else {
+      g_autoptr(FlValue) result = fl_value_new_map();
+      fl_value_set_string_take(result, "error", fl_value_new_string("Boolean data must be a list"));
+      return fl_value_ref(result);
+    }
+    // Create tensor
+    valueId = self->tensor_manager->createBoolTensor(data_vec, shape);
   } else {
     // Unsupported source type
     g_autoptr(FlValue) result = fl_value_new_map();
@@ -682,8 +798,7 @@ static FlValue *create_ort_value(FlutterOnnxruntimePlugin *self, FlValue *args) 
   // Create response
   g_autoptr(FlValue) result = fl_value_new_map();
   fl_value_set_string_take(result, "valueId", fl_value_new_string(valueId.c_str()));
-  fl_value_set_string_take(result, "dataType",
-                           fl_value_new_string(strcmp(source_type, "float32") == 0 ? "float32" : source_type));
+  fl_value_set_string_take(result, "dataType", fl_value_new_string(source_type));
 
   // Add shape to response
   FlValue *shape_list = fl_value_new_list();

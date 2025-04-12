@@ -18,6 +18,18 @@ public:
   // Create a tensor from Float32List data
   std::string createFloat32Tensor(const std::vector<float> &data, const std::vector<int64_t> &shape);
 
+  // Create a tensor from Int32List data
+  std::string createInt32Tensor(const std::vector<int32_t> &data, const std::vector<int64_t> &shape);
+
+  // Create a tensor from Int64List data
+  std::string createInt64Tensor(const std::vector<int64_t> &data, const std::vector<int64_t> &shape);
+
+  // Create a tensor from Uint8List data
+  std::string createUint8Tensor(const std::vector<uint8_t> &data, const std::vector<int64_t> &shape);
+
+  // Create a tensor from Boolean data
+  std::string createBoolTensor(const std::vector<bool> &data, const std::vector<int64_t> &shape);
+
   // Get data from a tensor
   FlValue *getTensorData(const std::string &tensor_id);
 

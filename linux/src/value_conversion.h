@@ -18,6 +18,18 @@ template <> FlValue *vector_to_fl_value<int>(const std::vector<int> &vec);
 // Specialization for float vectors
 template <> FlValue *vector_to_fl_value<float>(const std::vector<float> &vec);
 
+// Specialization for int32_t vectors
+template <> FlValue *vector_to_fl_value<int32_t>(const std::vector<int32_t> &vec);
+
+// Specialization for int64_t vectors
+template <> FlValue *vector_to_fl_value<int64_t>(const std::vector<int64_t> &vec);
+
+// Specialization for uint8_t vectors
+template <> FlValue *vector_to_fl_value<uint8_t>(const std::vector<uint8_t> &vec);
+
+// Specialization for bool vectors
+template <> FlValue *vector_to_fl_value<bool>(const std::vector<bool> &vec);
+
 // Convert a FlValue map to a C++ map
 std::map<std::string, FlValue *> fl_value_to_map(FlValue *map_value);
 
