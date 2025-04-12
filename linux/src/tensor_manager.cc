@@ -33,7 +33,7 @@ std::string TensorManager::createFloat32Tensor(const std::vector<float> &data, c
     // Store the tensor with direct ownership, its type, and shape
     // use std::make_unique to tie the OrtValue lifetime to the pointer
     tensors_[tensor_id] = std::make_unique<Ort::Value>(std::move(persistent_tensor));
-    tensor_types_[tensor_id] = "float";
+    tensor_types_[tensor_id] = "float32";
     tensor_shapes_[tensor_id] = shape;
 
     return tensor_id;
@@ -77,7 +77,7 @@ FlValue *TensorManager::getTensorData(const std::string &tensor_id) {
     fl_value_set_string_take(result, "dataType", fl_value_new_string(tensor_type.c_str()));
 
     // Handle different tensor types
-    if (tensor_type == "float") {
+    if (tensor_type == "float32") {
       // Get float data from tensor
       Ort::Value *tensor = tensor_it->second.get();
       float *tensor_data = tensor->GetTensorMutableData<float>();

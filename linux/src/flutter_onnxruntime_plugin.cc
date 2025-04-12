@@ -381,7 +381,7 @@ static FlValue *get_input_info(FlutterOnnxruntimePlugin *self, FlValue *args) {
           const char *type_str = "unknown";
           switch (element_type) {
           case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
-            type_str = "float";
+            type_str = "float32";
             break;
           case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8:
             type_str = "uint8";
@@ -524,7 +524,7 @@ static FlValue *get_output_info(FlutterOnnxruntimePlugin *self, FlValue *args) {
           const char *type_str = "unknown";
           switch (element_type) {
           case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
-            type_str = "float";
+            type_str = "float32";
             break;
           case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8:
             type_str = "uint8";
@@ -703,7 +703,7 @@ static FlValue *convert_ort_value(FlutterOnnxruntimePlugin *self, FlValue *args)
 
   g_autoptr(FlValue) result = fl_value_new_map();
   fl_value_set_string_take(result, "valueId", fl_value_new_string(value_id.c_str()));
-  fl_value_set_string_take(result, "type", fl_value_new_string("float"));
+  fl_value_set_string_take(result, "type", fl_value_new_string("float32"));
 
   // Add to values map (with null pointer for now)
   self->values[value_id] = nullptr;
