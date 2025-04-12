@@ -19,20 +19,14 @@ std::string TensorManager::createFloat32Tensor(const std::vector<float> &data, c
   try {
     // Create a unique tensor ID
     std::string tensor_id = generateTensorId();
-
-    // Create the OrtValue
-    auto tensor = std::make_unique<Ort::Value>(Ort::Value::CreateTensor<float>(
-        memory_info_, const_cast<float *>(data.data()), data.size(), shape.data(), shape.size()));
-
-    // Important: RAII principles: Instead of moving tensor, make a more robust copy
+    // make a more robust copy, avoid the delocation of the original data
     float *tensor_data = new float[data.size()];
     std::copy(data.begin(), data.end(), tensor_data);
     // Create a new tensor with our persistent copy of the data
-    auto persistent_tensor =
-        Ort::Value::CreateTensor<float>(memory_info_, tensor_data, data.size(), shape.data(), shape.size());
+    auto tensor = Ort::Value::CreateTensor<float>(memory_info_, tensor_data, data.size(), shape.data(), shape.size());
     // Store the tensor with direct ownership, its type, and shape
-    // use std::make_unique to tie the OrtValue lifetime to the pointer
-    tensors_[tensor_id] = std::make_unique<Ort::Value>(std::move(persistent_tensor));
+    // Following RAII principles, use std::make_unique to tie the OrtValue lifetime to the pointer
+    tensors_[tensor_id] = std::make_unique<Ort::Value>(std::move(tensor));
     tensor_types_[tensor_id] = "float32";
     tensor_shapes_[tensor_id] = shape;
 
