@@ -51,6 +51,9 @@ public:
   // Generate a unique tensor ID
   std::string generateTensorId();
 
+  // Get the element type string
+  const char *get_element_type_string(ONNXTensorElementDataType element_type);
+
 private:
   // Map of tensor IDs to OrtValue objects
   std::map<std::string, std::unique_ptr<Ort::Value>> tensors_;

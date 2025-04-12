@@ -428,10 +428,6 @@ static FlValue *run_inference(FlutterOnnxruntimePlugin *self, FlValue *args) {
       // Create a tensor ID
       std::string value_id = self->tensor_manager->generateTensorId();
 
-      // Get tensor info before moving
-      //   Ort::TensorTypeAndShapeInfo tensor_info = output_tensors[i].GetTensorTypeAndShapeInfo();
-      //   std::vector<int64_t> shape = tensor_info.GetShape();
-
       // Store the tensor directly using storeTensor - this transfers ownership
       self->tensor_manager->storeTensor(value_id, std::move(output_tensors[i]));
 
@@ -604,62 +600,7 @@ static FlValue *get_input_info(FlutterOnnxruntimePlugin *self, FlValue *args) {
 
           // Add type info
           ONNXTensorElementDataType element_type = tensor_info.GetElementType();
-
-          // Convert element type to string
-          const char *type_str = "unknown";
-          switch (element_type) {
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
-            type_str = "float32";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8:
-            type_str = "uint8";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8:
-            type_str = "int8";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT16:
-            type_str = "uint16";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT16:
-            type_str = "int16";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32:
-            type_str = "int32";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64:
-            type_str = "int64";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING:
-            type_str = "string";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL:
-            type_str = "bool";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16:
-            type_str = "float16";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE:
-            type_str = "double";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT32:
-            type_str = "uint32";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT64:
-            type_str = "uint64";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_COMPLEX64:
-            type_str = "complex64";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_COMPLEX128:
-            type_str = "complex128";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_BFLOAT16:
-            type_str = "bfloat16";
-            break;
-          default:
-            type_str = "unknown";
-            break;
-          }
+          const char *type_str = self->tensor_manager->get_element_type_string(element_type);
 
           fl_value_set_string_take(info_map, "type", fl_value_new_string(type_str));
         } else {
@@ -747,62 +688,7 @@ static FlValue *get_output_info(FlutterOnnxruntimePlugin *self, FlValue *args) {
 
           // Add type info
           ONNXTensorElementDataType element_type = tensor_info.GetElementType();
-
-          // Convert element type to string
-          const char *type_str = "unknown";
-          switch (element_type) {
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
-            type_str = "float32";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8:
-            type_str = "uint8";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8:
-            type_str = "int8";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT16:
-            type_str = "uint16";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT16:
-            type_str = "int16";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32:
-            type_str = "int32";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64:
-            type_str = "int64";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING:
-            type_str = "string";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL:
-            type_str = "bool";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16:
-            type_str = "float16";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE:
-            type_str = "double";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT32:
-            type_str = "uint32";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT64:
-            type_str = "uint64";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_COMPLEX64:
-            type_str = "complex64";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_COMPLEX128:
-            type_str = "complex128";
-            break;
-          case ONNX_TENSOR_ELEMENT_DATA_TYPE_BFLOAT16:
-            type_str = "bfloat16";
-            break;
-          default:
-            type_str = "unknown";
-            break;
-          }
+          const char *type_str = self->tensor_manager->get_element_type_string(element_type);
 
           fl_value_set_string_take(info_map, "type", fl_value_new_string(type_str));
         } else {
