@@ -166,6 +166,7 @@ list(APPEND PLUGIN_SOURCES
   "src/flutter_onnxruntime_plugin.cc"
   "src/session_manager.cc"
   "src/value_conversion.cc"
+  "src/tensor_manager.cc"
 )
 
 # Define the plugin library target. Its name must not be changed (see comment

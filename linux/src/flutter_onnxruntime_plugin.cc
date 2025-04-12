@@ -13,6 +13,7 @@
 #include <unordered_map>
 
 #include "session_manager.h"
+#include "tensor_manager.h"
 #include "value_conversion.h"
 
 #define FLUTTER_ONNXRUNTIME_PLUGIN(obj)                                                                                \
@@ -23,6 +24,9 @@ struct _FlutterOnnxruntimePlugin {
 
   // SessionManager for handling ONNX Runtime sessions
   SessionManager *session_manager;
+
+  // TensorManager for handling OrtValue objects
+  TensorManager *tensor_manager;
 
   // Value ID counter for generating unique value IDs
   int next_value_id;
@@ -66,14 +70,16 @@ static void flutter_onnxruntime_plugin_class_init(FlutterOnnxruntimePluginClass 
 
 static void flutter_onnxruntime_plugin_init(FlutterOnnxruntimePlugin *self) {
   self->session_manager = new SessionManager();
+  self->tensor_manager = new TensorManager();
   self->next_value_id = 1;
 }
 
 static void flutter_onnxruntime_plugin_dispose(GObject *object) {
   FlutterOnnxruntimePlugin *self = FLUTTER_ONNXRUNTIME_PLUGIN(object);
 
-  // Clean up session manager and values
+  // Clean up session manager, tensor manager and values
   delete self->session_manager;
+  delete self->tensor_manager;
 
   std::lock_guard<std::mutex> lock(self->mutex);
   self->values.clear();
@@ -600,17 +606,91 @@ static FlValue *get_output_info(FlutterOnnxruntimePlugin *self, FlValue *args) {
 }
 
 static FlValue *create_ort_value(FlutterOnnxruntimePlugin *self, FlValue *args) {
-  // Dummy implementation that returns a new value ID
-  std::lock_guard<std::mutex> lock(self->mutex);
+  // Extract arguments
+  FlValue *source_type_value = fl_value_lookup_string(args, "sourceType");
+  FlValue *data_value = fl_value_lookup_string(args, "data");
+  FlValue *shape_value = fl_value_lookup_string(args, "shape");
 
-  std::string value_id = "value_" + std::to_string(self->next_value_id++);
+  // Check if all required arguments are provided
+  if (source_type_value == nullptr || data_value == nullptr || shape_value == nullptr ||
+      fl_value_get_type(source_type_value) != FL_VALUE_TYPE_STRING ||
+      fl_value_get_type(shape_value) != FL_VALUE_TYPE_LIST) {
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "error", fl_value_new_string("Invalid arguments"));
+    return fl_value_ref(result);
+  }
 
+  const char *source_type = fl_value_get_string(source_type_value);
+
+  // Convert shape values to vector of int64_t
+  size_t shape_size = fl_value_get_length(shape_value);
+  std::vector<int64_t> shape;
+  for (size_t i = 0; i < shape_size; i++) {
+    FlValue *dim = fl_value_get_list_value(shape_value, i);
+    if (fl_value_get_type(dim) != FL_VALUE_TYPE_INT) {
+      g_autoptr(FlValue) result = fl_value_new_map();
+      fl_value_set_string_take(result, "error", fl_value_new_string("Shape must contain integers"));
+      return fl_value_ref(result);
+    }
+    shape.push_back(fl_value_get_int(dim));
+  }
+
+  std::string valueId;
+  std::vector<float> data_vec;
+
+  // Handle data according to source type
+  if (strcmp(source_type, "float32") == 0) {
+    // Convert data to vector of floats
+    if (fl_value_get_type(data_value) == FL_VALUE_TYPE_FLOAT32_LIST) {
+      size_t data_size = fl_value_get_length(data_value);
+      // Get direct access to the Dart Float32List data
+      const float *float_array = fl_value_get_float32_list(data_value);
+      for (size_t i = 0; i < data_size; i++) {
+        float val = float_array[i];
+        data_vec.push_back(val);
+      }
+    } else if (fl_value_get_type(data_value) == FL_VALUE_TYPE_LIST) { // regular float list array
+      size_t length = fl_value_get_length(data_value);
+      data_vec.reserve(length);
+
+      for (size_t i = 0; i < length; i++) {
+        FlValue *val = fl_value_get_list_value(data_value, i);
+        float float_val = fl_value_get_float(val);
+        data_vec.push_back(float_val);
+      }
+    } else {
+      g_autoptr(FlValue) result = fl_value_new_map();
+      fl_value_set_string_take(result, "error", fl_value_new_string("Data must be a typed list or a list"));
+      return fl_value_ref(result);
+    }
+    // Create tensor
+    valueId = self->tensor_manager->createFloat32Tensor(data_vec, shape);
+  } else {
+    // Unsupported source type
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "error", fl_value_new_string("Unsupported source type"));
+    return fl_value_ref(result);
+  }
+
+  // Check if tensor creation was successful
+  if (valueId.empty()) {
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "error", fl_value_new_string("Failed to create tensor"));
+    return fl_value_ref(result);
+  }
+
+  // Create response
   g_autoptr(FlValue) result = fl_value_new_map();
-  fl_value_set_string_take(result, "valueId", fl_value_new_string(value_id.c_str()));
-  fl_value_set_string_take(result, "type", fl_value_new_string("float"));
+  fl_value_set_string_take(result, "valueId", fl_value_new_string(valueId.c_str()));
+  fl_value_set_string_take(result, "dataType",
+                           fl_value_new_string(strcmp(source_type, "float32") == 0 ? "float32" : source_type));
 
-  // Add to values map (with null pointer for now)
-  self->values[value_id] = nullptr;
+  // Add shape to response
+  FlValue *shape_list = fl_value_new_list();
+  for (const auto &dim : shape) {
+    fl_value_append_take(shape_list, fl_value_new_int(dim));
+  }
+  fl_value_set_string_take(result, "shape", shape_list);
 
   return fl_value_ref(result);
 }
@@ -648,33 +728,45 @@ static FlValue *move_ort_value_to_device(FlutterOnnxruntimePlugin *self, FlValue
 }
 
 static FlValue *get_ort_value_data(FlutterOnnxruntimePlugin *self, FlValue *args) {
-  // Return dummy tensor data
-  g_autoptr(FlValue) data = fl_value_new_list();
-  for (int i = 0; i < 10; i++) {
-    fl_value_append_take(data, fl_value_new_float(i * 0.1));
+  // Extract value ID
+  FlValue *value_id_value = fl_value_lookup_string(args, "valueId");
+
+  if (value_id_value == nullptr || fl_value_get_type(value_id_value) != FL_VALUE_TYPE_STRING) {
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "error", fl_value_new_string("Invalid valueId"));
+    return fl_value_ref(result);
   }
 
-  g_autoptr(FlValue) shape = fl_value_new_list();
-  fl_value_append_take(shape, fl_value_new_int(1));
-  fl_value_append_take(shape, fl_value_new_int(10));
+  const char *value_id = fl_value_get_string(value_id_value);
 
-  g_autoptr(FlValue) result = fl_value_new_map();
-  fl_value_set_string(result, "data", data);
-  fl_value_set_string(result, "shape", shape);
-  fl_value_set_string_take(result, "type", fl_value_new_string("float"));
+  // Get tensor data
+  FlValue *tensor_data = self->tensor_manager->getTensorData(value_id);
 
-  return fl_value_ref(result);
+  // If tensor_data is null, return error
+  if (tensor_data == nullptr || fl_value_get_type(tensor_data) == FL_VALUE_TYPE_NULL) {
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "error", fl_value_new_string("Tensor not found"));
+    if (tensor_data != nullptr) {
+      fl_value_unref(tensor_data);
+    }
+    return fl_value_ref(result);
+  }
+
+  return tensor_data; // Already referenced in getTensorData
 }
 
 static FlValue *release_ort_value(FlutterOnnxruntimePlugin *self, FlValue *args) {
   // Get value ID
   FlValue *value_id_value = fl_value_lookup_string(args, "valueId");
+
+  if (value_id_value == nullptr || fl_value_get_type(value_id_value) != FL_VALUE_TYPE_STRING) {
+    return fl_value_new_null();
+  }
+
   const char *value_id = fl_value_get_string(value_id_value);
 
-  std::lock_guard<std::mutex> lock(self->mutex);
-
-  // Remove from values map
-  self->values.erase(value_id);
+  // Release tensor
+  self->tensor_manager->releaseTensor(value_id);
 
   return fl_value_new_null();
 }
