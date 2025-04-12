@@ -4,6 +4,9 @@
 #include <gtk/gtk.h>
 #include <sys/utsname.h>
 
+#include "session_manager.h"
+#include "tensor_manager.h"
+#include "value_conversion.h"
 #include <cstring>
 #include <map>
 #include <memory>
@@ -11,10 +14,6 @@
 #include <onnxruntime_cxx_api.h>
 #include <string>
 #include <unordered_map>
-
-#include "session_manager.h"
-#include "tensor_manager.h"
-#include "value_conversion.h"
 
 #define FLUTTER_ONNXRUNTIME_PLUGIN(obj)                                                                                \
   (G_TYPE_CHECK_INSTANCE_CAST((obj), flutter_onnxruntime_plugin_get_type(), FlutterOnnxruntimePlugin))
@@ -27,9 +26,6 @@ struct _FlutterOnnxruntimePlugin {
 
   // TensorManager for handling OrtValue objects
   TensorManager *tensor_manager;
-
-  // Value ID counter for generating unique value IDs
-  int next_value_id;
 
   // Maps to store value data
   std::map<std::string, void *> values;
@@ -71,7 +67,6 @@ static void flutter_onnxruntime_plugin_class_init(FlutterOnnxruntimePluginClass 
 static void flutter_onnxruntime_plugin_init(FlutterOnnxruntimePlugin *self) {
   self->session_manager = new SessionManager();
   self->tensor_manager = new TensorManager();
-  self->next_value_id = 1;
 }
 
 static void flutter_onnxruntime_plugin_dispose(GObject *object) {
@@ -189,8 +184,30 @@ static FlValue *create_session(FlutterOnnxruntimePlugin *self, FlValue *args) {
 
   const char *model_path = fl_value_get_string(model_path_value);
 
+  // Extract session options if provided
+  FlValue *session_options_value = fl_value_lookup_string(args, "sessionOptions");
+
+  // Create session options
+  Ort::SessionOptions session_options;
+
+  // Configure session options if provided
+  if (session_options_value != nullptr && fl_value_get_type(session_options_value) == FL_VALUE_TYPE_MAP) {
+    auto options_map = fl_value_to_map(session_options_value);
+
+    // Set threading options
+    auto intra_threads_val = options_map.find("intraOpNumThreads");
+    if (intra_threads_val != options_map.end() && fl_value_get_type(intra_threads_val->second) == FL_VALUE_TYPE_INT) {
+      session_options.SetIntraOpNumThreads(fl_value_get_int(intra_threads_val->second));
+    }
+
+    auto inter_threads_val = options_map.find("interOpNumThreads");
+    if (inter_threads_val != options_map.end() && fl_value_get_type(inter_threads_val->second) == FL_VALUE_TYPE_INT) {
+      session_options.SetInterOpNumThreads(fl_value_get_int(inter_threads_val->second));
+    }
+  }
+
   // Create session using session manager
-  std::string session_id = self->session_manager->createSession(model_path, nullptr);
+  std::string session_id = self->session_manager->createSession(model_path, session_options);
 
   // Check if session creation failed
   if (session_id.empty()) {
@@ -222,22 +239,233 @@ static FlValue *create_session(FlutterOnnxruntimePlugin *self, FlValue *args) {
 }
 
 static FlValue *run_inference(FlutterOnnxruntimePlugin *self, FlValue *args) {
-  // Dummy implementation that returns a fixed "output" tensor ID
-  std::lock_guard<std::mutex> lock(self->mutex);
+  // Extract the session ID
+  FlValue *session_id_value = fl_value_lookup_string(args, "sessionId");
+  if (session_id_value == nullptr || fl_value_get_type(session_id_value) != FL_VALUE_TYPE_STRING) {
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "error", fl_value_new_string("Invalid session ID"));
+    return fl_value_ref(result);
+  }
+  const char *session_id = fl_value_get_string(session_id_value);
 
-  std::string value_id = "value_" + std::to_string(self->next_value_id++);
+  // Extract the inputs
+  FlValue *inputs_value = fl_value_lookup_string(args, "inputs");
+  if (inputs_value == nullptr || fl_value_get_type(inputs_value) != FL_VALUE_TYPE_MAP) {
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "error", fl_value_new_string("Invalid inputs"));
+    return fl_value_ref(result);
+  }
 
-  g_autoptr(FlValue) outputs_map = fl_value_new_map();
-  fl_value_set_string_take(outputs_map, "output", fl_value_new_string(value_id.c_str()));
+  // Extract run options if provided
+  FlValue *run_options_value = fl_value_lookup_string(args, "runOptions");
 
-  g_autoptr(FlValue) result = fl_value_new_map();
-  fl_value_set_string(result, "outputs", outputs_map);
-  fl_value_set_string_take(result, "status", fl_value_new_string("success"));
+  // Get the session
+  Ort::Session *session = self->session_manager->getSession(session_id);
+  if (session == nullptr) {
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "error", fl_value_new_string("Session not found"));
+    return fl_value_ref(result);
+  }
 
-  // Add to values map (with null pointer for now)
-  self->values[value_id] = nullptr;
+  try {
+    // Get input and output names
+    std::vector<std::string> input_names = self->session_manager->getInputNames(session_id);
+    std::vector<std::string> output_names = self->session_manager->getOutputNames(session_id);
 
-  return fl_value_ref(result);
+    // Prepare input tensors
+    // Note: session.Run() requires a vector of Ort::Value objects so we need to clone the tensors
+    // Create a vector to hold the input tensors
+    std::vector<Ort::Value> input_tensors;
+    std::vector<const char *> input_names_char;
+
+    // get input names from session manager
+    for (const auto &name : input_names) {
+      input_names_char.push_back(name.c_str());
+    }
+
+    // Create memory info for tensor creation
+    Ort::MemoryInfo memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+
+    // Iterate through each input
+    size_t num_inputs = fl_value_get_length(inputs_value);
+    for (size_t i = 0; i < num_inputs; i++) {
+      FlValue *key = fl_value_get_map_key(inputs_value, i);
+      FlValue *value = fl_value_get_map_value(inputs_value, i);
+
+      if (fl_value_get_type(key) != FL_VALUE_TYPE_STRING || fl_value_get_type(value) != FL_VALUE_TYPE_MAP) {
+        continue;
+      }
+
+      FlValue *tensor_id_map = fl_value_lookup_string(value, "valueId");
+
+      if (tensor_id_map == nullptr || fl_value_get_type(tensor_id_map) != FL_VALUE_TYPE_STRING) {
+        continue;
+      }
+
+      std::string tensor_id = fl_value_get_string(tensor_id_map);
+
+      // Get the tensor value
+      Ort::Value *tensor_ptr = self->tensor_manager->getTensor(tensor_id);
+      if (tensor_ptr != nullptr) {
+        // Get tensor info
+        Ort::TensorTypeAndShapeInfo tensor_info = tensor_ptr->GetTensorTypeAndShapeInfo();
+        ONNXTensorElementDataType element_type = tensor_info.GetElementType();
+        std::vector<int64_t> shape = tensor_info.GetShape();
+        size_t element_count = tensor_info.GetElementCount();
+
+        // Create a new tensor with the same data as the original
+        switch (element_type) {
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT: {
+          float *data = tensor_ptr->GetTensorMutableData<float>();
+          float *new_data = new float[element_count];
+          std::memcpy(new_data, data, element_count * sizeof(float));
+
+          Ort::Value new_tensor =
+              Ort::Value::CreateTensor<float>(memory_info, new_data, element_count, shape.data(), shape.size());
+
+          input_tensors.push_back(std::move(new_tensor));
+          break;
+        }
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32: {
+          int32_t *data = tensor_ptr->GetTensorMutableData<int32_t>();
+          int32_t *new_data = new int32_t[element_count];
+          std::memcpy(new_data, data, element_count * sizeof(int32_t));
+
+          Ort::Value new_tensor =
+              Ort::Value::CreateTensor<int32_t>(memory_info, new_data, element_count, shape.data(), shape.size());
+
+          input_tensors.push_back(std::move(new_tensor));
+          break;
+        }
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64: {
+          int64_t *data = tensor_ptr->GetTensorMutableData<int64_t>();
+          int64_t *new_data = new int64_t[element_count];
+          std::memcpy(new_data, data, element_count * sizeof(int64_t));
+
+          Ort::Value new_tensor =
+              Ort::Value::CreateTensor<int64_t>(memory_info, new_data, element_count, shape.data(), shape.size());
+
+          input_tensors.push_back(std::move(new_tensor));
+          break;
+        }
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8: {
+          uint8_t *data = tensor_ptr->GetTensorMutableData<uint8_t>();
+          uint8_t *new_data = new uint8_t[element_count];
+          std::memcpy(new_data, data, element_count * sizeof(uint8_t));
+
+          Ort::Value new_tensor =
+              Ort::Value::CreateTensor<uint8_t>(memory_info, new_data, element_count, shape.data(), shape.size());
+
+          input_tensors.push_back(std::move(new_tensor));
+          break;
+        }
+        case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL: {
+          bool *data = tensor_ptr->GetTensorMutableData<bool>();
+          bool *new_data = new bool[element_count];
+          std::memcpy(new_data, data, element_count * sizeof(bool));
+
+          Ort::Value new_tensor =
+              Ort::Value::CreateTensor<bool>(memory_info, new_data, element_count, shape.data(), shape.size());
+
+          input_tensors.push_back(std::move(new_tensor));
+          break;
+        }
+        // Add cases for other data types as needed
+        default:
+          // Skip unsupported tensor types
+          break;
+        }
+      }
+    }
+
+    // Prepare output names
+    std::vector<const char *> output_names_char;
+    for (const auto &name : output_names) {
+      output_names_char.push_back(name.c_str());
+    }
+
+    // Create and configure run options
+    Ort::RunOptions run_options;
+
+    // Configure run options if provided
+    if (run_options_value != nullptr && fl_value_get_type(run_options_value) == FL_VALUE_TYPE_MAP) {
+      // Extract log severity level if provided
+      FlValue *log_severity_level_value = fl_value_lookup_string(run_options_value, "logSeverityLevel");
+      if (log_severity_level_value != nullptr && fl_value_get_type(log_severity_level_value) == FL_VALUE_TYPE_INT) {
+        run_options.SetRunLogSeverityLevel(fl_value_get_int(log_severity_level_value));
+      }
+
+      // Extract log verbosity level if provided
+      FlValue *log_verbosity_level_value = fl_value_lookup_string(run_options_value, "logVerbosityLevel");
+      if (log_verbosity_level_value != nullptr && fl_value_get_type(log_verbosity_level_value) == FL_VALUE_TYPE_INT) {
+        run_options.SetRunLogVerbosityLevel(fl_value_get_int(log_verbosity_level_value));
+      }
+
+      // Extract terminate option if provided
+      FlValue *terminate_value = fl_value_lookup_string(run_options_value, "terminate");
+      if (terminate_value != nullptr && fl_value_get_type(terminate_value) == FL_VALUE_TYPE_BOOL) {
+        if (fl_value_get_bool(terminate_value)) {
+          run_options.SetTerminate();
+        }
+      }
+
+      // Add more run options as needed
+    }
+
+    // Run inference - only if we have inputs
+    std::vector<Ort::Value> output_tensors;
+
+    if (!input_tensors.empty()) {
+      output_tensors = session->Run(run_options, input_names_char.data(), input_tensors.data(), input_tensors.size(),
+                                    output_names_char.data(), output_names_char.size());
+    }
+
+    // Process outputs
+    g_autoptr(FlValue) outputs_map = fl_value_new_map();
+
+    // For each output tensor, directly store it using TensorManager's storeTensor
+    for (size_t i = 0; i < output_tensors.size(); i++) {
+      // Create a tensor ID
+      std::string value_id = self->tensor_manager->generateTensorId();
+
+      // Get tensor info before moving
+      //   Ort::TensorTypeAndShapeInfo tensor_info = output_tensors[i].GetTensorTypeAndShapeInfo();
+      //   std::vector<int64_t> shape = tensor_info.GetShape();
+
+      // Store the tensor directly using storeTensor - this transfers ownership
+      self->tensor_manager->storeTensor(value_id, std::move(output_tensors[i]));
+
+      // get the tensor type and shape from tensor manager
+      // Note: only do this after storeTensor get the tensor registered in tensor manager
+      std::string tensor_type = self->tensor_manager->getTensorType(value_id);
+      std::vector<int64_t> shape = self->tensor_manager->getTensorShape(value_id);
+
+      // Add the value ID to the outputs map
+      FlValue *shape_list = fl_value_new_list();
+      for (const auto &dim : shape) {
+        fl_value_append_take(shape_list, fl_value_new_int(dim));
+      }
+
+      // Note: Flutter does not allow return a nested map, so we have to use list here to keep the output_info format
+      FlValue *output_info = fl_value_new_list();
+      fl_value_append_take(output_info, fl_value_new_string(value_id.c_str()));
+      fl_value_append_take(output_info, fl_value_new_string(tensor_type.c_str()));
+      fl_value_append_take(output_info, shape_list);
+
+      fl_value_set_string_take(outputs_map, output_names[i].c_str(), output_info);
+    }
+
+    // Create result
+    return fl_value_ref(outputs_map);
+  } catch (const Ort::Exception &e) {
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "error", fl_value_new_string(e.what()));
+    return fl_value_ref(result);
+  } catch (const std::exception &e) {
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "error", fl_value_new_string(e.what()));
+    return fl_value_ref(result);
+  }
 }
 
 static FlValue *close_session(FlutterOnnxruntimePlugin *self, FlValue *args) {
@@ -814,7 +1042,7 @@ static FlValue *convert_ort_value(FlutterOnnxruntimePlugin *self, FlValue *args)
   // Return a new value ID for the converted tensor
   std::lock_guard<std::mutex> lock(self->mutex);
 
-  std::string value_id = "value_" + std::to_string(self->next_value_id++);
+  std::string value_id = self->tensor_manager->generateTensorId();
 
   g_autoptr(FlValue) result = fl_value_new_map();
   fl_value_set_string_take(result, "valueId", fl_value_new_string(value_id.c_str()));
@@ -830,7 +1058,7 @@ static FlValue *move_ort_value_to_device(FlutterOnnxruntimePlugin *self, FlValue
   // Return a new value ID for the moved tensor
   std::lock_guard<std::mutex> lock(self->mutex);
 
-  std::string value_id = "value_" + std::to_string(self->next_value_id++);
+  std::string value_id = self->tensor_manager->generateTensorId();
 
   g_autoptr(FlValue) result = fl_value_new_map();
   fl_value_set_string_take(result, "valueId", fl_value_new_string(value_id.c_str()));

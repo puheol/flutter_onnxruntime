@@ -30,6 +30,9 @@ public:
   // Create a tensor from Boolean data
   std::string createBoolTensor(const std::vector<bool> &data, const std::vector<int64_t> &shape);
 
+  // Store a tensor with a specific ID (used for output tensors)
+  void storeTensor(const std::string &tensor_id, Ort::Value &&tensor);
+
   // Get data from a tensor
   FlValue *getTensorData(const std::string &tensor_id);
 
@@ -39,10 +42,16 @@ public:
   // Get the OrtValue for a tensor ID
   Ort::Value *getTensor(const std::string &tensor_id);
 
-private:
+  // Get the type of a tensor
+  std::string getTensorType(const std::string &tensor_id);
+
+  // Get the shape of a tensor
+  std::vector<int64_t> getTensorShape(const std::string &tensor_id);
+
   // Generate a unique tensor ID
   std::string generateTensorId();
 
+private:
   // Map of tensor IDs to OrtValue objects
   std::map<std::string, std::unique_ptr<Ort::Value>> tensors_;
 
