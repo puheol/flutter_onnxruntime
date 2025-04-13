@@ -30,6 +30,24 @@ public:
   // Create a tensor from Boolean data
   std::string createBoolTensor(const std::vector<bool> &data, const std::vector<int64_t> &shape);
 
+  // Convert between tensor formats
+  std::string convertTensor(const std::string &tensor_id, const std::string &target_type);
+
+  // Convert float32 tensor to another type
+  std::string convertFloat32To(const std::string &tensor_id, const std::string &target_type);
+
+  // Convert int32 tensor to another type
+  std::string convertInt32To(const std::string &tensor_id, const std::string &target_type);
+
+  // Convert int64 tensor to another type
+  std::string convertInt64To(const std::string &tensor_id, const std::string &target_type);
+
+  // Convert uint8 tensor to another type
+  std::string convertUint8To(const std::string &tensor_id, const std::string &target_type);
+
+  // Convert bool tensor to another type
+  std::string convertBoolTo(const std::string &tensor_id, const std::string &target_type);
+
   // Store a tensor with a specific ID (used for output tensors)
   void storeTensor(const std::string &tensor_id, Ort::Value &&tensor);
 

@@ -925,17 +925,49 @@ static FlValue *create_ort_value(FlutterOnnxruntimePlugin *self, FlValue *args) 
 }
 
 static FlValue *convert_ort_value(FlutterOnnxruntimePlugin *self, FlValue *args) {
-  // Return a new value ID for the converted tensor
+  // Extract arguments
+  FlValue *value_id_value = fl_value_lookup_string(args, "valueId");
+  FlValue *target_type_value = fl_value_lookup_string(args, "targetType");
+
+  // Check if required arguments are provided
+  if (value_id_value == nullptr || target_type_value == nullptr ||
+      fl_value_get_type(value_id_value) != FL_VALUE_TYPE_STRING ||
+      fl_value_get_type(target_type_value) != FL_VALUE_TYPE_STRING) {
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "error", fl_value_new_string("Invalid arguments"));
+    return fl_value_ref(result);
+  }
+
+  // Get valueId and targetType
+  const char *value_id = fl_value_get_string(value_id_value);
+  const char *target_type = fl_value_get_string(target_type_value);
+
   std::lock_guard<std::mutex> lock(self->mutex);
 
-  std::string value_id = self->tensor_manager->generateTensorId();
+  // Convert the tensor using TensorManager
+  std::string new_tensor_id = self->tensor_manager->convertTensor(value_id, target_type);
 
+  // Check if conversion was successful
+  if (new_tensor_id.empty()) {
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "error", fl_value_new_string("Failed to convert tensor"));
+    return fl_value_ref(result);
+  }
+
+  // Get the shape of the converted tensor
+  std::vector<int64_t> shape = self->tensor_manager->getTensorShape(new_tensor_id);
+
+  // Create response
   g_autoptr(FlValue) result = fl_value_new_map();
-  fl_value_set_string_take(result, "valueId", fl_value_new_string(value_id.c_str()));
-  fl_value_set_string_take(result, "type", fl_value_new_string("float32"));
+  fl_value_set_string_take(result, "valueId", fl_value_new_string(new_tensor_id.c_str()));
+  fl_value_set_string_take(result, "dataType", fl_value_new_string(target_type));
 
-  // Add to values map (with null pointer for now)
-  self->values[value_id] = nullptr;
+  // Add shape
+  FlValue *shape_list = fl_value_new_list();
+  for (const auto &dim : shape) {
+    fl_value_append_take(shape_list, fl_value_new_int(dim));
+  }
+  fl_value_set_string_take(result, "shape", shape_list);
 
   return fl_value_ref(result);
 }
