@@ -779,8 +779,8 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                 (dataType == "UINT8" && targetType == "uint8") ||
                                 (dataType == "INT8" && targetType == "int8") ||
                                 (dataType == "BOOL" && targetType == "bool") -> {
-                                // Return the original tensor if target type matches current type
-                                tensor
+                                // clone the original tensor to a new tensor
+                                OnnxTensor.createTensor(ortEnvironment, tensor.getValue())
                             }
                             else -> {
                                 // Unsupported conversion
@@ -793,15 +793,10 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                             }
                         }
 
-                    // Store the new tensor if it's different from the original
-                    val newValueId =
-                        if (newTensor !== tensor) {
-                            val id = UUID.randomUUID().toString()
-                            ortValues[id] = newTensor
-                            id
-                        } else {
-                            valueId
-                        }
+                    // register the new tensor to ortValues
+                    val id = UUID.randomUUID().toString()
+                    ortValues[id] = newTensor
+                    val newValueId = id
 
                     // Return tensor information
                     // Assuming CPU device for now
