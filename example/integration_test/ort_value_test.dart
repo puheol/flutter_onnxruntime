@@ -177,6 +177,31 @@ void main() {
         await tensor.dispose();
         await convertedTensor.dispose();
       });
+
+      testWidgets('Same type conversion', (WidgetTester tester) async {
+        // same type conversion should clone the tensor to a new tensor
+        final inputData = Float32List.fromList([1.1, 2.2]);
+        final shape = [2]; // 1D array
+
+        final tensor0 = await OrtValue.fromList(inputData, shape);
+        expect(tensor0.dataType, OrtDataType.float32);
+
+        final tensor1 = await tensor0.to(OrtDataType.float32);
+        expect(tensor1.dataType, OrtDataType.float32);
+        expect(tensor1.shape, shape);
+
+        // release tensor1 but tensor0 should still be valid
+        tensor1.dispose();
+        expect(tensor0.dataType, OrtDataType.float32);
+        expect(tensor0.shape, shape);
+
+        final retrievedData = await tensor0.asList();
+        expect(retrievedData.length, 2);
+        expect(retrievedData[0], closeTo(1.1, 1e-5));
+        expect(retrievedData[1], closeTo(2.2, 1e-5));
+
+        await tensor0.dispose();
+      });
     });
 
     group('Error handling tests', () {
