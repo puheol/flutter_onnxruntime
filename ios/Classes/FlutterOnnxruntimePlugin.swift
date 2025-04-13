@@ -505,6 +505,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
     }
   }
 
+  // swiftlint:disable:next cyclomatic_complexity function_body_length
   private func handleConvertOrtValue(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = call.arguments as? [String: Any],
           let valueId = args["valueId"] as? String,
@@ -522,23 +523,164 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
       // Get tensor information
       let tensorInfo = try tensor.tensorTypeAndShapeInfo()
       let shape = try tensorInfo.shape.map { Int(truncating: $0) }
-
-      // In ORTValue, direct type conversion isn't available
-      // We would need to extract data and create a new tensor
-      // For now, just return the same tensor with a new ID
-
-      // Store the tensor with a new ID
+      let elementCount = shape.reduce(1, *)
+      let sourceType = _getDataTypeName(from: tensorInfo.elementType)
+      
+      // If source and target types are the same, just clone the tensor
+      if sourceType == targetType {
+        // Create a new tensor ID and store reference
+        let newValueId = UUID().uuidString
+        ortValues[newValueId] = tensor
+        
+        // Return tensor information
+        let resultInfo: [String: Any] = [
+          "valueId": newValueId,
+          "dataType": targetType,
+          "shape": shape,
+          "device": "cpu"
+        ]
+        
+        result(resultInfo)
+        return
+      }
+      
+      // Create a new tensor with converted data
+      var newTensor: ORTValue
+      
+      // Extract original data
+      let sourceDataPtr = try tensor.tensorData()
+      
+      // Convert data based on source type and target type
+      switch (sourceType, targetType) {
+      case ("float32", "int32"):
+        // Float32 -> Int32
+        let floatPtr = sourceDataPtr.bytes.bindMemory(to: Float.self, capacity: elementCount)
+        let floatBuffer = UnsafeBufferPointer(start: floatPtr, count: elementCount)
+        
+        // Convert float values to int32
+        let int32Array = floatBuffer.map { Int32($0) }
+        let newData = NSMutableData(bytes: int32Array, length: int32Array.count * MemoryLayout<Int32>.stride)
+        newTensor = try ORTValue(tensorData: newData, elementType: .int32, shape: shape.map { NSNumber(value: $0) })
+        
+      case ("float32", "int64"):
+        // Float32 -> Int64
+        let floatPtr = sourceDataPtr.bytes.bindMemory(to: Float.self, capacity: elementCount)
+        let floatBuffer = UnsafeBufferPointer(start: floatPtr, count: elementCount)
+        
+        // Convert float values to int64
+        let int64Array = floatBuffer.map { Int64($0) }
+        let newData = NSMutableData(bytes: int64Array, length: int64Array.count * MemoryLayout<Int64>.stride)
+        newTensor = try ORTValue(tensorData: newData, elementType: .int64, shape: shape.map { NSNumber(value: $0) })
+        
+      case ("float32", "uint8"):
+        // Float32 -> UInt8
+        let floatPtr = sourceDataPtr.bytes.bindMemory(to: Float.self, capacity: elementCount)
+        let floatBuffer = UnsafeBufferPointer(start: floatPtr, count: elementCount)
+        
+        // Convert float values to uint8 (clamping to valid range)
+        let uint8Array = floatBuffer.map { max(0, min(255, UInt8($0))) }
+        let newData = NSMutableData(bytes: uint8Array, length: uint8Array.count * MemoryLayout<UInt8>.stride)
+        newTensor = try ORTValue(tensorData: newData, elementType: .uInt8, shape: shape.map { NSNumber(value: $0) })
+        
+      case ("int32", "float32"):
+        // Int32 -> Float32
+        let intPtr = sourceDataPtr.bytes.bindMemory(to: Int32.self, capacity: elementCount)
+        let intBuffer = UnsafeBufferPointer(start: intPtr, count: elementCount)
+        
+        // Convert int32 values to float
+        let floatArray = intBuffer.map { Float($0) }
+        let newData = NSMutableData(bytes: floatArray, length: floatArray.count * MemoryLayout<Float>.stride)
+        newTensor = try ORTValue(tensorData: newData, elementType: .float, shape: shape.map { NSNumber(value: $0) })
+        
+      case ("int32", "int64"):
+        // Int32 -> Int64
+        let intPtr = sourceDataPtr.bytes.bindMemory(to: Int32.self, capacity: elementCount)
+        let intBuffer = UnsafeBufferPointer(start: intPtr, count: elementCount)
+        
+        // Convert int32 values to int64
+        let int64Array = intBuffer.map { Int64($0) }
+        let newData = NSMutableData(bytes: int64Array, length: int64Array.count * MemoryLayout<Int64>.stride)
+        newTensor = try ORTValue(tensorData: newData, elementType: .int64, shape: shape.map { NSNumber(value: $0) })
+        
+      case ("int64", "float32"):
+        // Int64 -> Float32
+        let int64Ptr = sourceDataPtr.bytes.bindMemory(to: Int64.self, capacity: elementCount)
+        let int64Buffer = UnsafeBufferPointer(start: int64Ptr, count: elementCount)
+        
+        // Convert int64 values to float (potential precision loss)
+        let floatArray = int64Buffer.map { Float($0) }
+        let newData = NSMutableData(bytes: floatArray, length: floatArray.count * MemoryLayout<Float>.stride)
+        newTensor = try ORTValue(tensorData: newData, elementType: .float, shape: shape.map { NSNumber(value: $0) })
+        
+      case ("int64", "int32"):
+        // Int64 -> Int32
+        let int64Ptr = sourceDataPtr.bytes.bindMemory(to: Int64.self, capacity: elementCount)
+        let int64Buffer = UnsafeBufferPointer(start: int64Ptr, count: elementCount)
+        
+        // Convert int64 values to int32 (potential overflow)
+        let int32Array = int64Buffer.map { Int32(max(Int64(Int32.min), min(Int64(Int32.max), $0))) }
+        let newData = NSMutableData(bytes: int32Array, length: int32Array.count * MemoryLayout<Int32>.stride)
+        newTensor = try ORTValue(tensorData: newData, elementType: .int32, shape: shape.map { NSNumber(value: $0) })
+        
+      case ("uint8", "float32"):
+        // UInt8 -> Float32
+        let uint8Ptr = sourceDataPtr.bytes.bindMemory(to: UInt8.self, capacity: elementCount)
+        let uint8Buffer = UnsafeBufferPointer(start: uint8Ptr, count: elementCount)
+        
+        // Convert uint8 values to float
+        let floatArray = uint8Buffer.map { Float($0) }
+        let newData = NSMutableData(bytes: floatArray, length: floatArray.count * MemoryLayout<Float>.stride)
+        newTensor = try ORTValue(tensorData: newData, elementType: .float, shape: shape.map { NSNumber(value: $0) })
+        
+      case ("uint8", "bool"), ("int8", "bool"):
+        // UInt8/Int8 -> Boolean (treated as uint8, non-zero = true)
+        // Since Bool is not directly supported, we use uint8 (0=false, 1=true)
+        let bytePtr = sourceDataPtr.bytes.bindMemory(to: UInt8.self, capacity: elementCount)
+        let byteBuffer = UnsafeBufferPointer(start: bytePtr, count: elementCount)
+        
+        // Convert any non-zero value to 1 (true)
+        let boolArray = byteBuffer.map { $0 > 0 ? UInt8(1) : UInt8(0) }
+        let newData = NSMutableData(bytes: boolArray, length: boolArray.count * MemoryLayout<UInt8>.stride)
+        newTensor = try ORTValue(tensorData: newData, elementType: .uInt8, shape: shape.map { NSNumber(value: $0) })
+        
+      case ("bool", "uint8"), ("bool", "int8"):
+        // Boolean -> UInt8/Int8 (Keep as uint8 with same values since bool is stored as uint8)
+        // Booleans are already represented as UInt8 in ORT, so just use the same tensor
+        let newValueId = UUID().uuidString
+        ortValues[newValueId] = tensor
+        
+        // Return tensor information using the requested type
+        let dataTypeElementType: ORTTensorElementDataType = targetType == "uint8" ? .uInt8 : .int8
+        let resultInfo: [String: Any] = [
+          "valueId": newValueId,
+          "dataType": targetType,
+          "shape": shape,
+          "device": "cpu"
+        ]
+        
+        result(resultInfo)
+        return
+        
+      default:
+        // Unsupported conversion, return error
+        result(FlutterError(code: "UNSUPPORTED_CONVERSION", 
+                           message: "Conversion from \(sourceType) to \(targetType) is not supported", 
+                           details: nil))
+        return
+      }
+      
+      // Generate unique ID for the new tensor
       let newValueId = UUID().uuidString
-      ortValues[newValueId] = tensor
-
+      ortValues[newValueId] = newTensor
+      
       // Return tensor information
       let resultInfo: [String: Any] = [
         "valueId": newValueId,
         "dataType": targetType,
         "shape": shape,
-        "device": "cpu" // ORTValue only supports CPU in this implementation
+        "device": "cpu"
       ]
-
+      
       result(resultInfo)
     } catch {
       result(FlutterError(code: "CONVERSION_ERROR", message: error.localizedDescription, details: nil))
