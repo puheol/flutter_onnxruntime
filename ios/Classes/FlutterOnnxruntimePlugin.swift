@@ -175,11 +175,20 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
       // Run inference with prepared output containers
       let outputs = try session.run(withInputs: ortInputs, outputNames: Set(outputNames), runOptions: nil)
 
-      // Convert outputs to Flutter format
-      let flutterOutputs = try convertOutputsToFlutterFormat(outputs: outputs, session: session)
-
+      // store outputs in ortValues dictionary and return metadata in Flutter format
+      var flutterOutputs: [String: Any] = [:]
+      for (outputName, outputTensor) in outputs {
+        let valueId = UUID().uuidString
+        ortValues[valueId] = outputTensor
+        let tensorInfo = try outputTensor.tensorTypeAndShapeInfo()
+        // set an array of [valueId, dataType, shape]
+        let shape = try tensorInfo.shape.map { Int($0) }
+        // get the element type as string
+        let typeName = _getDataTypeName(from: tensorInfo.elementType)
+        flutterOutputs[outputName] = [valueId, typeName, shape]
+      }
       // Return result
-      result(["outputs": flutterOutputs])
+      result(flutterOutputs)
     } catch let error as FlutterError {
       result(error)
     } catch {
@@ -293,98 +302,6 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
     } catch {
       result(FlutterError(code: "OUTPUT_INFO_ERROR", message: error.localizedDescription, details: nil))
     }
-  }
-
-  // Helper functions
-
-  // swiftlint:disable:next cyclomatic_complexity
-  private func convertOutputsToFlutterFormat(outputs: [String: ORTValue], session: ORTSession) throws -> [String: Any] {
-    var flutterOutputs: [String: Any] = [:]
-
-    for (name, value) in outputs {
-      if let tensorInfo = try? value.tensorTypeAndShapeInfo() {
-        // Get shape information
-        let shape = try tensorInfo.shape.map { Int($0) }
-        flutterOutputs["\(name)_shape"] = shape
-
-        // Calculate total element count
-        let elementCount = shape.reduce(1, *)
-
-        // Extract data based on tensor type
-        switch tensorInfo.elementType {
-        case .float:
-          // For float tensors
-          let dataPtr = try value.tensorData()
-          let floatPtr = dataPtr.bytes.bindMemory(to: Float.self, capacity: elementCount)
-          let floatBuffer = UnsafeBufferPointer(start: floatPtr, count: elementCount)
-          flutterOutputs[name] = Array(floatBuffer)
-
-        case .int8:
-          // For int8 tensors
-          let dataPtr = try value.tensorData()
-          let int8Ptr = dataPtr.bytes.bindMemory(to: Int8.self, capacity: elementCount)
-          let int8Buffer = UnsafeBufferPointer(start: int8Ptr, count: elementCount)
-          flutterOutputs[name] = Array(int8Buffer)
-
-        case .uInt8:
-          // For uint8 tensors
-          let dataPtr = try value.tensorData()
-          let uint8Ptr = dataPtr.bytes.bindMemory(to: UInt8.self, capacity: elementCount)
-          let uint8Buffer = UnsafeBufferPointer(start: uint8Ptr, count: elementCount)
-          flutterOutputs[name] = Array(uint8Buffer)
-
-        case .int32:
-          // For int32 tensors
-          let dataPtr = try value.tensorData()
-          let intPtr = dataPtr.bytes.bindMemory(to: Int32.self, capacity: elementCount)
-          let intBuffer = UnsafeBufferPointer(start: intPtr, count: elementCount)
-          flutterOutputs[name] = Array(intBuffer)
-
-        case .uInt32:
-          // For uint32 tensors
-          let dataPtr = try value.tensorData()
-          let uint32Ptr = dataPtr.bytes.bindMemory(to: UInt32.self, capacity: elementCount)
-          let uint32Buffer = UnsafeBufferPointer(start: uint32Ptr, count: elementCount)
-          flutterOutputs[name] = Array(uint32Buffer)
-
-        case .int64:
-          // For int64 tensors
-          let dataPtr = try value.tensorData()
-          let int64Ptr = dataPtr.bytes.bindMemory(to: Int64.self, capacity: elementCount)
-          let int64Buffer = UnsafeBufferPointer(start: int64Ptr, count: elementCount)
-          flutterOutputs[name] = Array(int64Buffer)
-
-        case .uInt64:
-          // For uint64 tensors
-          let dataPtr = try value.tensorData()
-          let uint64Ptr = dataPtr.bytes.bindMemory(to: UInt64.self, capacity: elementCount)
-          let uint64Buffer = UnsafeBufferPointer(start: uint64Ptr, count: elementCount)
-          flutterOutputs[name] = Array(uint64Buffer)
-
-        case .string:
-          // For string tensors
-          let dataPtr = try value.tensorData()
-          let stringPtr = dataPtr.bytes.bindMemory(to: String.self, capacity: elementCount)
-          let stringBuffer = UnsafeBufferPointer(start: stringPtr, count: elementCount)
-          flutterOutputs[name] = Array(stringBuffer)
-
-        default:
-          // Try extracting as float for other types
-          do {
-            let dataPtr = try value.tensorData()
-            let floatPtr = dataPtr.bytes.bindMemory(to: Float.self, capacity: elementCount)
-            let floatBuffer = UnsafeBufferPointer(start: floatPtr, count: elementCount)
-            flutterOutputs[name] = Array(floatBuffer)
-          } catch {
-            flutterOutputs[name] = "Unsupported output tensor type: \(tensorInfo.elementType)"
-          }
-        }
-      } else {
-        flutterOutputs[name] = "Output is not a tensor"
-      }
-    }
-
-    return flutterOutputs
   }
 
   // MARK: - OrtValue Management

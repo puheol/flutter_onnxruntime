@@ -24,6 +24,8 @@ class OrtSession {
   /// [inputs] is a map of input names to OrtValue objects
   /// [options] is an optional map of run options
   ///
+  /// Returns a map of output names to OrtValue objects if successful, otherwise throws an exception
+  ///
   /// Example:
   /// ```dart
   /// final inputTensor = await OrtValue.fromList(
@@ -35,8 +37,28 @@ class OrtSession {
   /// };
   /// final outputs = await session.run(inputs);
   /// ```
-  Future<Map<String, dynamic>> run(Map<String, OrtValue> inputs, {OrtRunOptions? options}) async {
-    return await FlutterOnnxruntimePlatform.instance.runInference(id, inputs, runOptions: options?.toMap() ?? {});
+  Future<Map<String, OrtValue>> run(Map<String, OrtValue> inputs, {OrtRunOptions? options}) async {
+    final result = await FlutterOnnxruntimePlatform.instance.runInference(
+      id,
+      inputs,
+      runOptions: options?.toMap() ?? {},
+    );
+    if (result.containsKey('error')) {
+      // throw an error
+      throw Exception('Error when running inference: ${result['error']}');
+    } else {
+      try {
+        // loop through the map and convert map to OrtValue
+        final outputs = <String, OrtValue>{};
+        for (final entry in result.entries) {
+          final tensorMap = {'valueId': entry.value[0], 'dataType': entry.value[1], 'shape': entry.value[2]};
+          outputs[entry.key] = OrtValue.fromMap(tensorMap);
+        }
+        return outputs;
+      } catch (e) {
+        throw Exception('Error when parsing inference outputs: $e');
+      }
+    }
   }
 
   Future<void> close() async {

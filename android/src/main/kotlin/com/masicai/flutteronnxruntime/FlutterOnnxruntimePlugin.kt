@@ -94,7 +94,13 @@ class Float16Utils {
                     e++
                 }
                 val normalizedExponent = exponent - e + 1
-                val float32Bits = sign or ((normalizedExponent + FLOAT32_EXPONENT_BIAS - FLOAT16_EXPONENT_BIAS) shl 23) or ((m and 0x3FF) shl 13)
+                val float32Bits =
+                    sign or (
+                        (
+                            normalizedExponent + FLOAT32_EXPONENT_BIAS -
+                                FLOAT16_EXPONENT_BIAS
+                        ) shl 23
+                    ) or ((m and 0x3FF) shl 13)
                 return java.lang.Float.intBitsToFloat(float32Bits)
             } else if (exponent == 31) {
                 // Infinity or NaN
@@ -250,16 +256,20 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                         val ortOutputs = session.run(runInputs)
 
                         // Process outputs
+                        // Outputs will be a map of outputName -> OrtValue parameters
+                        // OrtValue parameters are: valueId, elementType, shape
                         val outputs = HashMap<String, Any>()
 
                         // Convert tensor outputs to Flutter-compatible types
                         for (outputName in session.outputNames) {
                             val outputValue = ortOutputs[outputName]
+                            // create a list of outputValue parameters
+                            val outputValueParams = ArrayList<Any>()
 
                             Log.d("outputValue", outputValue.toString())
 
                             // Output tensor is wrapped in Optional[] for safety, unwrap the Optional if needed
-                            val actualTensor =
+                            val outputTensor =
                                 when {
                                     outputValue.toString().startsWith("Optional[") -> {
                                         try {
@@ -281,57 +291,27 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                     else -> null
                                 }
 
-                            if (actualTensor != null) {
-                                // Get shape information
-                                val shape = actualTensor.info.shape
-                                outputs["${outputName}_shape"] = shape.toList()
+                            if (outputTensor != null) {
+                                // add outputTensor to ortvalues
+                                val valueId = UUID.randomUUID().toString()
+                                ortValues[valueId] = outputTensor
 
-                                // Try to determine the tensor type and extract the appropriate data
-                                try {
-                                    // Try float - most common for ML model outputs
-                                    val flatSize = shape.fold(1L) { acc, dim -> acc * dim }.toInt()
-                                    val floatArray = FloatArray(flatSize)
-                                    actualTensor.floatBuffer.get(floatArray)
-                                    outputs[outputName] = floatArray.toList()
-                                } catch (e: Exception) {
-                                    try {
-                                        // Try int
-                                        val flatSize = shape.fold(1L) { acc, dim -> acc * dim }.toInt()
-                                        val intArray = IntArray(flatSize)
-                                        actualTensor.intBuffer.get(intArray)
-                                        outputs[outputName] = intArray.toList()
-                                    } catch (e2: Exception) {
-                                        try {
-                                            // Try long
-                                            val flatSize = shape.fold(1L) { acc, dim -> acc * dim }.toInt()
-                                            val longArray = LongArray(flatSize)
-                                            actualTensor.longBuffer.get(longArray)
-                                            outputs[outputName] = longArray.toList()
-                                        } catch (e3: Exception) {
-                                            try {
-                                                // Try byte
-                                                val flatSize = shape.fold(1L) { acc, dim -> acc * dim }.toInt()
-                                                val byteArray = ByteArray(flatSize)
-                                                actualTensor.byteBuffer.get(byteArray)
-                                                outputs[outputName] = byteArray.map { it.toInt() and 0xFF }
-                                            } catch (e4: Exception) {
-                                                outputs[outputName] = "Failed to extract tensor data: ${e4.message}"
-                                            }
-                                        }
-                                    }
-                                }
+                                outputValueParams.add(valueId)
+                                outputValueParams.add(outputTensor.info.type.toString())
+                                outputValueParams.add(outputTensor.info.shape.toList())
                             } else {
-                                outputs[outputName] = "Output is null or not a tensor: ${outputValue?.javaClass?.name}"
+                                val errorMessage = "Output is null or not a tensor: ${outputValue?.javaClass?.name}"
+                                outputValueParams.add(errorMessage)
                             }
+                            outputs[outputName] = outputValueParams
                         }
 
                         // Clean up
                         for (input in ortInputs.values) {
                             input.close()
                         }
-                        // ortOutputs.iterator().forEach { key, value -> value.close() }
 
-                        result.success(mapOf("outputs" to outputs))
+                        result.success(outputs)
                     } catch (e: Exception) {
                         // Clean up in case of error
                         for (input in ortInputs.values) {
@@ -626,11 +606,6 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                 return
                             }
                         }
-
-                    // If target type is different from source type, perform conversion
-                    // Note: This is a simplified example. In a real implementation, you would need
-                    // to implement type conversion logic based on ONNX Runtime capabilities.
-                    // For now, we'll just use the created tensor without conversion.
 
                     // Store the tensor with a unique ID
                     val valueId = UUID.randomUUID().toString()

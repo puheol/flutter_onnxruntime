@@ -61,8 +61,13 @@ void main() {
       final inputs = {'A': inputA, 'B': inputB};
 
       final outputs = await session.run(inputs);
-      expect(outputs, isNotNull);
-      expect(outputs['outputs']['C'][0], 7.0); // 3 + 4 = 7
+      final outputTensor = outputs['C'];
+      final outputData = await outputTensor!.asList();
+
+      expect(outputs.length, 1);
+      expect(outputTensor.dataType, OrtDataType.float32);
+      expect(outputTensor.shape, [1]);
+      expect(outputData[0], 7.0); // 3 + 4 = 7
 
       // Clean up
       await inputA.dispose();
@@ -77,14 +82,16 @@ void main() {
       final inputs = {'A': inputA, 'B': inputB};
 
       final outputs = await session.run(inputs);
-      expect(outputs, isNotNull);
+      final outputTensor = outputs['C'];
+      final outputData = await outputTensor!.asList();
 
-      final result = outputs['outputs']['C'];
-
-      expect(result.length, 3);
-      expect(result[0], closeTo(5.5, 1e-5)); // 1.1 + 4.4 ≈ 5.5
-      expect(result[1], closeTo(7.7, 1e-5)); // 2.2 + 5.5 ≈ 7.7
-      expect(result[2], closeTo(9.9, 1e-5)); // 3.3 + 6.6 ≈ 9.9
+      expect(outputs.length, 1);
+      expect(outputTensor.dataType, OrtDataType.float32);
+      expect(outputTensor.shape, [3]);
+      expect(outputData.length, 3);
+      expect(outputData[0], closeTo(5.5, 1e-5)); // 1.1 + 4.4 ≈ 5.5
+      expect(outputData[1], closeTo(7.7, 1e-5)); // 2.2 + 5.5 ≈ 7.7
+      expect(outputData[2], closeTo(9.9, 1e-5)); // 3.3 + 6.6 ≈ 9.9
 
       // Clean up
       await inputA.dispose();

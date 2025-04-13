@@ -25,10 +25,15 @@ void main() {
           };
         case 'runInference':
           return {
-            'output1': [1.0, 2.0, 3.0],
+            'output1': [
+              'output_value_1',
+              'float32',
+              [3],
+            ],
             'output2': [
-              [4.0, 5.0],
-              [6.0, 7.0],
+              'output_value_2',
+              'float32',
+              [2, 2],
             ],
           };
         case 'getMetadata':
@@ -113,11 +118,20 @@ void main() {
       final outputs = await platform.runInference('test_session_id', inputs);
 
       expect(outputs, isNotNull);
-      expect(outputs['output1'], [1.0, 2.0, 3.0]);
-      expect(outputs['output2'], [
-        [4.0, 5.0],
-        [6.0, 7.0],
-      ]);
+      expect(outputs, isA<Map<String, dynamic>>());
+      expect(outputs.keys, containsAll(['output1', 'output2']));
+
+      // Each output should contain values needed to create an OrtValue
+      expect(outputs['output1'], isA<List>());
+      expect(outputs['output1'].length, 3); // valueId, dataType, shape
+      expect(outputs['output1'][0], 'output_value_1');
+      expect(outputs['output1'][1], 'float32');
+      expect(outputs['output1'][2], [3]);
+
+      expect(outputs['output2'], isA<List>());
+      expect(outputs['output2'][0], 'output_value_2');
+      expect(outputs['output2'][1], 'float32');
+      expect(outputs['output2'][2], [2, 2]);
     });
 
     test('getMetadata returns model metadata', () async {
@@ -174,9 +188,16 @@ void main() {
           expect((inputs['input2'] as Map)['valueId'], 'test_value_2');
 
           return {
-            'outputs': {
-              'output1': [1.0, 2.0, 3.0],
-            },
+            'output1': [
+              'output_value_1',
+              'float32',
+              [3],
+            ],
+            'output2': [
+              'output_value_2',
+              'float32',
+              [2, 2],
+            ],
           };
         }
         return null;
@@ -202,8 +223,10 @@ void main() {
 
       // Verify the result
       expect(result, isA<Map<String, dynamic>>());
-      expect(result['outputs'], isA<Map>());
-      expect(result['outputs']['output1'], [1.0, 2.0, 3.0]);
+      expect(result['output1'], isA<List>());
+      expect(result['output1'][0], 'output_value_1');
+      expect(result['output1'][1], 'float32');
+      expect(result['output1'][2], [3]);
     });
   });
 }

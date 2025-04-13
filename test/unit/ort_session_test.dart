@@ -35,15 +35,18 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
     };
     lastRunOptions = runOptions;
 
-    // Return mock output
+    // Return mock output - simulate the new output format with OrtValue properties
     return Future.value({
-      'outputs': {
-        'output1': [1.0, 2.0, 3.0],
-        'output2': [
-          [4.0, 5.0],
-          [6.0, 7.0],
-        ],
-      },
+      'output1': [
+        'test_output_value_1',
+        'float32',
+        [1, 3],
+      ],
+      'output2': [
+        'test_output_value_2',
+        'float32',
+        [2, 2],
+      ],
     });
   }
 
@@ -121,6 +124,56 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
   Future<void> releaseOrtValue(String valueId) => Future.value();
 }
 
+class CustomDataMockFlutterOnnxruntimePlatform extends MockFlutterOnnxruntimePlatform {
+  @override
+  Future<Map<String, dynamic>> getOrtValueData(String valueId) {
+    if (valueId == 'test_output_value_1') {
+      return Future.value({
+        'data': [1.0, 2.0, 3.0],
+        'shape': [1, 3],
+      });
+    } else if (valueId == 'test_output_value_2') {
+      return Future.value({
+        'data': [4.0, 5.0, 6.0, 7.0],
+        'shape': [2, 2],
+      });
+    }
+    return Future.value({
+      'data': [0.0, 0.0],
+      'shape': [1, 2],
+    });
+  }
+
+  @override
+  Future<Map<String, dynamic>> createSession(String modelPath, {Map<String, dynamic>? sessionOptions}) {
+    return Future.value({
+      'sessionId': 'test_session_id',
+      'inputNames': ['input1'],
+      'outputNames': ['output1', 'output2'],
+    });
+  }
+
+  @override
+  Future<Map<String, dynamic>> runInference(
+    String sessionId,
+    Map<String, OrtValue> inputs, {
+    Map<String, dynamic>? runOptions,
+  }) {
+    return Future.value({
+      'output1': [
+        'test_output_value_1',
+        'float32',
+        [1, 3],
+      ],
+      'output2': [
+        'test_output_value_2',
+        'float32',
+        [2, 2],
+      ],
+    });
+  }
+}
+
 void main() {
   late OrtSession session;
   late MockFlutterOnnxruntimePlatform mockPlatform;
@@ -191,7 +244,7 @@ void main() {
       expect(mockPlatform.lastRunOptions, runOptions.toMap());
     });
 
-    test('run returns correct output structure', () async {
+    test('run returns OrtValue outputs in new format', () async {
       // Create a mock OrtValue
       final ortValue = OrtValue.fromMap({
         'valueId': 'test_value_id',
@@ -203,12 +256,17 @@ void main() {
       final outputs = await session.run({'input1': ortValue});
 
       expect(outputs, isNotNull);
-      expect(outputs.keys, contains('outputs'));
-      expect(outputs['outputs'], isA<Map<String, dynamic>>());
-      expect(outputs['outputs'].keys, containsAll(['output1', 'output2']));
-      expect(outputs['outputs']['output1'], [1.0, 2.0, 3.0]);
-      expect(outputs['outputs']['output2'], isA<List>());
-      expect(outputs['outputs']['output2'][0], isA<List>());
+      expect(outputs, isA<Map<String, OrtValue>>());
+      expect(outputs.keys, containsAll(['output1', 'output2']));
+
+      // Verify the output OrtValues have the correct properties
+      expect(outputs['output1']!.id, 'test_output_value_1');
+      expect(outputs['output1']!.dataType, OrtDataType.float32);
+      expect(outputs['output1']!.shape, [1, 3]);
+
+      expect(outputs['output2']!.id, 'test_output_value_2');
+      expect(outputs['output2']!.dataType, OrtDataType.float32);
+      expect(outputs['output2']!.shape, [2, 2]);
     });
 
     test('run processes OrtValue inputs correctly', () async {
@@ -271,6 +329,41 @@ void main() {
       expect(mockPlatform.lastInputsForRun, isNotNull);
       expect(mockPlatform.lastInputsForRun!['input1'], {'valueId': 'float32_value'});
       expect(mockPlatform.lastInputsForRun!['input2'], {'valueId': 'int32_value'});
+    });
+
+    test('run outputs can be used to extract data', () async {
+      // Use a custom mock implementation specifically for this test
+      final customMock = CustomDataMockFlutterOnnxruntimePlatform();
+      FlutterOnnxruntimePlatform.instance = customMock;
+
+      // Create a test session
+      final onnxRuntime = OnnxRuntime();
+      final testSession = await onnxRuntime.createSession('test_model.onnx');
+
+      // Create a mock input OrtValue
+      final inputValue = OrtValue.fromMap({
+        'valueId': 'test_input_value',
+        'dataType': 'float32',
+        'shape': [1, 3],
+        'device': 'cpu',
+      });
+
+      // Run inference
+      final outputs = await testSession.run({'input1': inputValue});
+
+      // Extract data from output OrtValues
+      final output1Data = await outputs['output1']!.asList();
+      final output2Data = await outputs['output2']!.asList();
+
+      // Verify the extracted data
+      expect(output1Data, [1.0, 2.0, 3.0]);
+      expect(outputs['output1']!.shape, [1, 3]);
+
+      expect(output2Data, [4.0, 5.0, 6.0, 7.0]);
+      expect(outputs['output2']!.shape, [2, 2]);
+
+      // Restore the original mock
+      FlutterOnnxruntimePlatform.instance = mockPlatform;
     });
   });
 

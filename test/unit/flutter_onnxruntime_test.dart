@@ -21,15 +21,20 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
   @override
   Future<Map<String, dynamic>> runInference(
     String sessionId,
-    Map<String, dynamic> inputs, {
+    Map<String, OrtValue> inputs, {
     Map<String, dynamic>? runOptions,
   }) {
     // Return mock output with the same structure as expected from the real implementation
     return Future.value({
-      'output1': [1.0, 2.0, 3.0],
+      'output1': [
+        'tensor_001',
+        'float32',
+        [3],
+      ],
       'output2': [
-        [4.0, 5.0],
-        [6.0, 7.0],
+        'tensor_002',
+        'float32',
+        [2, 2],
       ],
     });
   }
@@ -85,7 +90,7 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
   Future<Map<String, dynamic>> convertOrtValue(String valueId, String targetType) => Future.value({});
 
   @override
-  Future<Map<String, dynamic>> createOrtValue(String sourceType, data, List<int> shape) => Future.value({});
+  Future<Map<String, dynamic>> createOrtValue(String sourceType, dynamic data, List<int> shape) => Future.value({});
 
   @override
   Future<Map<String, dynamic>> getOrtValueData(String valueId) => Future.value({
@@ -177,11 +182,17 @@ void main() {
       final outputs = await session.run(inputs);
 
       expect(outputs, isNotNull);
-      expect(outputs['output1'], [1.0, 2.0, 3.0]);
-      expect(outputs['output2'], [
-        [4.0, 5.0],
-        [6.0, 7.0],
-      ]);
+      expect(outputs, isA<Map<String, OrtValue>>());
+      expect(outputs.keys, containsAll(['output1', 'output2']));
+
+      // Verify output OrtValue properties
+      expect(outputs['output1']!.id, 'tensor_001');
+      expect(outputs['output1']!.dataType, OrtDataType.float32);
+      expect(outputs['output1']!.shape, [3]);
+
+      expect(outputs['output2']!.id, 'tensor_002');
+      expect(outputs['output2']!.dataType, OrtDataType.float32);
+      expect(outputs['output2']!.shape, [2, 2]);
     });
 
     test('getMetadata returns model metadata', () async {

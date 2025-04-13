@@ -54,13 +54,23 @@ class _MyAppState extends State<MyApp> {
     final inputs = {'A': inputA, 'B': inputB};
 
     final outputs = await _session!.run(inputs);
-    setState(() {
-      _result = outputs['outputs']['C'][0].toString(); // Update the result with the output from the model
-    });
 
-    // clean up
-    inputA.dispose();
-    inputB.dispose();
+    // extract the output data
+    try {
+      final outputData = await outputs['C']!.asList();
+      setState(() {
+        _result = outputData[0].toString(); // Update the result with the output from the model
+      });
+    } catch (e) {
+      setState(() {
+        _result = 'Error: $e';
+      });
+    } finally {
+      // clean up
+      inputA.dispose();
+      inputB.dispose();
+      outputs['C']!.dispose();
+    }
   }
 
   @override
