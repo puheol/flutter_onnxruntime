@@ -389,6 +389,27 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
           let int32Array = intArray.map { Int32($0) }
           let data = NSMutableData(bytes: int32Array, length: int32Array.count * MemoryLayout<Int32>.stride)
           tensor = try ORTValue(tensorData: data, elementType: .int32, shape: shapeNumbers)
+        } else if let typedData = data as? FlutterStandardTypedData {
+          // Handle FlutterStandardTypedData for Int32
+          if typedData.data.count % 4 == 0 {
+            let int32Count = typedData.data.count / 4
+            var int32Array = [Int32](repeating: 0, count: int32Count)
+
+            typedData.data.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) in
+              let int32Buffer = buffer.bindMemory(to: Int32.self)
+              for index in 0..<int32Count {
+                int32Array[index] = int32Buffer[index]
+              }
+            }
+
+            let int32Data = NSMutableData(bytes: int32Array, length: int32Array.count * MemoryLayout<Int32>.stride)
+            tensor = try ORTValue(tensorData: int32Data, elementType: .int32, shape: shapeNumbers)
+          } else {
+            result(FlutterError(code: "INVALID_DATA_TYPE",
+                               message: "Data size \(typedData.data.count) is not consistent with Int32 data",
+                               details: nil))
+            return
+          }
         } else {
           result(FlutterError(code: "INVALID_DATA", message: "Data must be a list of numbers for int32 type", details: nil))
           return
@@ -402,6 +423,27 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
           let int64Array = intArray.map { Int64($0) }
           let data = NSMutableData(bytes: int64Array, length: int64Array.count * MemoryLayout<Int64>.stride)
           tensor = try ORTValue(tensorData: data, elementType: .int64, shape: shapeNumbers)
+        } else if let typedData = data as? FlutterStandardTypedData {
+          // Handle FlutterStandardTypedData for Int64
+          if typedData.data.count % 8 == 0 {
+            let int64Count = typedData.data.count / 8
+            var int64Array = [Int64](repeating: 0, count: int64Count)
+
+            typedData.data.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) in
+              let int64Buffer = buffer.bindMemory(to: Int64.self)
+              for index in 0..<int64Count {
+                int64Array[index] = int64Buffer[index]
+              }
+            }
+
+            let int64Data = NSMutableData(bytes: int64Array, length: int64Array.count * MemoryLayout<Int64>.stride)
+            tensor = try ORTValue(tensorData: int64Data, elementType: .int64, shape: shapeNumbers)
+          } else {
+            result(FlutterError(code: "INVALID_DATA_TYPE",
+                               message: "Data size \(typedData.data.count) is not consistent with Int64 data",
+                               details: nil))
+            return
+          }
         } else {
           result(FlutterError(code: "INVALID_DATA", message: "Data must be a list of numbers for int64 type", details: nil))
           return
@@ -415,6 +457,10 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
           let uintArray = intArray.map { UInt8($0) }
           let data = NSMutableData(bytes: uintArray, length: uintArray.count * MemoryLayout<UInt8>.stride)
           tensor = try ORTValue(tensorData: data, elementType: .uInt8, shape: shapeNumbers)
+        } else if let typedData = data as? FlutterStandardTypedData {
+          // Handle FlutterStandardTypedData for UInt8 - directly use the data for byte arrays
+          let uint8Data = NSMutableData(data: typedData.data)
+          tensor = try ORTValue(tensorData: uint8Data, elementType: .uInt8, shape: shapeNumbers)
         } else {
           result(FlutterError(code: "INVALID_DATA", message: "Data must be a list of numbers for uint8 type", details: nil))
           return
@@ -427,6 +473,10 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
           let data = NSMutableData(bytes: uint8Array, length: uint8Array.count * MemoryLayout<UInt8>.stride)
           // Use uint8 type since bool is not available in ORTTensorElementDataType
           tensor = try ORTValue(tensorData: data, elementType: .uInt8, shape: shapeNumbers)
+        } else if let typedData = data as? FlutterStandardTypedData {
+          // For bool values, assume they are stored as bytes, where non-zero is true
+          let uint8Data = NSMutableData(data: typedData.data)
+          tensor = try ORTValue(tensorData: uint8Data, elementType: .uInt8, shape: shapeNumbers)
         } else {
           result(FlutterError(code: "INVALID_DATA", message: "Data must be a list of booleans for bool type", details: nil))
           return
