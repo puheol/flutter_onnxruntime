@@ -115,4 +115,62 @@ void main() {
       await inputB.dispose();
     });
   });
+
+  group('ONNX Runtime Inference Tests with run options', () {
+    late OnnxRuntime onnxRuntime;
+    late OrtSession session;
+    late Map<String, OrtValue> inputs;
+
+    setUpAll(() async {
+      onnxRuntime = OnnxRuntime();
+      try {
+        // Load model from assets
+        session = await onnxRuntime.createSessionFromAsset('assets/models/addition_model.ort');
+      } catch (e) {
+        fail('Failed to create session: $e');
+      }
+    });
+
+    tearDownAll(() async {
+      await session.close();
+    });
+
+    testWidgets('Run inference with run options', (WidgetTester tester) async {
+      final runOptions = OrtRunOptions(logSeverityLevel: 1, logVerbosityLevel: 1, terminate: false);
+      inputs = {
+        'A': await OrtValue.fromList([3.0], [1]),
+        'B': await OrtValue.fromList([4.0], [1]),
+      };
+      final outputs = await session.run(inputs, options: runOptions);
+      final outputTensor = outputs['C'];
+      final outputData = await outputTensor!.asList();
+
+      expect(outputs.length, 1);
+      expect(outputTensor.dataType, OrtDataType.float32);
+      expect(outputTensor.shape, [1]);
+      expect(outputData[0], 7.0); // 3 + 4 = 7
+
+      // Clean up
+      await inputs['A']!.dispose();
+      await inputs['B']!.dispose();
+      await outputs['C']!.dispose();
+    });
+
+    testWidgets('Run inference with run options and terminate', (WidgetTester tester) async {
+      final runOptions = OrtRunOptions(logSeverityLevel: 1, logVerbosityLevel: 1, terminate: true);
+      inputs = {
+        'A': await OrtValue.fromList([3.0], [1]),
+        'B': await OrtValue.fromList([4.0], [1]),
+      };
+
+      // expect the run to throw an exception since terminate is true
+      expect(() async {
+        await session.run(inputs, options: runOptions);
+      }, throwsA(isA<Exception>()));
+
+      // Clean up
+      await inputs['A']!.dispose();
+      await inputs['B']!.dispose();
+    });
+  });
 }
