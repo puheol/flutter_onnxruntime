@@ -42,6 +42,8 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
     */
     case "createSession":
       handleCreateSession(call: call, result: result)
+    case "getAvailableProviders":
+      handleGetAvailableProviders(call: call, result: result)
     case "runInference":
       handleRunInference(call: call, result: result)
     case "closeSession":
@@ -82,13 +84,27 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
           try sessionOptions.setIntraOpNumThreads(Int32(intraOpNumThreads))
         }
 
+        // Note: 14/04/25 interOpNumThreads is not supported in onnxruntime-objc
         // if let interOpNumThreads = options["interOpNumThreads"] as? Int {
         //   try sessionOptions.setInterOpNumThreads(Int32(interOpNumThreads))
         // }
 
-        // if let enableCpuMemArena = options["enableCpuMemArena"] as? Bool {
-        //   sessionOptions.enableCPUMemArena = enableCpuMemArena
-        // }
+        // get providers from options
+        if let providers = options["providers"] as? [String] {
+          // switch-case to config each providers
+          for provider in providers {
+            switch provider {
+            case "CPU":
+              continue
+            case "CORE_ML":
+              sessionOptions.appendCoreMLExecutionProvider()
+            case "XNNPACK":
+              sessionOptions.appendXnnpackExecutionProvider(ORTXnnpackExecutionProviderOptions())
+            default:
+              continue
+            }
+          }
+        }
       }
 
       // Check if file exists
@@ -132,6 +148,19 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
     } catch {
       result(FlutterError(code: "SESSION_CREATION_FAILED", message: error.localizedDescription, details: nil))
     }
+  }
+
+  private func handleGetAvailableProviders(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    // Note: 14/04/25 ORTEnv does not have a method to get available providers so
+    // we can only check if CoreML is available
+    // Reference: https://onnxruntime.ai/docs/api/objectivec/Functions.html#/c:@F@ORTIsCoreMLExecutionProviderAvailable
+    var providers: [String] = ["CPU"]
+    let isCoreMLAvailable = ORTIsCoreMLExecutionProviderAvailable()
+    if isCoreMLAvailable {
+      providers.append("CORE_ML")
+    }
+    // Note: it's available support for XNNPACK but it's not an official API to check if it's available
+    result(providers)
   }
 
   private func handleRunInference(call: FlutterMethodCall, result: @escaping FlutterResult) {
