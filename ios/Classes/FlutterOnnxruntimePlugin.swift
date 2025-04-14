@@ -540,7 +540,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
       let tensorInfo: [String: Any] = [
         "valueId": valueId,
         "dataType": sourceType,
-        "shape": shape,
+        "shape": shape
       ]
 
       result(tensorInfo)
@@ -580,7 +580,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
         let resultInfo: [String: Any] = [
           "valueId": newValueId,
           "dataType": targetType,
-          "shape": shape,
+          "shape": shape
         ]
 
         result(resultInfo)
@@ -696,7 +696,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
         let resultInfo: [String: Any] = [
           "valueId": newValueId,
           "dataType": targetType,
-          "shape": shape,
+          "shape": shape
         ]
 
         result(resultInfo)
@@ -718,7 +718,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
       let resultInfo: [String: Any] = [
         "valueId": newValueId,
         "dataType": targetType,
-        "shape": shape,
+        "shape": shape
       ]
 
       result(resultInfo)

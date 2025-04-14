@@ -25,7 +25,7 @@ run_integration_test_on_device() {
 }
 
 # Function to run integration tests file by file
-# This is a workaround to run integration tests on Linux due to 
+# This is a workaround to run integration tests on Linux and macOS due to the issue at
 # https://github.com/flutter/flutter/issues/135673
 run_integration_test_file_by_file() {
     local DEVICE=$1
@@ -88,7 +88,7 @@ run_macos_tests() {
     if [ -n "$MACOS_DEVICES" ]; then
         # Take the first macOS device (usually just "macos")
         MACOS_DEVICE=$(echo "$MACOS_DEVICES" | head -n 1)
-        run_integration_test_on_device "$MACOS_DEVICE" "macOS"
+        run_integration_test_file_by_file "$MACOS_DEVICE" "macOS"
     else
         echo -e "${RED}macOS desktop not available. Skipping macOS tests.${NC}"
     fi
