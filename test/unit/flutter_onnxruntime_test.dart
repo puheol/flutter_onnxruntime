@@ -294,12 +294,12 @@ void main() {
     });
 
     test('OrtRunOptions toMap converts options to map correctly', () {
-      final options = OrtRunOptions(logSeverityLevel: true, logVerbosityLevel: true, terminate: false);
+      final options = OrtRunOptions(logSeverityLevel: 1, logVerbosityLevel: 2, terminate: false);
 
       final map = options.toMap();
 
-      expect(map['logSeverityLevel'], true);
-      expect(map['logVerbosityLevel'], true);
+      expect(map['logSeverityLevel'], 1);
+      expect(map['logVerbosityLevel'], 2);
       expect(map['terminate'], false);
     });
 
