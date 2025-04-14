@@ -116,6 +116,9 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
   Future<List<Map<String, dynamic>>> getOutputInfo(String sessionId) {
     return Future.value([]);
   }
+
+  @override
+  Future<List<String>> getAvailableProviders() => Future.value(['CPU']);
 }
 
 void main() {

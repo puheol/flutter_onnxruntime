@@ -130,6 +130,9 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
 
   @override
   Future<void> releaseOrtValue(String valueId) => Future.value();
+
+  @override
+  Future<List<String>> getAvailableProviders() => Future.value(['CPU']);
 }
 
 class ConversionTrackingMock extends MockFlutterOnnxruntimePlatform {
@@ -151,7 +154,34 @@ class ConversionTrackingMock extends MockFlutterOnnxruntimePlatform {
   }
 }
 
+class ProviderOptionsMock extends MockFlutterOnnxruntimePlatform {
+  @override
+  Future<List<String>> getAvailableProviders() => Future.value(['CUDA', 'CPU', 'CoreML']);
+
+  @override
+  Future<Map<String, dynamic>> createSession(String modelPath, {Map<String, dynamic>? sessionOptions}) {
+    // Verify options are passed correctly
+    final providers = sessionOptions?['providers'] as List<dynamic>?;
+    if (providers != null && providers.contains('CUDA') && providers.contains('CPU')) {
+      return Future.value({
+        'sessionId': 'provider_test_session',
+        'inputNames': ['input1'],
+        'outputNames': ['output1'],
+      });
+    }
+
+    // Default response
+    return Future.value({
+      'sessionId': 'test_session_id',
+      'inputNames': ['input1', 'input2'],
+      'outputNames': ['output1', 'output2'],
+    });
+  }
+}
+
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   late OrtSession session;
   late MockFlutterOnnxruntimePlatform mockPlatform;
   final FlutterOnnxruntimePlatform initialPlatform = FlutterOnnxruntimePlatform.instance;
@@ -240,6 +270,36 @@ void main() {
       expect(conversionMock.lastConvertedTargetType, 'int32');
 
       // Restore original mock
+      FlutterOnnxruntimePlatform.instance = mockPlatform;
+    });
+  });
+
+  group('Provider and Session Options Integration', () {
+    test('uses available providers in session options', () async {
+      // Create a specialized mock for this test
+      final providersMock = ProviderOptionsMock();
+      FlutterOnnxruntimePlatform.instance = providersMock;
+
+      // Create runtime and check available providers
+      final onnxRuntime = OnnxRuntime();
+      final availableProviders = await onnxRuntime.getAvailableProviders();
+
+      // Verify we get our expected providers
+      expect(availableProviders, containsAll(['CUDA', 'CPU', 'CoreML']));
+
+      // Create session with preferred providers
+      final options = OrtSessionOptions(
+        providers: ['CUDA', 'CPU'], // Prioritize CUDA, fallback to CPU
+        deviceId: 0,
+      );
+
+      final session = await onnxRuntime.createSession('test_model.onnx', options: options);
+
+      // Verify we get the special session id that indicates providers were correctly used
+      expect(session, isNotNull);
+      expect(session.id, 'provider_test_session');
+
+      // Restore the original mock
       FlutterOnnxruntimePlatform.instance = mockPlatform;
     });
   });

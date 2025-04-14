@@ -122,6 +122,9 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
 
   @override
   Future<void> releaseOrtValue(String valueId) => Future.value();
+
+  @override
+  Future<List<String>> getAvailableProviders() => Future.value(['CPU']);
 }
 
 class CustomDataMockFlutterOnnxruntimePlatform extends MockFlutterOnnxruntimePlatform {
@@ -174,7 +177,25 @@ class CustomDataMockFlutterOnnxruntimePlatform extends MockFlutterOnnxruntimePla
   }
 }
 
+// Add this class outside the test function, at the top level or before the test group
+class SessionOptionsMock extends MockFlutterOnnxruntimePlatform {
+  Map<String, dynamic>? capturedOptions;
+
+  @override
+  Future<Map<String, dynamic>> createSession(String modelPath, {Map<String, dynamic>? sessionOptions}) {
+    // Capture the options
+    capturedOptions = sessionOptions;
+    return Future.value({
+      'sessionId': 'test_session_id',
+      'inputNames': ['input1', 'input2'],
+      'outputNames': ['output1', 'output2'],
+    });
+  }
+}
+
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   late OrtSession session;
   late MockFlutterOnnxruntimePlatform mockPlatform;
   final FlutterOnnxruntimePlatform initialPlatform = FlutterOnnxruntimePlatform.instance;
@@ -406,6 +427,65 @@ void main() {
       expect(outputInfo[0]['name'], 'output1');
       expect(outputInfo[0]['type'], 'FLOAT');
       expect(outputInfo[0]['shape'], [1, 1000]);
+    });
+  });
+
+  group('OrtSessionOptions', () {
+    test('constructs with all options and produces correct map', () {
+      final options = OrtSessionOptions(
+        intraOpNumThreads: 2,
+        interOpNumThreads: 4,
+        providers: ['CUDA', 'CPU'],
+        useArena: true,
+        deviceId: 0,
+      );
+
+      final map = options.toMap();
+
+      expect(map['intraOpNumThreads'], 2);
+      expect(map['interOpNumThreads'], 4);
+      expect(map['providers'], ['CUDA', 'CPU']);
+      expect(map['useArena'], true);
+      expect(map['deviceId'], 0);
+    });
+
+    test('constructs with partial options and produces correct map', () {
+      final options = OrtSessionOptions(intraOpNumThreads: 2, providers: ['CUDA']);
+
+      final map = options.toMap();
+
+      expect(map['intraOpNumThreads'], 2);
+      expect(map['providers'], ['CUDA']);
+      expect(map.containsKey('interOpNumThreads'), false);
+      expect(map.containsKey('useArena'), false);
+      expect(map.containsKey('deviceId'), false);
+    });
+
+    test('empty providers list is not included in map', () {
+      final options = OrtSessionOptions(intraOpNumThreads: 2, providers: []);
+
+      final map = options.toMap();
+
+      expect(map['intraOpNumThreads'], 2);
+      expect(map.containsKey('providers'), false);
+    });
+
+    test('options affect session creation', () async {
+      // Create a specialized tracking mock platform
+      final optionsMock = SessionOptionsMock();
+      FlutterOnnxruntimePlatform.instance = optionsMock;
+
+      final options = OrtSessionOptions(providers: ['CUDA', 'CPU'], deviceId: 1);
+
+      final onnxRuntime = OnnxRuntime();
+      await onnxRuntime.createSession('test_model.onnx', options: options);
+
+      expect(optionsMock.capturedOptions, isNotNull);
+      expect(optionsMock.capturedOptions!['providers'], ['CUDA', 'CPU']);
+      expect(optionsMock.capturedOptions!['deviceId'], 1);
+
+      // Restore the original mock
+      FlutterOnnxruntimePlatform.instance = mockPlatform;
     });
   });
 }
