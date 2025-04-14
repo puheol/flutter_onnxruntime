@@ -14,14 +14,32 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 # Function to run tests on a specific device
-run_test_on_device() {
+run_integration_test_on_device() {
     local DEVICE=$1
     local PLATFORM_NAME=$2
-    
+
     echo -e "${GREEN}----------------------------------------${NC}"
-    echo -e "${GREEN}Running tests on ${PLATFORM_NAME} device: ${DEVICE}${NC}"
+    echo -e "${GREEN}Running integration tests on ${PLATFORM_NAME} device: ${DEVICE}${NC}"
     echo -e "${GREEN}----------------------------------------${NC}"
     flutter test integration_test/ -d "$DEVICE"
+}
+
+# Function to run integration tests file by file
+# This is a workaround to run integration tests on Linux due to 
+# https://github.com/flutter/flutter/issues/135673
+run_integration_test_file_by_file() {
+    local DEVICE=$1
+    local PLATFORM_NAME=$2
+
+    echo -e "${GREEN}----------------------------------------${NC}"
+    echo -e "${GREEN}Running integration tests file by file on ${PLATFORM_NAME} device: ${DEVICE}${NC}"
+    echo -e "${GREEN}----------------------------------------${NC}"
+    # Loop through each .dart file in the directory
+    for test_file in "integration_test"/*.dart; do
+        if [ -f "$test_file" ]; then
+            flutter test "$test_file" -d "$DEVICE"
+        fi
+    done
 }
 
 # Function to run Android tests
@@ -31,7 +49,7 @@ run_android_tests() {
     if [ -n "$ANDROID_DEVICES" ]; then
         # Take the first Android device
         ANDROID_DEVICE=$(echo "$ANDROID_DEVICES" | head -n 1)
-        run_test_on_device "$ANDROID_DEVICE" "Android"
+        run_integration_test_on_device "$ANDROID_DEVICE" "Android"
     else
         echo -e "${RED}No Android devices found. Skipping Android tests.${NC}"
     fi
@@ -44,7 +62,7 @@ run_ios_tests() {
     if [ -n "$IOS_DEVICES" ]; then
         # Take the first iOS device
         IOS_DEVICE=$(echo "$IOS_DEVICES" | head -n 1)
-        run_test_on_device "$IOS_DEVICE" "iOS"
+        run_integration_test_on_device "$IOS_DEVICE" "iOS"
     else
         echo -e "${RED}No iOS devices found. Skipping iOS tests.${NC}"
     fi
@@ -57,7 +75,7 @@ run_linux_tests() {
     if [ -n "$LINUX_DEVICES" ]; then
         # Take the first Linux device (usually just "linux")
         LINUX_DEVICE=$(echo "$LINUX_DEVICES" | head -n 1)
-        run_test_on_device "$LINUX_DEVICE" "Linux"
+        run_integration_test_file_by_file "$LINUX_DEVICE" "Linux"
     else
         echo -e "${RED}Linux desktop not available. Skipping Linux tests.${NC}"
     fi
@@ -70,7 +88,7 @@ run_macos_tests() {
     if [ -n "$MACOS_DEVICES" ]; then
         # Take the first macOS device (usually just "macos")
         MACOS_DEVICE=$(echo "$MACOS_DEVICES" | head -n 1)
-        run_test_on_device "$MACOS_DEVICE" "macOS"
+        run_integration_test_on_device "$MACOS_DEVICE" "macOS"
     else
         echo -e "${RED}macOS desktop not available. Skipping macOS tests.${NC}"
     fi
