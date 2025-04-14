@@ -39,7 +39,9 @@ final session = await OnnxRuntime.createSession(
   sessionOptions: OrtSessionOptions(
     intraOpNumThreads: 2,
     interOpNumThreads: 1,
-    enableCpuMemArena: true,
+    providers: ['CPU'],
+    useArena: true,
+    deviceId: 0,
   ),
 );
 
@@ -47,6 +49,13 @@ final session = await OnnxRuntime.createSession(
 print('Input names: ${session.inputNames}');
 print('Output names: ${session.outputNames}');
 ```
+
+* Optional: to get available providers
+
+  ```dart
+  final providers = await OnnxRuntime.getAvailableProviders();
+  print('Available providers: $providers');
+  ```
 
 ### Running Inference
 
@@ -109,19 +118,6 @@ final imageTensor = await OrtValue.fromList(
 ```dart
 // Convert to different data type
 final float16Tensor = await inputTensor.to(OrtDataType.float16);
-```
-
-### Device Placement
-
-```dart
-// Move tensor to specific device (if supported)
-try {
-  final gpuTensor = await inputTensor.toDevice(OrtDevice.cuda);
-  // Use GPU tensor
-} catch (e) {
-  print('GPU not available: $e');
-  // Fall back to CPU
-}
 ```
 
 ### Accessing Tensor Data

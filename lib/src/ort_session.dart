@@ -92,17 +92,27 @@ class OrtSession {
 }
 
 class OrtSessionOptions {
+  // Sets the number of threads used to parallelize the execution within nodes
   final int? intraOpNumThreads;
+  // Sets the number of threads used to parallelize the execution of the graph (across nodes)
   final int? interOpNumThreads;
-  final bool? enableCpuMemArena;
+  // set a list of providers, if one provider is not available, ORT will fallback to the next provider in the list
+  // for example: ["CUDA", "CPU"]
+  final List<String>? providers;
+  // arena allocator for memory management, default is true
+  final bool? useArena;
+  // set the device id for the session, default is 0
+  final int? deviceId;
 
-  OrtSessionOptions({this.intraOpNumThreads, this.interOpNumThreads, this.enableCpuMemArena});
+  OrtSessionOptions({this.intraOpNumThreads, this.interOpNumThreads, this.providers, this.useArena, this.deviceId});
 
   Map<String, dynamic> toMap() {
     return {
       if (intraOpNumThreads != null) 'intraOpNumThreads': intraOpNumThreads,
       if (interOpNumThreads != null) 'interOpNumThreads': interOpNumThreads,
-      if (enableCpuMemArena != null) 'enableCpuMemArena': enableCpuMemArena,
+      if (providers != null && providers!.isNotEmpty) 'providers': providers,
+      if (useArena != null) 'useArena': useArena,
+      if (deviceId != null) 'deviceId': deviceId,
     };
   }
 }

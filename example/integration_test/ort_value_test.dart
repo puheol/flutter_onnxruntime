@@ -245,43 +245,5 @@ void main() {
         await tensor.dispose();
       });
     });
-
-    group('Device transfer tests', () {
-      testWidgets('Device transfer test (if supported)', (WidgetTester tester) async {
-        final inputData = Float32List.fromList([1.0, 2.0, 3.0, 4.0]);
-        final shape = [4];
-
-        final tensor = await OrtValue.fromList(inputData, shape);
-        expect(tensor.device, OrtDevice.cpu);
-
-        // Try to move to a different device if available
-        // This might fail if the device is not available, so we wrap it in try-catch
-        try {
-          final deviceTensor = await tensor.toDevice(OrtDevice.cuda);
-          expect(deviceTensor.device, OrtDevice.cuda);
-          expect(deviceTensor.shape, shape);
-          expect(deviceTensor.dataType, tensor.dataType);
-
-          // Move back to CPU to verify data
-          final cpuTensor = await deviceTensor.toDevice(OrtDevice.cpu);
-          expect(cpuTensor.device, OrtDevice.cpu);
-
-          final retrievedData = await cpuTensor.asList();
-          expect(retrievedData.length, 4);
-          for (int i = 0; i < inputData.length; i++) {
-            expect(retrievedData[i], closeTo(inputData[i], 1e-5));
-          }
-
-          await deviceTensor.dispose();
-          await cpuTensor.dispose();
-        } catch (e) {
-          // If CUDA or other device is not available, this is expected to fail
-          // So we just print the error and continue
-          // print('Device transfer test skipped: $e');
-        }
-
-        await tensor.dispose();
-      });
-    });
   });
 }

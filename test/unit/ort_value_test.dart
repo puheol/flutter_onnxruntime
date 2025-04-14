@@ -54,7 +54,6 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
       'valueId': 'test_value_id_${DateTime.now().millisecondsSinceEpoch}',
       'dataType': dataType,
       'shape': shape,
-      'device': 'cpu',
     });
   }
 
@@ -67,7 +66,6 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
       'valueId': 'converted_$valueId',
       'dataType': targetType,
       'shape': [2, 2],
-      'device': 'cpu',
     });
   }
 
@@ -80,16 +78,6 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
     return Future.value({
       'data': [1.0, 2.0, 3.0, 4.0],
       'shape': [2, 2],
-    });
-  }
-
-  @override
-  Future<Map<String, dynamic>> moveOrtValueToDevice(String valueId, String targetDevice) {
-    return Future.value({
-      'valueId': valueId,
-      'dataType': 'float32',
-      'shape': [2, 2],
-      'device': targetDevice,
     });
   }
 
@@ -116,6 +104,9 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
   Future<List<Map<String, dynamic>>> getOutputInfo(String sessionId) {
     return Future.value([]);
   }
+
+  @override
+  Future<List<String>> getAvailableProviders() => Future.value(['CPU']);
 }
 
 void main() {
@@ -146,7 +137,6 @@ void main() {
       // Verify OrtValue properties
       expect(tensor.shape, testShape);
       expect(tensor.dataType, OrtDataType.float32);
-      expect(tensor.device, OrtDevice.cpu);
       expect(tensor.id, isNotEmpty);
     });
 
@@ -309,17 +299,6 @@ void main() {
       expect(convertedTensor.dataType, OrtDataType.int32);
       expect(convertedTensor.shape, [2, 2]);
     });
-
-    test('toDevice() should move tensor to a different device', () async {
-      // Create an OrtValue first
-      final tensor = await OrtValue.fromList(Float32List.fromList([1.0, 2.0, 3.0, 4.0]), [2, 2]);
-
-      // Move to a different device
-      final deviceTensor = await tensor.toDevice(OrtDevice.cuda);
-
-      // Verify properties
-      expect(deviceTensor.device, OrtDevice.cuda);
-    });
   });
 
   group('OrtValue data extraction', () {
@@ -362,7 +341,6 @@ void main() {
         'valueId': 'test_id',
         'dataType': 'float32',
         'shape': [2, 2],
-        'device': 'cpu',
       };
 
       final tensor = OrtValue.fromMap(map);
@@ -370,7 +348,6 @@ void main() {
       expect(tensor.id, 'test_id');
       expect(tensor.dataType, OrtDataType.float32);
       expect(tensor.shape, [2, 2]);
-      expect(tensor.device, OrtDevice.cpu);
     });
 
     test('fromMap should handle missing or invalid properties', () {
@@ -378,7 +355,6 @@ void main() {
         'valueId': 'test_id',
         // Missing dataType
         'shape': [], // Empty shape
-        'device': 'invalid_device',
       };
 
       final tensor = OrtValue.fromMap(map);
@@ -386,7 +362,6 @@ void main() {
       expect(tensor.id, 'test_id');
       expect(tensor.dataType, OrtDataType.float32); // Default
       expect(tensor.shape, isEmpty);
-      expect(tensor.device, OrtDevice.cpu); // Default
     });
   });
 }

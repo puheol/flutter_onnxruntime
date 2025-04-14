@@ -28,13 +28,10 @@ enum OrtDataType {
   bfloat16,
 }
 
-/// Represents a device in ONNX Runtime
-enum OrtDevice { cpu, cuda, tensorrt, openVINO }
-
 /// OrtValue represents a tensor or other data structure used for input/output in ONNX Runtime.
 ///
-/// This class manages memory for tensor data and provides methods for data type conversion
-/// and device transfer. It wraps the native OrtValue (C/C++) or OnnxTensor (Java) types from
+/// This class manages memory for tensor data and provides methods for data type conversion.
+/// It wraps the native OrtValue (C/C++) or OnnxTensor (Java) types from
 /// the ONNX Runtime API.
 class OrtValue {
   /// Unique identifier for this tensor in the native code
@@ -46,11 +43,8 @@ class OrtValue {
   /// Shape of the tensor as a list of dimensions
   final List<int> shape;
 
-  /// Device where the tensor is stored
-  final OrtDevice device;
-
   /// Private constructor
-  OrtValue._({required this.id, required this.dataType, required this.shape, this.device = OrtDevice.cpu});
+  OrtValue._({required this.id, required this.dataType, required this.shape});
 
   /// Creates an OrtValue from a map returned by the platform interface
   factory OrtValue.fromMap(Map<String, dynamic> map) {
@@ -61,10 +55,6 @@ class OrtValue {
         orElse: () => OrtDataType.float32,
       ),
       shape: List<int>.from(map['shape'] ?? []),
-      device: OrtDevice.values.firstWhere(
-        (dev) => dev.toString() == 'OrtDevice.${map['device']}',
-        orElse: () => OrtDevice.cpu,
-      ),
     );
   }
 
@@ -74,7 +64,7 @@ class OrtValue {
   // ignore: unintended_html_in_doc_comment
   /// Supported types include Float32List, Int32List, Int64List, Uint8List, List<bool>,
   // ignore: unintended_html_in_doc_comment
-  /// and their corresponding Dart List<num> types. The default device is cpu.
+  /// and their corresponding Dart List<num> types.
   ///
   /// [data] is the data to create the tensor from (any supported list type)
   /// [shape] is the shape of the tensor
@@ -109,17 +99,6 @@ class OrtValue {
   /// [targetType] is the target data type to convert to
   Future<OrtValue> to(OrtDataType targetType) async {
     final result = await FlutterOnnxruntimePlatform.instance.convertOrtValue(id, targetType.toString().split('.').last);
-    return OrtValue.fromMap(result);
-  }
-
-  /// Move this tensor to a different device
-  ///
-  /// [targetDevice] is the target device to move to
-  Future<OrtValue> toDevice(OrtDevice targetDevice) async {
-    final result = await FlutterOnnxruntimePlatform.instance.moveOrtValueToDevice(
-      id,
-      targetDevice.toString().split('.').last,
-    );
     return OrtValue.fromMap(result);
   }
 

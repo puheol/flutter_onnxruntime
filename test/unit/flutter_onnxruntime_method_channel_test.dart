@@ -73,6 +73,8 @@ void main() {
           ];
         case 'closeSession':
           return null;
+        case 'getAvailableProviders':
+          return ['CPU', 'CUDA', 'CoreML'];
         default:
           return null;
       }
@@ -103,14 +105,12 @@ void main() {
         'valueId': 'test_value_1',
         'dataType': 'float32',
         'shape': [1, 3],
-        'device': 'cpu',
       });
 
       final ortValue2 = OrtValue.fromMap({
         'valueId': 'test_value_2',
         'dataType': 'float32',
         'shape': [1, 3],
-        'device': 'cpu',
       });
 
       final inputs = {'input1': ortValue1, 'input2': ortValue2};
@@ -208,14 +208,12 @@ void main() {
         'valueId': 'test_value_1',
         'dataType': 'float32',
         'shape': [1, 3],
-        'device': 'cpu',
       });
 
       final ortValue2 = OrtValue.fromMap({
         'valueId': 'test_value_2',
         'dataType': 'float32',
         'shape': [1, 3],
-        'device': 'cpu',
       });
 
       // Run inference with the mock OrtValues
@@ -227,6 +225,25 @@ void main() {
       expect(result['output1'][0], 'output_value_1');
       expect(result['output1'][1], 'float32');
       expect(result['output1'][2], [3]);
+    });
+
+    test('getAvailableProviders returns list of providers', () async {
+      // Set up a mock implementation for the method channel
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+        MethodCall methodCall,
+      ) async {
+        if (methodCall.method == 'getAvailableProviders') {
+          return ['CPU', 'CUDA', 'CoreML'];
+        }
+        return null;
+      });
+
+      final providers = await platform.getAvailableProviders();
+
+      expect(providers, isNotNull);
+      expect(providers, isA<List<String>>());
+      expect(providers.length, 3);
+      expect(providers, containsAll(['CPU', 'CUDA', 'CoreML']));
     });
   });
 }

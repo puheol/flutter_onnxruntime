@@ -7,6 +7,23 @@ void main() {
   // Initialize integration test binding
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
+  group('Environment setup', () {
+    late OnnxRuntime onnxRuntime;
+
+    setUpAll(() async {
+      onnxRuntime = OnnxRuntime();
+    });
+
+    testWidgets('Available providers', (WidgetTester tester) async {
+      try {
+        final providers = await onnxRuntime.getAvailableProviders();
+        expect(providers, isNotNull);
+        expect(providers.isNotEmpty, true);
+      } catch (e) {
+        fail('Failed to get available providers: $e');
+      }
+    });
+  });
   group('ONNX Runtime Integration Tests', () {
     late OnnxRuntime onnxRuntime;
     late OrtSession session;

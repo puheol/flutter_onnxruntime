@@ -33,6 +33,11 @@ abstract class FlutterOnnxruntimePlatform extends PlatformInterface {
     throw UnimplementedError('createSession() has not been implemented.');
   }
 
+  /// Get the available providers
+  Future<List<String>> getAvailableProviders() {
+    throw UnimplementedError('getAvailableProviders() has not been implemented.');
+  }
+
   /// Run inference on a session
   ///
   /// [sessionId] is the ID of the session to run inference on
@@ -88,8 +93,6 @@ abstract class FlutterOnnxruntimePlatform extends PlatformInterface {
   /// [sourceType] is the source data type (e.g., 'float32', 'int32')
   /// [data] is the data to create the tensor from
   /// [shape] is the shape of the tensor
-  /// [targetType] is the target data type (e.g., 'float32', 'float16')
-  /// [device] is the target device (e.g., 'cpu', 'cuda')
   Future<Map<String, dynamic>> createOrtValue(String sourceType, dynamic data, List<int> shape) {
     throw UnimplementedError('createOrtValue() has not been implemented.');
   }
@@ -100,14 +103,6 @@ abstract class FlutterOnnxruntimePlatform extends PlatformInterface {
   /// [targetType] is the target data type (e.g., 'float32', 'float16')
   Future<Map<String, dynamic>> convertOrtValue(String valueId, String targetType) {
     throw UnimplementedError('convertOrtValue() has not been implemented.');
-  }
-
-  /// Moves an OrtValue to a different device
-  ///
-  /// [valueId] is the ID of the OrtValue to move
-  /// [targetDevice] is the target device (e.g., 'cpu', 'cuda')
-  Future<Map<String, dynamic>> moveOrtValueToDevice(String valueId, String targetDevice) {
-    throw UnimplementedError('moveOrtValueToDevice() has not been implemented.');
   }
 
   /// Gets the data from an OrtValue

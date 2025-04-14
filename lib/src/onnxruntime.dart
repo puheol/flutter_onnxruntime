@@ -40,4 +40,9 @@ class OnnxRuntime {
     // Create session with the file path
     return createSession(filePath, options: options);
   }
+
+  /// Get the available providers
+  Future<List<String>> getAvailableProviders() async {
+    return FlutterOnnxruntimePlatform.instance.getAvailableProviders();
+  }
 }

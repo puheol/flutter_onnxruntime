@@ -34,6 +34,18 @@ class MethodChannelFlutterOnnxruntime extends FlutterOnnxruntimePlatform {
     return _convertMapToStringDynamic(result ?? {});
   }
 
+  /// Get the available providers
+  @override
+  Future<List<String>> getAvailableProviders() async {
+    final result = await methodChannel.invokeMethod<List<Object?>>('getAvailableProviders');
+    return result?.map((item) => item.toString()).toList() ?? [];
+  }
+
+  /// Run inference on a session
+  ///
+  /// [sessionId] is the ID of the session to run inference on
+  /// [inputs] is a map of input names to OrtValue objects
+  /// [runOptions] is an optional map of run options
   @override
   Future<Map<String, dynamic>> runInference(
     String sessionId,
@@ -96,15 +108,6 @@ class MethodChannelFlutterOnnxruntime extends FlutterOnnxruntimePlatform {
     final result = await methodChannel.invokeMethod<Map<Object?, Object?>>('convertOrtValue', {
       'valueId': valueId,
       'targetType': targetType,
-    });
-    return _convertMapToStringDynamic(result ?? {});
-  }
-
-  @override
-  Future<Map<String, dynamic>> moveOrtValueToDevice(String valueId, String targetDevice) async {
-    final result = await methodChannel.invokeMethod<Map<Object?, Object?>>('moveOrtValueToDevice', {
-      'valueId': valueId,
-      'targetDevice': targetDevice,
     });
     return _convertMapToStringDynamic(result ?? {});
   }

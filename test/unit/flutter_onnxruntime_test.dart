@@ -99,10 +99,10 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
   });
 
   @override
-  Future<Map<String, dynamic>> moveOrtValueToDevice(String valueId, String targetDevice) => Future.value({});
+  Future<void> releaseOrtValue(String valueId) => Future.value();
 
   @override
-  Future<void> releaseOrtValue(String valueId) => Future.value();
+  Future<List<String>> getAvailableProviders() => Future.value(['CPU']);
 }
 
 void main() {
@@ -139,7 +139,7 @@ void main() {
     });
 
     test('createSession with options passes options correctly', () async {
-      final options = OrtSessionOptions(intraOpNumThreads: 2, interOpNumThreads: 1, enableCpuMemArena: true);
+      final options = OrtSessionOptions(intraOpNumThreads: 2, interOpNumThreads: 1);
 
       final session = await onnxRuntime.createSession('test_model.onnx', options: options);
 
@@ -151,6 +151,14 @@ void main() {
     // We're verifying the basic function structure here
     test('createSessionFromAsset function structure is correct', () {
       expect(onnxRuntime.createSessionFromAsset, isA<Function>());
+    });
+
+    test('getAvailableProviders returns list of providers', () async {
+      final providers = await onnxRuntime.getAvailableProviders();
+
+      expect(providers, isNotNull);
+      expect(providers, isA<List<String>>());
+      expect(providers, contains('CPU'));
     });
   });
 
@@ -166,14 +174,12 @@ void main() {
       'valueId': 'test_value_1',
       'dataType': 'float32',
       'shape': [1, 3],
-      'device': 'cpu',
     });
 
     final ortValue2 = OrtValue.fromMap({
       'valueId': 'test_value_2',
       'dataType': 'float32',
       'shape': [1, 3],
-      'device': 'cpu',
     });
 
     test('run performs inference with correct inputs', () async {
@@ -279,13 +285,12 @@ void main() {
 
   group('Options classes', () {
     test('OrtSessionOptions toMap converts options to map correctly', () {
-      final options = OrtSessionOptions(intraOpNumThreads: 4, interOpNumThreads: 2, enableCpuMemArena: true);
+      final options = OrtSessionOptions(intraOpNumThreads: 4, interOpNumThreads: 2);
 
       final map = options.toMap();
 
       expect(map['intraOpNumThreads'], 4);
       expect(map['interOpNumThreads'], 2);
-      expect(map['enableCpuMemArena'], true);
     });
 
     test('OrtRunOptions toMap converts options to map correctly', () {
@@ -304,7 +309,6 @@ void main() {
 
       expect(map.containsKey('intraOpNumThreads'), false);
       expect(map.containsKey('interOpNumThreads'), false);
-      expect(map.containsKey('enableCpuMemArena'), false);
     });
   });
 }
