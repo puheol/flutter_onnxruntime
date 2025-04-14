@@ -68,6 +68,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
     }
   }
 
+  // swiftlint:disable:next cyclomatic_complexity
   private func handleCreateSession(call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = call.arguments as? [String: Any],
           let modelPath = args["modelPath"] as? String else {
@@ -80,7 +81,13 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
 
       if let options = args["sessionOptions"] as? [String: Any] {
         if let intraOpNumThreads = options["intraOpNumThreads"] as? Int {
-          try sessionOptions.setIntraOpNumThreads(Int32(intraOpNumThreads))
+          do {
+            try sessionOptions.setIntraOpNumThreads(Int32(intraOpNumThreads))
+          } catch {
+            result(FlutterError(code: "SESSION_OPTIONS_ERROR",
+              message: "Failed to set intraOpNumThreads: \(error.localizedDescription)", details: nil))
+            return
+          }
         }
 
         // Note: 14/04/25 interOpNumThreads is not supported in onnxruntime-objc
@@ -90,15 +97,26 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
 
         // get providers from options
         if let providers = options["providers"] as? [String] {
-          // switch-case to config each providers
           for provider in providers {
             switch provider {
             case "CPU":
               continue
             case "CORE_ML":
-              sessionOptions.appendCoreMLExecutionProvider()
+              do {
+                try sessionOptions.appendCoreMLExecutionProvider()
+              } catch {
+                result(FlutterError(code: "SESSION_OPTIONS_ERROR",
+                  message: "Failed to append CoreML execution provider: \(error.localizedDescription)", details: nil))
+                return
+              }
             case "XNNPACK":
-              sessionOptions.appendXnnpackExecutionProvider(ORTXnnpackExecutionProviderOptions())
+              do {
+                try sessionOptions.appendXnnpackExecutionProvider(with: ORTXnnpackExecutionProviderOptions())
+              } catch {
+                result(FlutterError(code: "SESSION_OPTIONS_ERROR",
+                  message: "Failed to append XNNPACK execution provider: \(error.localizedDescription)", details: nil))
+                return
+              }
             default:
               continue
             }
