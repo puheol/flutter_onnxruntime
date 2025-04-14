@@ -33,6 +33,11 @@ abstract class FlutterOnnxruntimePlatform extends PlatformInterface {
     throw UnimplementedError('createSession() has not been implemented.');
   }
 
+  /// Get the available providers
+  Future<List<String>> getAvailableProviders() {
+    throw UnimplementedError('getAvailableProviders() has not been implemented.');
+  }
+
   /// Run inference on a session
   ///
   /// [sessionId] is the ID of the session to run inference on

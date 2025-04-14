@@ -6,6 +6,7 @@ import ai.onnxruntime.OnnxValue
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtException
 import ai.onnxruntime.OrtSession
+import ai.onnxruntime.providers.OrtTensorRTProviderOptions
 import android.util.Log
 import androidx.annotation.NonNull
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -171,6 +172,75 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                         ortSessionOptions.setInterOpNumThreads((sessionOptions["interOpNumThreads"] as Number).toInt())
                     }
 
+                    // get list of providers, default is empty list
+                    var providers = emptyList<String>()
+                    if (sessionOptions.containsKey("providers")) {
+                        providers = sessionOptions["providers"] as List<String>
+                    }
+                    // if providers is empty, add CPU provider
+                    if (providers.isEmpty()) {
+                        providers = listOf("CPU")
+                    }
+                    var useArena = true
+                    if (sessionOptions.containsKey("useArena")) {
+                        useArena = sessionOptions["useArena"] as Boolean
+                    }
+                    ortSessionOptions.setCPUArenaAllocator(useArena)
+                    var deviceId = 0
+                    if (sessionOptions.containsKey("deviceId")) {
+                        deviceId = sessionOptions["deviceId"] as Int
+                    }
+                    // loop through the providers and add them to the ortSessionOptions
+                    for (provider in providers) {
+                        // add providers with default parameters
+                        when (provider) {
+                            "ACL" -> {
+                                ortSessionOptions.addACL(true)
+                            }
+                            "ARM_NN" -> {
+                                ortSessionOptions.addArmNN(useArena)
+                            }
+                            "CORE_ML" -> {
+                                ortSessionOptions.addCoreML()
+                            }
+                            "CPU" -> {
+                                ortSessionOptions.addCPU(useArena)
+                            }
+                            "CUDA" -> {
+                                ortSessionOptions.addCUDA(deviceId)
+                            }
+                            "DIRECT_ML" -> {
+                                ortSessionOptions.addDirectML(deviceId)
+                            }
+                            "DNNL" -> {
+                                ortSessionOptions.addDnnl(useArena)
+                            }
+                            "NNAPI" -> {
+                                ortSessionOptions.addNnapi()
+                            }
+                            "OPEN_VINO" -> {
+                                ortSessionOptions.addOpenVINO(deviceId.toString())
+                            }
+                            "QNN" -> {
+                                ortSessionOptions.addQnn(mapOf())
+                            }
+                            "ROCM" -> {
+                                ortSessionOptions.addROCM(deviceId)
+                            }
+                            "TENSOR_RT" -> {
+                                ortSessionOptions.addTensorrt(OrtTensorRTProviderOptions(deviceId))
+                            }
+                            "XNNPACK" -> {
+                                // use an empty map as the parameter
+                                ortSessionOptions.addXnnpack(mapOf())
+                            }
+                            else -> {
+                                result.error("INVALID_PROVIDER", "Provider $provider is not supported", null)
+                                return
+                            }
+                        }
+                    }
+
                     // Load model from file path
                     val modelFile = File(modelPath)
                     if (!modelFile.exists()) {
@@ -198,6 +268,11 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                 } catch (e: Exception) {
                     result.error("GENERIC_ERROR", e.message, e.stackTraceToString())
                 }
+            }
+            "getAvailableProviders" -> {
+                val providers = OrtEnvironment.getAvailableProviders()
+                val providerList = providers.map { it.toString() }.toList()
+                result.success(providerList)
             }
             "runInference" -> {
                 try {
