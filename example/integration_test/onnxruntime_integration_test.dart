@@ -1,4 +1,6 @@
 // ONNX Runtime integration test
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
@@ -157,6 +159,10 @@ void main() {
     });
 
     testWidgets('Run inference with run options and terminate', (WidgetTester tester) async {
+      // Skip the test for iOS and macOS as terminate is not supported
+      if (Platform.isIOS || Platform.isMacOS) {
+        return; // Skip the test
+      }
       final runOptions = OrtRunOptions(logSeverityLevel: 1, logVerbosityLevel: 1, terminate: true);
       inputs = {
         'A': await OrtValue.fromList([3.0], [1]),

@@ -178,6 +178,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
     result(providers)
   }
 
+  // swiftlint:disable:next cyclomatic_complexity
   private func handleRunInference(call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = call.arguments as? [String: Any],
           let sessionId = args["sessionId"] as? String,
@@ -189,9 +190,9 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
     do {
       // Get run options if provided
       let optionsDict = args["runOptions"] as? [String: Any] ?? [:]
-      
+
       // Create ORTRunOptions if options are provided
-      var runOptions: ORTRunOptions? = nil
+      var runOptions: ORTRunOptions?
       if !optionsDict.isEmpty {
         runOptions = try ORTRunOptions()
 
@@ -209,6 +210,8 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
           loggingLevel = ORTLoggingLevel.error
         case 4:
           loggingLevel = ORTLoggingLevel.fatal
+        default:
+          loggingLevel = ORTLoggingLevel.warning
         }
         try runOptions?.setLogSeverityLevel(loggingLevel)
       }
