@@ -692,7 +692,6 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                             "valueId" to valueId,
                             "dataType" to sourceType,
                             "shape" to shape,
-                            "device" to "cpu",
                         )
 
                     result.success(tensorInfo)
@@ -874,55 +873,16 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                     val newValueId = id
 
                     // Return tensor information
-                    // Assuming CPU device for now
                     val tensorInfo =
                         mapOf(
                             "valueId" to newValueId,
                             "dataType" to targetType,
                             "shape" to shape.toList(),
-                            "device" to "cpu",
                         )
 
                     result.success(tensorInfo)
                 } catch (e: Exception) {
                     result.error("CONVERSION_ERROR", e.message, e.stackTraceToString())
-                }
-            }
-            "moveOrtValueToDevice" -> {
-                try {
-                    val valueId = call.argument<String>("valueId")
-                    val targetDevice = call.argument<String>("targetDevice")
-
-                    if (valueId == null || targetDevice == null) {
-                        result.error("INVALID_ARGS", "Missing required arguments", null)
-                        return
-                    }
-
-                    val tensor = ortValues[valueId]
-                    if (tensor == null) {
-                        result.error("INVALID_VALUE", "OrtValue with ID $valueId not found", null)
-                        return
-                    }
-
-                    // Currently, we only support CPU device in this implementation
-                    // For GPU support, you would need to implement device transfer logic
-                    if (targetDevice != "cpu") {
-                        result.error("UNSUPPORTED_DEVICE", "Only CPU device is supported in this implementation", null)
-                        return
-                    }
-
-                    // Return the same tensor since we're already on CPU
-                    val tensorInfo =
-                        mapOf(
-                            "valueId" to valueId,
-                            "dataType" to (if (tensor is OnnxTensor) tensor.info.type.toString().lowercase() else "unknown"),
-                            "shape" to (if (tensor is OnnxTensor) tensor.info.shape.toList() else emptyList<Int>()),
-                            "device" to "cpu",
-                        )
-
-                    result.success(tensorInfo)
-                } catch (e: Exception) {
-                    result.error("DEVICE_TRANSFER_ERROR", e.message, e.stackTraceToString())
                 }
             }
             "getOrtValueData" -> {

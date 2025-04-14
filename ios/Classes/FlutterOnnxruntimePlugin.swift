@@ -57,8 +57,6 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
       handleCreateOrtValue(call, result: result)
     case "convertOrtValue":
       handleConvertOrtValue(call, result: result)
-    case "moveOrtValueToDevice":
-      handleMoveOrtValueToDevice(call, result: result)
     case "getOrtValueData":
       handleGetOrtValueData(call, result: result)
     case "releaseOrtValue":
@@ -543,7 +541,6 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
         "valueId": valueId,
         "dataType": sourceType,
         "shape": shape,
-        "device": "cpu"
       ]
 
       result(tensorInfo)
@@ -584,7 +581,6 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
           "valueId": newValueId,
           "dataType": targetType,
           "shape": shape,
-          "device": "cpu"
         ]
 
         result(resultInfo)
@@ -701,7 +697,6 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
           "valueId": newValueId,
           "dataType": targetType,
           "shape": shape,
-          "device": "cpu"
         ]
 
         result(resultInfo)
@@ -724,50 +719,11 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
         "valueId": newValueId,
         "dataType": targetType,
         "shape": shape,
-        "device": "cpu"
       ]
 
       result(resultInfo)
     } catch {
       result(FlutterError(code: "CONVERSION_ERROR", message: error.localizedDescription, details: nil))
-    }
-  }
-
-  private func handleMoveOrtValueToDevice(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    guard let args = call.arguments as? [String: Any],
-          let valueId = args["valueId"] as? String,
-          let targetDevice = args["targetDevice"] as? String else {
-      result(FlutterError(code: "INVALID_ARGS", message: "Missing required arguments", details: nil))
-      return
-    }
-
-    guard let tensor = ortValues[valueId] else {
-      result(FlutterError(code: "INVALID_VALUE", message: "OrtValue with ID \(valueId) not found", details: nil))
-      return
-    }
-
-    // Currently, we only support CPU device in this implementation
-    if targetDevice != "cpu" {
-      result(FlutterError(code: "UNSUPPORTED_DEVICE", message: "Only CPU device is supported in this implementation", details: nil))
-      return
-    }
-
-    do {
-      // Get tensor information
-      let tensorInfo = try tensor.tensorTypeAndShapeInfo()
-      let shape = try tensorInfo.shape.map { Int(truncating: $0) }
-
-      // Return tensor information (no actual device transfer needed as we're staying on CPU)
-      let resultInfo: [String: Any] = [
-        "valueId": valueId,
-        "dataType": _getDataTypeName(from: tensorInfo.elementType),
-        "shape": shape,
-        "device": "cpu"
-      ]
-
-      result(resultInfo)
-    } catch {
-      result(FlutterError(code: "DEVICE_TRANSFER_ERROR", message: error.localizedDescription, details: nil))
     }
   }
 

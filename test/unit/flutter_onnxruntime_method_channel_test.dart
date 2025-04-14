@@ -105,14 +105,12 @@ void main() {
         'valueId': 'test_value_1',
         'dataType': 'float32',
         'shape': [1, 3],
-        'device': 'cpu',
       });
 
       final ortValue2 = OrtValue.fromMap({
         'valueId': 'test_value_2',
         'dataType': 'float32',
         'shape': [1, 3],
-        'device': 'cpu',
       });
 
       final inputs = {'input1': ortValue1, 'input2': ortValue2};
@@ -210,14 +208,12 @@ void main() {
         'valueId': 'test_value_1',
         'dataType': 'float32',
         'shape': [1, 3],
-        'device': 'cpu',
       });
 
       final ortValue2 = OrtValue.fromMap({
         'valueId': 'test_value_2',
         'dataType': 'float32',
         'shape': [1, 3],
-        'device': 'cpu',
       });
 
       // Run inference with the mock OrtValues

@@ -99,9 +99,6 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
   });
 
   @override
-  Future<Map<String, dynamic>> moveOrtValueToDevice(String valueId, String targetDevice) => Future.value({});
-
-  @override
   Future<void> releaseOrtValue(String valueId) => Future.value();
 
   @override
@@ -177,14 +174,12 @@ void main() {
       'valueId': 'test_value_1',
       'dataType': 'float32',
       'shape': [1, 3],
-      'device': 'cpu',
     });
 
     final ortValue2 = OrtValue.fromMap({
       'valueId': 'test_value_2',
       'dataType': 'float32',
       'shape': [1, 3],
-      'device': 'cpu',
     });
 
     test('run performs inference with correct inputs', () async {

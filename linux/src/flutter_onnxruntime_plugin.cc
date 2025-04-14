@@ -56,7 +56,6 @@ static FlValue *get_output_info(FlutterOnnxruntimePlugin *self, FlValue *args);
 // OrtValue operations
 static FlValue *create_ort_value(FlutterOnnxruntimePlugin *self, FlValue *args);
 static FlValue *convert_ort_value(FlutterOnnxruntimePlugin *self, FlValue *args);
-static FlValue *move_ort_value_to_device(FlutterOnnxruntimePlugin *self, FlValue *args);
 static FlValue *get_ort_value_data(FlutterOnnxruntimePlugin *self, FlValue *args);
 static FlValue *release_ort_value(FlutterOnnxruntimePlugin *self, FlValue *args);
 
@@ -148,10 +147,6 @@ static void flutter_onnxruntime_plugin_handle_method_call(FlutterOnnxruntimePlug
     fl_value_unref(result);
   } else if (strcmp(method, "convertOrtValue") == 0) {
     FlValue *result = convert_ort_value(self, args);
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
-    fl_value_unref(result);
-  } else if (strcmp(method, "moveOrtValueToDevice") == 0) {
-    FlValue *result = move_ort_value_to_device(self, args);
     response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
     fl_value_unref(result);
   } else if (strcmp(method, "getOrtValueData") == 0) {
@@ -1091,22 +1086,6 @@ static FlValue *convert_ort_value(FlutterOnnxruntimePlugin *self, FlValue *args)
     fl_value_append_take(shape_list, fl_value_new_int(dim));
   }
   fl_value_set_string_take(result, "shape", shape_list);
-
-  return fl_value_ref(result);
-}
-
-static FlValue *move_ort_value_to_device(FlutterOnnxruntimePlugin *self, FlValue *args) {
-  // Return a new value ID for the moved tensor
-  std::lock_guard<std::mutex> lock(self->mutex);
-
-  std::string value_id = self->tensor_manager->generateTensorId();
-
-  g_autoptr(FlValue) result = fl_value_new_map();
-  fl_value_set_string_take(result, "valueId", fl_value_new_string(value_id.c_str()));
-  fl_value_set_string_take(result, "device", fl_value_new_string("CPU"));
-
-  // Add to values map (with null pointer for now)
-  self->values[value_id] = nullptr;
 
   return fl_value_ref(result);
 }

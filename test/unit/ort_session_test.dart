@@ -105,7 +105,7 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
 
   @override
   Future<Map<String, dynamic>> createOrtValue(String sourceType, dynamic data, List<int> shape) {
-    return Future.value({'valueId': 'test_value_id', 'dataType': sourceType, 'shape': shape, 'device': 'cpu'});
+    return Future.value({'valueId': 'test_value_id', 'dataType': sourceType, 'shape': shape});
   }
 
   @override
@@ -116,9 +116,6 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
     'data': [1.0, 2.0, 3.0, 4.0],
     'shape': [2, 2],
   });
-
-  @override
-  Future<Map<String, dynamic>> moveOrtValueToDevice(String valueId, String targetDevice) => Future.value({});
 
   @override
   Future<void> releaseOrtValue(String valueId) => Future.value();
@@ -242,14 +239,12 @@ void main() {
         'valueId': 'test_value_1',
         'dataType': 'float32',
         'shape': [1, 3],
-        'device': 'cpu',
       });
 
       final ortValue2 = OrtValue.fromMap({
         'valueId': 'test_value_2',
         'dataType': 'float32',
         'shape': [1, 3],
-        'device': 'cpu',
       });
 
       final inputs = {'input1': ortValue1, 'input2': ortValue2};
@@ -271,7 +266,6 @@ void main() {
         'valueId': 'test_value_id',
         'dataType': 'float32',
         'shape': [1, 3],
-        'device': 'cpu',
       });
 
       final outputs = await session.run({'input1': ortValue});
@@ -296,7 +290,6 @@ void main() {
         'valueId': 'test_value_id',
         'dataType': 'float32',
         'shape': [2, 2],
-        'device': 'cpu',
       });
 
       // Use the OrtValue in session.run()
@@ -318,7 +311,6 @@ void main() {
         'valueId': 'test_value_id',
         'dataType': 'float32',
         'shape': [2, 2],
-        'device': 'cpu',
       });
 
       // This should work fine
@@ -334,14 +326,12 @@ void main() {
         'valueId': 'float32_value',
         'dataType': 'float32',
         'shape': [2, 2],
-        'device': 'cpu',
       });
 
       final int32Value = OrtValue.fromMap({
         'valueId': 'int32_value',
         'dataType': 'int32',
         'shape': [3, 3],
-        'device': 'cpu',
       });
 
       await session.run({'input1': float32Value, 'input2': int32Value});
@@ -366,7 +356,6 @@ void main() {
         'valueId': 'test_input_value',
         'dataType': 'float32',
         'shape': [1, 3],
-        'device': 'cpu',
       });
 
       // Run inference

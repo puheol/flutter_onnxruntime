@@ -54,7 +54,6 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
       'valueId': 'test_value_id_${DateTime.now().millisecondsSinceEpoch}',
       'dataType': sourceType,
       'shape': shape,
-      'device': 'cpu',
     });
   }
 
@@ -106,7 +105,6 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
       'valueId': valueId,
       'dataType': targetType,
       'shape': [2, 2],
-      'device': 'cpu',
     });
   }
 
@@ -115,16 +113,6 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
     return Future.value({
       'data': [1.0, 2.0, 3.0, 4.0],
       'shape': [2, 2],
-    });
-  }
-
-  @override
-  Future<Map<String, dynamic>> moveOrtValueToDevice(String valueId, String targetDevice) {
-    return Future.value({
-      'valueId': valueId,
-      'dataType': 'float32',
-      'shape': [2, 2],
-      'device': targetDevice,
     });
   }
 
@@ -149,7 +137,6 @@ class ConversionTrackingMock extends MockFlutterOnnxruntimePlatform {
       'valueId': 'converted_$valueId',
       'dataType': targetType,
       'shape': [2, 2],
-      'device': 'cpu',
     });
   }
 }
