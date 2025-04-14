@@ -186,11 +186,33 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
       return
     }
 
-    // Get run options if provided
-    // TODO: process and pass the runOptions to session.run()
-    let runOptions = args["runOptions"] as? [String: Any] ?? [:]
-
     do {
+      // Get run options if provided
+      let optionsDict = args["runOptions"] as? [String: Any] ?? [:]
+      
+      // Create ORTRunOptions if options are provided
+      var runOptions: ORTRunOptions? = nil
+      if !optionsDict.isEmpty {
+        runOptions = try ORTRunOptions()
+
+        let logSeverityLevel = optionsDict["logSeverityLevel"] as? Int
+        // switch on logSeverityLevel to assign a loggingLevel variable
+        var loggingLevel: ORTLoggingLevel = ORTLoggingLevel.warning
+        switch logSeverityLevel {
+        case 0:
+          loggingLevel = ORTLoggingLevel.verbose
+        case 1:
+          loggingLevel = ORTLoggingLevel.info
+        case 2:
+          loggingLevel = ORTLoggingLevel.warning
+        case 3:
+          loggingLevel = ORTLoggingLevel.error
+        case 4:
+          loggingLevel = ORTLoggingLevel.fatal
+        }
+        try runOptions?.setLogSeverityLevel(loggingLevel)
+      }
+
       // Get session
       guard let session = sessions[sessionId] else {
         throw OrtError.flutterError(FlutterError(code: "INVALID_SESSION", message: "Session not found", details: nil))
@@ -217,8 +239,8 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
       // Get output names
       let outputNames = try session.outputNames()
 
-      // Run inference with prepared output containers
-      let outputs = try session.run(withInputs: ortInputs, outputNames: Set(outputNames), runOptions: nil)
+      // Run inference with prepared output containers and run options if available
+      let outputs = try session.run(withInputs: ortInputs, outputNames: Set(outputNames), runOptions: runOptions)
 
       // store outputs in ortValues dictionary and return metadata in Flutter format
       var flutterOutputs: [String: Any] = [:]
