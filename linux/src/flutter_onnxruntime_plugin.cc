@@ -46,6 +46,7 @@ static FlValue *get_platform_version();
 
 // Session management
 static FlValue *create_session(FlutterOnnxruntimePlugin *self, FlValue *args);
+static FlValue *get_available_providers(FlutterOnnxruntimePlugin *self, FlValue *args);
 static FlValue *run_inference(FlutterOnnxruntimePlugin *self, FlValue *args);
 static FlValue *close_session(FlutterOnnxruntimePlugin *self, FlValue *args);
 static FlValue *get_metadata(FlutterOnnxruntimePlugin *self, FlValue *args);
@@ -115,6 +116,10 @@ static void flutter_onnxruntime_plugin_handle_method_call(FlutterOnnxruntimePlug
     fl_value_unref(result);
   } else if (strcmp(method, "createSession") == 0) {
     FlValue *result = create_session(self, args);
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
+    fl_value_unref(result);
+  } else if (strcmp(method, "getAvailableProviders") == 0) {
+    FlValue *result = get_available_providers(self, args);
     response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
     fl_value_unref(result);
   } else if (strcmp(method, "runInference") == 0) {
@@ -204,6 +209,113 @@ static FlValue *create_session(FlutterOnnxruntimePlugin *self, FlValue *args) {
     if (inter_threads_val != options_map.end() && fl_value_get_type(inter_threads_val->second) == FL_VALUE_TYPE_INT) {
       session_options.SetInterOpNumThreads(fl_value_get_int(inter_threads_val->second));
     }
+
+    // get the device id, if not provided, set to 0
+    int device_id = 0;
+    auto device_id_val = options_map.find("deviceId");
+    if (device_id_val != options_map.end() && fl_value_get_type(device_id_val->second) == FL_VALUE_TYPE_INT) {
+      device_id = fl_value_get_int(device_id_val->second);
+    }
+
+    // // Extract useArena option if provided
+    // auto use_arena_val = options_map.find("useArena");
+    // if (use_arena_val != options_map.end() && fl_value_get_type(use_arena_val->second) == FL_VALUE_TYPE_BOOL) {
+    //     bool use_arena = fl_value_get_bool(use_arena_val->second);
+    //     // use areana for memory management
+    // }
+
+    // Handle providers
+    auto providers_val = options_map.find("providers");
+    std::vector<std::string> providers;
+    if (providers_val != options_map.end() && fl_value_get_type(providers_val->second) == FL_VALUE_TYPE_LIST) {
+      FlValue *providers_list = providers_val->second;
+      size_t num_providers = fl_value_get_length(providers_list);
+      for (size_t i = 0; i < num_providers; i++) {
+        FlValue *provider_value = fl_value_get_list_value(providers_list, i);
+        if (fl_value_get_type(provider_value) == FL_VALUE_TYPE_STRING) {
+          providers.push_back(fl_value_get_string(provider_value));
+        }
+      }
+    }
+
+    // Default to CPU provider if no providers are specified
+    if (providers.empty()) {
+      providers.push_back("CPUExecutionProvider");
+    }
+
+    // Set providers in session options
+    for (const auto &provider : providers) {
+      if (provider == "CPUExecutionProvider") {
+        continue;
+
+      } else if (provider == "CUDAExecutionProvider") {
+        OrtCUDAProviderOptionsV2 *cuda_options = nullptr;
+        OrtStatus *status = Ort::GetApi().CreateCUDAProviderOptions(&cuda_options);
+        if (status != nullptr) {
+          // Handle error in creating CUDA provider options
+          g_autoptr(FlValue) result = fl_value_new_map();
+          fl_value_set_string_take(result, "error", fl_value_new_string("Failed to create CUDA provider options"));
+          return fl_value_ref(result);
+        }
+
+        // follow the example at
+        // https://onnxruntime.ai/docs/execution-providers/CUDA-ExecutionProvider.html#using-v2-provider-options-struct
+        std::vector<const char *> keys{"device_id"};
+        std::vector<const char *> values{"0"};
+        status = Ort::GetApi().UpdateCUDAProviderOptions(cuda_options, keys.data(), values.data(), keys.size());
+        if (status != nullptr) {
+          // Handle error in creating CUDA provider options
+          g_autoptr(FlValue) result = fl_value_new_map();
+          fl_value_set_string_take(result, "error", fl_value_new_string("Failed to update CUDA provider options"));
+          return fl_value_ref(result);
+        }
+
+        // Append CUDA execution provider to session options
+        status = Ort::GetApi().SessionOptionsAppendExecutionProvider_CUDA_V2(session_options, cuda_options);
+        if (status != nullptr) {
+          // Handle error in appending CUDA execution provider
+          g_autoptr(FlValue) result = fl_value_new_map();
+          fl_value_set_string_take(result, "error", fl_value_new_string("Failed to append CUDA execution provider"));
+          return fl_value_ref(result);
+        }
+        Ort::GetApi().ReleaseCUDAProviderOptions(cuda_options); // Clean up options after use
+
+      } else if (provider == "TensorrtExecutionProvider") {
+        OrtTensorRTProviderOptionsV2 *tensorrt_options = nullptr;
+        OrtStatus *status = Ort::GetApi().CreateTensorRTProviderOptions(&tensorrt_options);
+        if (status != nullptr) {
+          // Handle error in creating TensorRT provider options
+          g_autoptr(FlValue) result = fl_value_new_map();
+          fl_value_set_string_take(result, "error", fl_value_new_string("Failed to create TensorRT provider options"));
+          return fl_value_ref(result);
+        }
+        std::vector<const char *> keys{"device_id"};
+        std::vector<const char *> values{"0"};
+        status = Ort::GetApi().UpdateTensorRTProviderOptions(tensorrt_options, keys.data(), values.data(), keys.size());
+        if (status != nullptr) {
+          // Handle error in updating TensorRT provider options
+          g_autoptr(FlValue) result = fl_value_new_map();
+          fl_value_set_string_take(result, "error", fl_value_new_string("Failed to update TensorRT provider options"));
+          return fl_value_ref(result);
+        }
+
+        status = Ort::GetApi().SessionOptionsAppendExecutionProvider_TensorRT_V2(session_options, tensorrt_options);
+        Ort::GetApi().ReleaseTensorRTProviderOptions(tensorrt_options); // Clean up options after use
+        if (status != nullptr) {
+          // Handle error in appending TensorRT execution provider
+          g_autoptr(FlValue) result = fl_value_new_map();
+          fl_value_set_string_take(result, "error",
+                                   fl_value_new_string("Failed to append TensorRT execution provider"));
+          return fl_value_ref(result);
+        }
+
+      } else {
+        // return error
+        g_autoptr(FlValue) result = fl_value_new_map();
+        fl_value_set_string_take(result, "error", fl_value_new_string("Invalid execution provider or not supported"));
+        return fl_value_ref(result);
+      }
+    }
   }
 
   // Create session using session manager
@@ -235,6 +347,17 @@ static FlValue *create_session(FlutterOnnxruntimePlugin *self, FlValue *args) {
   // Status is success
   fl_value_set_string_take(result, "status", fl_value_new_string("success"));
 
+  return fl_value_ref(result);
+}
+
+static FlValue *get_available_providers(FlutterOnnxruntimePlugin *self, FlValue *args) {
+  std::vector<std::string> providers = Ort::GetAvailableProviders();
+
+  // Create a response
+  g_autoptr(FlValue) result = fl_value_new_list();
+  for (const auto &provider : providers) {
+    fl_value_append_take(result, fl_value_new_string(provider.c_str()));
+  }
   return fl_value_ref(result);
 }
 
