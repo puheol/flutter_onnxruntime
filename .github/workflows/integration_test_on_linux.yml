@@ -3,14 +3,8 @@ name: Integration Tests on Linux
 on:
   push:
     branches: [ main, master ]
-    paths:
-      - 'lib/**'
-      - 'test/**'
   pull_request:
     branches: [ main, master ]
-    paths:
-      - 'lib/**'
-      - 'test/**'
 
 jobs:
   linux_integration_test:
