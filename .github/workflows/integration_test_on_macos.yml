@@ -1,4 +1,4 @@
-name: ONNX Runtime Integration Tests
+name: Integration Tests on macOS
 
 on:
   workflow_dispatch:

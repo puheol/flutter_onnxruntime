@@ -256,7 +256,8 @@ static FlValue *create_session(FlutterOnnxruntimePlugin *self, FlValue *args) {
         // follow the example at
         // https://onnxruntime.ai/docs/execution-providers/CUDA-ExecutionProvider.html#using-v2-provider-options-struct
         std::vector<const char *> keys{"device_id"};
-        std::vector<const char *> values{"0"};
+        std::string device_id_str = std::to_string(device_id);
+        std::vector<const char *> values{device_id_str.c_str()};
         status = Ort::GetApi().UpdateCUDAProviderOptions(cuda_options, keys.data(), values.data(), keys.size());
         if (status != nullptr) {
           // Handle error in creating CUDA provider options
@@ -285,7 +286,8 @@ static FlValue *create_session(FlutterOnnxruntimePlugin *self, FlValue *args) {
           return fl_value_ref(result);
         }
         std::vector<const char *> keys{"device_id"};
-        std::vector<const char *> values{"0"};
+        std::string device_id_str = std::to_string(device_id);
+        std::vector<const char *> values{device_id_str.c_str()};
         status = Ort::GetApi().UpdateTensorRTProviderOptions(tensorrt_options, keys.data(), values.data(), keys.size());
         if (status != nullptr) {
           // Handle error in updating TensorRT provider options
