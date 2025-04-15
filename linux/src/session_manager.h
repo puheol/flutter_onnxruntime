@@ -1,3 +1,9 @@
+// Copyright (c) MASIC AI
+// All rights reserved.
+//
+// This source code is licensed under the license found in the
+// LICENSE file in the root directory of this source tree.
+
 #ifndef SESSION_MANAGER_H
 #define SESSION_MANAGER_H
 

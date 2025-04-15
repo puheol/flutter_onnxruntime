@@ -1,3 +1,9 @@
+// Copyright (c) MASIC AI
+// All rights reserved.
+//
+// This source code is licensed under the license found in the
+// LICENSE file in the root directory of this source tree.
+
 // Single file for all integration tests
 //
 // All integration tests are grouped into a single file due to an issue in Linux and macOS reported at:
