@@ -357,11 +357,17 @@ void main() {
         'shape': [], // Empty shape
       };
 
-      final tensor = OrtValue.fromMap(map);
+      expect(() => OrtValue.fromMap(map), throwsArgumentError);
+    });
 
-      expect(tensor.id, 'test_id');
-      expect(tensor.dataType, OrtDataType.float32); // Default
-      expect(tensor.shape, isEmpty);
+    test('fromMap with invalid dataType should throw ArgumentError', () {
+      final map = {
+        'valueId': 'test_id',
+        'dataType': 'invalid_type',
+        'shape': [2, 2],
+      };
+
+      expect(() => OrtValue.fromMap(map), throwsArgumentError);
     });
   });
 }

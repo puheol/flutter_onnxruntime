@@ -52,7 +52,8 @@ class OrtValue {
       id: map['valueId'] as String,
       dataType: OrtDataType.values.firstWhere(
         (dt) => dt.toString() == 'OrtDataType.${map['dataType']}',
-        orElse: () => OrtDataType.float32,
+        // throw an exception if the data type is not found
+        orElse: () => throw ArgumentError('Invalid data type: ${map['dataType']}'),
       ),
       shape: List<int>.from(map['shape'] ?? []),
     );
