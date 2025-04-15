@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'dart:async';
 
@@ -48,8 +46,8 @@ class _MyAppState extends State<MyApp> {
       await _initializeSession();
     }
 
-    final inputA = await OrtValue.fromList(Float32List.fromList([a]), [1]);
-    final inputB = await OrtValue.fromList(Float32List.fromList([b]), [1]);
+    final inputA = await OrtValue.fromList([a], [1]);
+    final inputB = await OrtValue.fromList([b], [1]);
 
     final inputs = {'A': inputA, 'B': inputB};
 

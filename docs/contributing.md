@@ -1,6 +1,14 @@
 
 We welcome contributions to improve the flutter_onnxruntime plugin! Whether you're fixing bugs, adding features, or improving documentation, your help is appreciated.
 
+## Principles
+
+### Tests are the source of truth, respect them
+
+All native implementations are not glued by the Dart API but the Dart integration tests. All native implementations should adapt to pass the tests, not the other way.
+
+Apart from the unit tests at `test/unit`, we have sophisicated integration tests at `example/integration_test` that cover all the supported platforms. Make sure that you run the script at `scripts/run_tests.sh` to run all the tests before submitting a pull request.
+
 ## Setting Up Development Environment
 
 ### Pre-commit Setup
@@ -62,6 +70,10 @@ You can also manually run tests for a specific platform:
     ```
     cd example
     flutter drive --driver=test_driver/integration_test.dart --target=integration_test/ -d <device_id>
+    ```
+  * To run a test separately, you can run the following commands:
+    ```
+    flutter test integration_test/all_tests.dart --plain-name "<Test Name>" -d <device_id>
     ```
 
 ## Contributing

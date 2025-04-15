@@ -25,18 +25,20 @@ The ONNX Runtime is automatically initialized when you create your first session
 
 ```dart
 // Optional: Check platform version
-final platformVersion = await OnnxRuntime.platformVersion;
+final platformVersion = await OnnxRuntime().getPlatformVersion();
 print('Running on $platformVersion');
 ```
 
 ### Creating a Session
 
 ```dart
+// Create an instance of OnnxRuntime
+final ort = OnnxRuntime();
+
 // Create a session from a model file
-final session = await OnnxRuntime.createSession(
-  modelPath: 'assets/model.onnx',
-  // Optional session configuration
-  sessionOptions: OrtSessionOptions(
+final session = await ort.createSession(
+  'path/to/model.onnx',
+  options: OrtSessionOptions(
     intraOpNumThreads: 2,
     interOpNumThreads: 1,
     providers: ['CPU'],
@@ -50,34 +52,52 @@ print('Input names: ${session.inputNames}');
 print('Output names: ${session.outputNames}');
 ```
 
-* Optional: to get available providers
+### Creating a Session from an Asset
 
-  ```dart
-  final providers = await OnnxRuntime.getAvailableProviders();
-  print('Available providers: $providers');
-  ```
+```dart
+// Create a session from an asset file
+final session = await ort.createSessionFromAsset(
+  'assets/model.onnx',
+);
+```
+
+### Getting Available Providers
+
+```dart
+final providers = await ort.getAvailableProviders();
+print('Available providers: $providers');
+```
 
 ### Running Inference
 
 ```dart
-// Prepare input data - assuming a model with one input named 'input'
-// with shape [1, 3, 224, 224] (batch_size, channels, height, width)
-final inputData = Float32List(1 * 3 * 224 * 224);
-// ... fill inputData with your values ...
+// Create OrtValue tensors for input
+final inputTensor = await OrtValue.fromList(
+  [1.0, 2.0, 3.0, 4.0],
+  [2, 2], // Shape: 2x2 matrix
+);
 
-// Create inputs map
+// Create inputs map with OrtValue objects
 final inputs = {
-  'input': inputData,
-  'input_shape': [1, 3, 224, 224], // Specify shape
+  'input_name': inputTensor,
 };
 
 // Run inference
 final outputs = await session.run(inputs);
 
-// Process results - outputs will be a map with keys for each output tensor
-final outputTensor = outputs['output'];
-final outputShape = outputs['output_shape'];
-print('Output shape: $outputShape');
+// Process outputs - the result is a map of output names to OrtValue objects
+final outputTensor = outputs['output_name'];
+print('Output shape: ${outputTensor.shape}');
+
+// Get the data from the output tensor
+final outputData = await outputTensor.asList();
+print('Output data: $outputData');
+
+// Always dispose tensors to free resources
+await inputTensor.dispose();
+for (final tensor in outputs.values) {
+  await tensor.dispose();
+}
 ```
 
 ### Closing the Session
@@ -89,85 +109,58 @@ await session.close();
 
 ## Working with OrtValue
 
-The `OrtValue` class provides a more flexible way to manage tensors:
+The `OrtValue` class provides a way to manage tensors:
 
 ### Creating Tensors
 
 ```dart
 // Create from Float32List
-final inputTensor = await OrtValue.fromList(
+final float32Tensor = await OrtValue.fromList(
   Float32List.fromList([1.0, 2.0, 3.0, 4.0]),
   [2, 2], // Shape: 2x2 matrix
 );
 
 // Create from Int32List
-final intTensor = await OrtValue.fromList(
+final int32Tensor = await OrtValue.fromList(
   Int32List.fromList([1, 2, 3, 4]),
   [4], // Shape: vector of 4 elements
 );
 
 // Create from Uint8List (for images)
-final imageTensor = await OrtValue.fromList(
-  imageBytes, // Uint8List from an image
-  [1, height, width, channels],
+final uint8Tensor = await OrtValue.fromList(
+  Uint8List.fromList([255, 0, 255, 0]),
+  [2, 2],
+);
+
+// Create from regular List (auto-converts to appropriate type)
+final autoTensor = await OrtValue.fromList(
+  [1.0, 2.0, 3.0, 4.0],
+  [2, 2],
 );
 ```
 
-### Data Type Conversion
+### Tensor Data Type Conversion
 
 ```dart
 // Convert to different data type
-final float16Tensor = await inputTensor.to(OrtDataType.float16);
+final float16Tensor = await float32Tensor.to(OrtDataType.float16);
 ```
 
 ### Accessing Tensor Data
 
 ```dart
-// Get data as Float32List
-final floatData = await inputTensor.asFloat32List();
-
-// Get data as Int32List
-final intData = await intTensor.asInt32List();
+// Get data as a List
+final tensorData = await float32Tensor.asList();
+print('Tensor data: $tensorData');
 ```
 
-### Using OrtValue with Session Run
+### Important Memory Management
+
+OrtValue instances must be explicitly disposed to free native resources:
 
 ```dart
-// Create OrtValue tensor
-final inputTensor = await OrtValue.fromList(
-  Float32List.fromList([1.0, 2.0, 3.0, 4.0]),
-  [2, 2],  // Shape: 2x2 matrix
-);
-
-// Create another tensor for a second input
-final inputTensor2 = await OrtValue.fromList(
-  Float32List.fromList([5.0, 6.0, 7.0, 8.0]),
-  [2, 2],
-);
-
-// Use OrtValue objects directly with session.run()
-final inputs = {
-  'input1': inputTensor,
-  'input2': inputTensor2,
-};
-
-// Run inference with OrtValue inputs
-final outputs = await session.run(inputs);
-
-// Process results - outputs will be a map with keys for each output tensor
-final outputTensor = outputs['output'];
-final outputShape = outputs['output_shape'];
-
-// Clean up resources
-await inputTensor.dispose();
-await inputTensor2.dispose();
-```
-
-### Memory Management
-
-```dart
-// Explicitly release native resources when done
-await inputTensor.dispose();
+// Dispose of tensors when no longer needed
+await float32Tensor.dispose();
 await float16Tensor.dispose();
 ```
 
@@ -183,6 +176,7 @@ print('Graph name: ${metadata.graphName}');
 print('Domain: ${metadata.domain}');
 print('Description: ${metadata.description}');
 print('Version: ${metadata.version}');
+print('Custom metadata: ${metadata.customMetadataMap}');
 ```
 
 ### Getting Input/Output Information
@@ -205,34 +199,34 @@ for (final info in outputInfo) {
 }
 ```
 
-### Custom Run Options
-
-```dart
-// Configure runtime options for inference
-final results = await session.run(
-  inputs,
-  options: OrtRunOptions(
-    logSeverityLevel: 2,
-    logVerbosityLevel: 4,
-    terminate: false,
-  ),
-);
-```
-
 ## Best Practices
 
 1. **Resource Management**
-   - Always call `session.close()` and `tensor.dispose()` when done
-   - Use try/finally blocks to ensure resources are released
+   - Always call `session.close()` when done with a session
+   - Always call `tensor.dispose()` when done with tensors
+   - Use try/finally blocks to ensure resources are released even if errors occur
 
-2. **Performance Optimization**
-   - Reuse OrtValue instances when possible
-   - Prefer operating on batches of data rather than individual items
+2. **Tensor Lifecycle Management**
+   
+   ❌ **Don't**: Reassign a tensor without disposing the original
+   ```dart
+   var tensor = await OrtValue.fromList([1.0, 2.0], [2]);
+   tensor = await tensor.to(OrtDataType.int32); // Memory leak!
+   ```
+   
+   ✅ **Do**: Create a new variable for converted tensors
+   ```dart
+   var floatTensor = await OrtValue.fromList([1.0, 2.0], [2]);
+   var intTensor = await floatTensor.to(OrtDataType.int32);
+   await floatTensor.dispose(); // Properly dispose original
+   // Use intTensor
+   await intTensor.dispose(); // Dispose when done
+   ```
+
+3. **Performance Optimization**
+   - Reuse OrtValue instances when possible rather than creating new ones for each inference
    - Use appropriate data types (e.g., Float32List is generally more efficient than List<double>)
-
-3. **Cross-Platform Development**
-   - Test on all target platforms, as performance characteristics may vary
-   - Be aware that some devices may not support all features (e.g., GPU acceleration)
+   - Consider batch processing instead of individual inferences when appropriate
 
 4. **Memory Efficiency**
    - Dispose of large tensors immediately after use
