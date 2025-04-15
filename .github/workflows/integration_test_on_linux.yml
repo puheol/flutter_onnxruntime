@@ -1,0 +1,41 @@
+name: Integration Tests on Linux
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  linux_integration_test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.0'
+          channel: 'stable'
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libgtk-3-dev libblkid-dev liblzma-dev
+
+      - name: Install Flutter dependencies
+        run: |
+          flutter pub get
+          cd example
+          flutter pub get
+
+      - name: Enable Linux desktop support
+        run: flutter config --enable-linux-desktop
+
+      - name: Run integration tests on Linux
+        run: |
+          cd example
+          # Start a virtual display server (https://github.com/wang-bin/fvp/issues/212)
+          sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+          DISPLAY=:99 flutter test integration_test/all_tests.dart

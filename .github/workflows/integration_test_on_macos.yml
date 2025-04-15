@@ -1,4 +1,4 @@
-name: ONNX Runtime Integration Tests
+name: Integration Tests on macOS
 
 on:
   workflow_dispatch:
@@ -40,7 +40,7 @@ jobs:
           cd example
           
           # Run the integration test directly
-          flutter test integration_test/onnxruntime_integration_test.dart -d macos 
+          flutter test integration_test/all_tests.dart -d macos 
 
   android_integration_test:
     runs-on: macos-13 # macOS runner needed for Android emulator
@@ -86,5 +86,5 @@ jobs:
 
             echo "--- Running flutter drive ---"
             # TODO: need to verify if this works
-            cd example && flutter drive --driver=test_driver/integration_test.dart --target=integration_test/onnxruntime_integration_test.dart
+            cd example && flutter drive --driver=test_driver/integration_test.dart --target=integration_test/all_tests.dart
             echo "--- Flutter drive finished ---"

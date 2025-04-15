@@ -1,12 +1,18 @@
-name: Flutter CI
+name: Flutter Unit Tests
 
 on:
   push:
     branches:
       - main
+    paths:
+      - 'lib/**'
+      - 'test/**'
   pull_request:
     branches:
       - main
+    paths:
+      - 'lib/**'
+      - 'test/**'
 
 jobs:
   build:
@@ -14,12 +20,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-
-    # Create a placeholder asset for the model to pass the flutter test check
-    - name: Create placeholder asset for model
-      run: |
-        mkdir -p assets/models/
-        touch assets/models/separation_model.ort
 
     # Setup Flutter
     - name: Setup Flutter
@@ -34,7 +34,7 @@ jobs:
 
     # Run Dart format
     - name: Verify Formatting
-      run: dart format --output=none --set-exit-if-changed --line-length 120 $(find . -name "*.dart" -not -path "./lib/l10n/generated/*")
+      run: dart format --output=none --set-exit-if-changed --line-length 120 $(find . -name "*.dart")
 
     # Analyze Dart code
     - name: Analyze
