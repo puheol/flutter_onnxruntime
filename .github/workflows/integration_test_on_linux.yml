@@ -33,19 +33,7 @@ jobs:
           cd example
           flutter pub get
 
-      - name: Verify model file exists
-        run: |
-          find . -name "addition_model.ort" || echo "Model not found!"
-          ls -la example/assets/models || echo "Directory not found!"
-
       - name: Run integration tests on Linux
         run: |
-          # Use the existing example app
           cd example
-          
-          # Run integration tests file by file (workaround for Flutter issue #135673)
-          for test_file in integration_test/*.dart; do
-            if [ -f "$test_file" ]; then
-              flutter test "$test_file" -d linux
-            fi
-          done 
+          flutter test integration_test/all_tests.dart -d linux
