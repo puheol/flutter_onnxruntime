@@ -3,6 +3,13 @@
 Common issues and their solutions.
 
 
+## Android
+* `JNI DETECTED ERROR IN APPLICATION: mid == null`
+    For Android consumers using the library with R8-minimized builds, currently you need to add the following line to your `proguard-rules.pro` inside your Android project ([reference](https://onnxruntime.ai/docs/build/android.html#note-proguard-rules-for-r8-minimization-android-app-builds-to-work))
+    ```
+    -keep class ai.onnxruntime.** { *; }
+    ```
+
 ## iOS
 * Target minimum version: iOS 16
 * "The 'Pods-Runner' target has transitive dependencies that include statically linked binaries: (onnxruntime-objc and onnxruntime-c)". In `Podfile` change:
