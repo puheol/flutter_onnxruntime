@@ -33,10 +33,9 @@ jobs:
       - name: Enable Linux desktop support
         run: flutter config --enable-linux-desktop
 
-      - name: Start a virtual display server
-        run: sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
-
       - name: Run integration tests on Linux
         run: |
           cd example
-          flutter test integration_test/all_tests.dart
+          # Start a virtual display server (https://github.com/wang-bin/fvp/issues/212)
+          sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+          DISPLAY=:99 flutter test integration_test/all_tests.dart
