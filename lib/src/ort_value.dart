@@ -74,6 +74,17 @@ class OrtValue {
       data = _convertListToTypedData(data);
     }
 
+    // Validate data length against shape
+    int expectedElements = _calculateExpectedElements(shape);
+    int actualElements = _getElementCount(data);
+
+    if (expectedElements != -1 && actualElements != expectedElements) {
+      throw ArgumentError(
+        'Shape/data size mismatch: data has $actualElements elements, '
+        'but shape $shape requires $expectedElements elements',
+      );
+    }
+
     String sourceType;
 
     if (data is Float32List) {
@@ -125,45 +136,73 @@ class OrtValue {
       throw ArgumentError('Cannot create OrtValue from empty list');
     }
 
-    final firstElement = data.first;
-
-    if (firstElement is bool) {
-      // Just return List<bool> as is, it's handled separately
-      return data.cast<bool>();
-    } else if (firstElement is double ||
-        (firstElement is num && data.any((e) => e is double || (e is num && e % 1 != 0)))) {
-      // Convert to Float32List if any element is a double or has decimal part
-      final typedList = Float32List(data.length);
-      for (int i = 0; i < data.length; i++) {
-        typedList[i] = (data[i] as num).toDouble();
-      }
-      return typedList;
-    } else if (firstElement is int || firstElement is num) {
-      // Check if int64 is needed
-      bool needsInt64 = false;
-      for (var item in data) {
-        int value = (item as num).toInt();
-        if (value > 2147483647 || value < -2147483648) {
-          needsInt64 = true;
-          break;
-        }
-      }
-
-      if (needsInt64) {
-        final typedList = Int64List(data.length);
-        for (int i = 0; i < data.length; i++) {
-          typedList[i] = (data[i] as num).toInt();
-        }
-        return typedList;
-      } else {
-        final typedList = Int32List(data.length);
-        for (int i = 0; i < data.length; i++) {
-          typedList[i] = (data[i] as num).toInt();
-        }
-        return typedList;
+    // Detect and flatten nested lists
+    if (data.first is List) {
+      data = _flattenNestedList(data);
+      if (data.isEmpty) {
+        throw ArgumentError('Cannot create OrtValue from empty nested list');
       }
     }
 
+    final firstElement = data.first;
+
+    // Handle boolean lists
+    if (firstElement is bool) {
+      return data.cast<bool>();
+    }
+
+    // Handle numeric lists
+    if (firstElement is num) {
+      // Check if it should be Float32List (contains any doubles or decimal values)
+      if (firstElement is double || data.any((e) => e is double || (e is num && e % 1 != 0))) {
+        return Float32List.fromList(data.map((e) => (e as num).toDouble()).toList());
+      }
+
+      // Check if Int64List is needed (any value outside Int32 range)
+      bool needsInt64 = data.any((e) => (e as num).toInt() > 2147483647 || (e).toInt() < -2147483648);
+
+      return needsInt64
+          ? Int64List.fromList(data.map((e) => (e as num).toInt()).toList())
+          : Int32List.fromList(data.map((e) => (e as num).toInt()).toList());
+    }
+
     throw ArgumentError('Unsupported element type: ${firstElement.runtimeType} in list');
+  }
+
+  // Helper method to recursively flatten nested lists
+  static List _flattenNestedList(List nestedList) {
+    List result = [];
+
+    for (var item in nestedList) {
+      if (item is List) {
+        result.addAll(_flattenNestedList(item));
+      } else {
+        result.add(item);
+      }
+    }
+
+    return result;
+  }
+
+  /// Calculates the expected number of elements based on the shape
+  ///
+  /// Returns -1 if the shape contains dynamic dimensions (negative values)
+  /// which indicates that validation should be skipped for that dimension
+  static int _calculateExpectedElements(List<int> shape) {
+    // If shape has a negative dimension (dynamic size),
+    // we can't validate the exact element count
+    if (shape.any((dim) => dim < 0)) {
+      return -1;
+    }
+    // Calculate product of all dimensions
+    return shape.fold(1, (product, dim) => product * dim);
+  }
+
+  /// Get the number of elements in the data
+  static int _getElementCount(dynamic data) {
+    if (data is Float32List || data is Int32List || data is Int64List || data is Uint8List || data is List) {
+      return data.length;
+    }
+    throw ArgumentError('Cannot determine element count for type: ${data.runtimeType}');
   }
 }
