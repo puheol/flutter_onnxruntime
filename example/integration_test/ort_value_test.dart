@@ -227,6 +227,14 @@ void main() {
         final retrievedData = await tensor.asList();
         expect(retrievedData.length, 4);
       });
+
+      testWidgets('Negative value in shape test', (WidgetTester tester) async {
+        final inputData = [1.1, 2.2, 3.3, 4.4, 5.5];
+        final shape = [-1, 2, 2];
+
+        // expect to throw an ArgumentError
+        expect(() async => await OrtValue.fromList(inputData, shape), throwsA(isA<ArgumentError>()));
+      });
     });
 
     group('Error handling tests', () {

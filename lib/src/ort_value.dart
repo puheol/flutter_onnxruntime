@@ -192,7 +192,7 @@ class OrtValue {
     // If shape has a negative dimension (dynamic size),
     // we can't validate the exact element count
     if (shape.any((dim) => dim < 0)) {
-      return -1;
+      throw ArgumentError('Shape contains negative dimension: $shape');
     }
     // Calculate product of all dimensions
     return shape.fold(1, (product, dim) => product * dim);
