@@ -136,6 +136,23 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
     // Store OrtValues (tensors) by ID
     private val ortValues = ConcurrentHashMap<String, OnnxValue>()
 
+    private fun ortTypeToString(type: OnnxJavaType): String {
+        return when (type.toString()) {
+            "FLOAT" -> "float32"
+            "FLOAT16" -> "float16"
+            "INT32" -> "int32"
+            "INT64" -> "int64"
+            "UINT8" -> "uint8"
+            "INT8" -> "int8"
+            "BOOL" -> "bool"
+            "UINT16" -> "uint16"
+            "INT16" -> "int16"
+            "DOUBLE" -> "float64"
+            // Add other types as needed
+            else -> type.toString().lowercase()
+        }
+    }
+
     override fun onAttachedToEngine(
         @NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding,
     ) {
@@ -417,7 +434,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                 ortValues[valueId] = outputTensor
 
                                 outputValueParams.add(valueId)
-                                outputValueParams.add(outputTensor.info.type.toString())
+                                outputValueParams.add(ortTypeToString(outputTensor.info.type))
                                 outputValueParams.add(outputTensor.info.shape.toList())
                             } else {
                                 val errorMessage = "Output is null or not a tensor: ${outputValue?.javaClass?.name}"
@@ -535,7 +552,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                         if (info is ai.onnxruntime.TensorInfo) {
                             val shape = info.shape
                             infoMap["shape"] = shape.toList()
-                            infoMap["type"] = info.type.toString()
+                            infoMap["type"] = ortTypeToString(info.type)
                         } else {
                             // For non-tensor types, provide an empty shape
                             infoMap["shape"] = emptyList<Long>()
@@ -582,7 +599,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                         if (info is ai.onnxruntime.TensorInfo) {
                             val shape = info.shape
                             infoMap["shape"] = shape.toList()
-                            infoMap["type"] = info.type.toString()
+                            infoMap["type"] = ortTypeToString(info.type)
                         } else {
                             // For non-tensor types, provide an empty shape
                             infoMap["shape"] = emptyList<Long>()
@@ -770,14 +787,14 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
 
                     // Get tensor information
                     val shape = tensor.info.shape
-                    val dataType = tensor.info.type.toString()
+                    val dataType = ortTypeToString(tensor.info.type)
 
                     // For now, we'll implement a simple conversion for certain type pairs
                     // A full implementation would handle all possible conversions
                     val newTensor =
                         when {
                             // Float32 to float16
-                            dataType == "FLOAT" && targetType == "float16" -> {
+                            dataType == "float32" && targetType == "float16" -> {
                                 // Extract the float data from the tensor
                                 val floatBuffer = tensor.floatBuffer
                                 val floatArray = FloatArray(floatBuffer.remaining())
@@ -797,7 +814,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                 OnnxTensor.createTensor(ortEnvironment, shortBuffer, shape, OnnxJavaType.FLOAT16)
                             }
                             // Float16 to float32
-                            dataType == "FLOAT16" && targetType == "float32" -> {
+                            dataType == "float16" && targetType == "float32" -> {
                                 val shortBuffer = tensor.shortBuffer
                                 val shortArray = ShortArray(shortBuffer.remaining())
                                 shortBuffer.get(shortArray)
@@ -806,7 +823,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                 OnnxTensor.createTensor(ortEnvironment, FloatBuffer.wrap(floatArray), shape)
                             }
                             // Int32 to Float32
-                            dataType == "INT32" && targetType == "float32" -> {
+                            dataType == "int32" && targetType == "float32" -> {
                                 val intBuffer = tensor.intBuffer
                                 val intArray = IntArray(intBuffer.remaining())
                                 intBuffer.get(intArray)
@@ -815,7 +832,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                 OnnxTensor.createTensor(ortEnvironment, FloatBuffer.wrap(floatArray), shape)
                             }
                             // Int64 to Float32
-                            dataType == "INT64" && targetType == "float32" -> {
+                            dataType == "int64" && targetType == "float32" -> {
                                 val longBuffer = tensor.longBuffer
                                 val longArray = LongArray(longBuffer.remaining())
                                 longBuffer.get(longArray)
@@ -824,7 +841,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                 OnnxTensor.createTensor(ortEnvironment, FloatBuffer.wrap(floatArray), shape)
                             }
                             // Uint8 to Float32
-                            dataType == "UINT8" && targetType == "float32" -> {
+                            dataType == "uint8" && targetType == "float32" -> {
                                 val byteBuffer = tensor.byteBuffer
                                 val byteArray = ByteArray(byteBuffer.remaining())
                                 byteBuffer.get(byteArray)
@@ -833,7 +850,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                 OnnxTensor.createTensor(ortEnvironment, FloatBuffer.wrap(floatArray), shape)
                             }
                             // Float32 to Int32
-                            dataType == "FLOAT" && targetType == "int32" -> {
+                            dataType == "float32" && targetType == "int32" -> {
                                 val floatBuffer = tensor.floatBuffer
                                 val floatArray = FloatArray(floatBuffer.remaining())
                                 floatBuffer.get(floatArray)
@@ -842,7 +859,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                 OnnxTensor.createTensor(ortEnvironment, IntBuffer.wrap(intArray), shape)
                             }
                             // Float32 to Int64
-                            dataType == "FLOAT" && targetType == "int64" -> {
+                            dataType == "float32" && targetType == "int64" -> {
                                 val floatBuffer = tensor.floatBuffer
                                 val floatArray = FloatArray(floatBuffer.remaining())
                                 floatBuffer.get(floatArray)
@@ -851,7 +868,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                 OnnxTensor.createTensor(ortEnvironment, LongBuffer.wrap(longArray), shape)
                             }
                             // Int32 to Int64
-                            dataType == "INT32" && targetType == "int64" -> {
+                            dataType == "int32" && targetType == "int64" -> {
                                 val intBuffer = tensor.intBuffer
                                 val intArray = IntArray(intBuffer.remaining())
                                 intBuffer.get(intArray)
@@ -860,7 +877,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                 OnnxTensor.createTensor(ortEnvironment, LongBuffer.wrap(longArray), shape)
                             }
                             // Int64 to Int32 (with potential loss of precision)
-                            dataType == "INT64" && targetType == "int32" -> {
+                            dataType == "int64" && targetType == "int32" -> {
                                 val longBuffer = tensor.longBuffer
                                 val longArray = LongArray(longBuffer.remaining())
                                 longBuffer.get(longArray)
@@ -875,7 +892,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                 OnnxTensor.createTensor(ortEnvironment, IntBuffer.wrap(intArray), shape)
                             }
                             // Boolean to Int8/Uint8
-                            dataType == "BOOL" && (targetType == "int8" || targetType == "uint8") -> {
+                            dataType == "bool" && (targetType == "int8" || targetType == "uint8") -> {
                                 val byteBuffer = tensor.byteBuffer
                                 val byteArray = ByteArray(byteBuffer.remaining())
                                 byteBuffer.get(byteArray)
@@ -884,7 +901,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                 OnnxTensor.createTensor(ortEnvironment, ByteBuffer.wrap(byteArray), shape)
                             }
                             // Int8/Uint8 to Boolean
-                            (dataType == "INT8" || dataType == "UINT8") && targetType == "bool" -> {
+                            (dataType == "int8" || dataType == "uint8") && targetType == "bool" -> {
                                 val byteBuffer = tensor.byteBuffer
                                 val byteArray = ByteArray(byteBuffer.remaining())
                                 byteBuffer.get(byteArray)
@@ -894,13 +911,13 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                 OnnxTensor.createTensor(ortEnvironment, ByteBuffer.wrap(boolArray), shape)
                             }
                             // Same type conversion (no-op)
-                            (dataType == "FLOAT" && targetType == "float32") ||
-                                (dataType == "FLOAT16" && targetType == "float16") ||
-                                (dataType == "INT32" && targetType == "int32") ||
-                                (dataType == "INT64" && targetType == "int64") ||
-                                (dataType == "UINT8" && targetType == "uint8") ||
-                                (dataType == "INT8" && targetType == "int8") ||
-                                (dataType == "BOOL" && targetType == "bool") -> {
+                            (dataType == "float32" && targetType == "float32") ||
+                                (dataType == "float16" && targetType == "float16") ||
+                                (dataType == "int32" && targetType == "int32") ||
+                                (dataType == "int64" && targetType == "int64") ||
+                                (dataType == "uint8" && targetType == "uint8") ||
+                                (dataType == "int8" && targetType == "int8") ||
+                                (dataType == "bool" && targetType == "bool") -> {
                                 // clone the original tensor to a new tensor
                                 OnnxTensor.createTensor(ortEnvironment, tensor.getValue())
                             }
@@ -959,39 +976,39 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
 
                     // Return data in its native type without conversion
                     val data =
-                        when (tensor.info.type.toString()) {
-                            "FLOAT" -> {
+                        when (ortTypeToString(tensor.info.type)) {
+                            "float32" -> {
                                 val floatArray = FloatArray(flatSize)
                                 tensor.floatBuffer.get(floatArray)
                                 floatArray.toList()
                             }
-                            "FLOAT16" -> {
+                            "float16" -> {
                                 // For float16, convert to float32 for easier use in Dart
                                 val shortArray = ShortArray(flatSize)
                                 tensor.shortBuffer.get(shortArray)
                                 shortArray.map { Float16Utils.float16ToFloat(it) }
                             }
-                            "INT32" -> {
+                            "int32" -> {
                                 val intArray = IntArray(flatSize)
                                 tensor.intBuffer.get(intArray)
                                 intArray.toList()
                             }
-                            "INT64" -> {
+                            "int64" -> {
                                 val longArray = LongArray(flatSize)
                                 tensor.longBuffer.get(longArray)
                                 longArray.toList()
                             }
-                            "INT16", "UINT16" -> {
+                            "int16", "uint16" -> {
                                 val shortArray = ShortArray(flatSize)
                                 tensor.shortBuffer.get(shortArray)
                                 shortArray.map { it.toInt() }
                             }
-                            "INT8", "UINT8" -> {
+                            "int8", "uint8" -> {
                                 val byteArray = ByteArray(flatSize)
                                 tensor.byteBuffer.get(byteArray)
                                 byteArray.map { it.toInt() and 0xFF }
                             }
-                            "BOOL" -> {
+                            "bool" -> {
                                 val byteArray = ByteArray(flatSize)
                                 tensor.byteBuffer.get(byteArray)
                                 byteArray.map { it != 0.toByte() }
