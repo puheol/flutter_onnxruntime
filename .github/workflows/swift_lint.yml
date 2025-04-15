@@ -1,16 +1,18 @@
-name: iOS Lint
+name: SWift Lint
 
 on:
   push:
     branches:
       - main
     paths:
-      - 'ios/**'
+      - 'ios/**/*.swift'
+      - 'macos/**/*.swift'
   pull_request:
     branches:
       - main
     paths:
-      - 'ios/**'
+      - 'ios/**/*.swift'
+      - 'macos/**/*.swift'
 
 jobs:
   swiftlint:

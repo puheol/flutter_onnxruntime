@@ -1,4 +1,4 @@
-name: Android Lint
+name: Kotlin Lint
 
 on:
   push:
