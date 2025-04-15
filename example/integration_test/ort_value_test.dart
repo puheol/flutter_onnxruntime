@@ -204,6 +204,31 @@ void main() {
       });
     });
 
+    group('Tensor Shape Tests', () {
+      testWidgets('Tensor size and target shape mismatch', (WidgetTester tester) async {
+        final inputData = [1.1, 2.2, 3.3, 4.4, 5.5];
+        final shape = [2, 2];
+
+        // expect to throw an PlatformException
+        expect(() async => await OrtValue.fromList(inputData, shape), throwsA(isA<ArgumentError>()));
+      });
+
+      testWidgets('Nested list to tensor', (WidgetTester tester) async {
+        final inputData = [
+          [1.1],
+          [2.2, 3.3, 4.4],
+        ];
+        final shape = [2, 2];
+
+        final tensor = await OrtValue.fromList(inputData, shape);
+        expect(tensor.dataType, OrtDataType.float32);
+        expect(tensor.shape, shape);
+
+        final retrievedData = await tensor.asList();
+        expect(retrievedData.length, 4);
+      });
+    });
+
     group('Error handling tests', () {
       testWidgets('Empty list error test', (WidgetTester tester) async {
         final emptyList = [];

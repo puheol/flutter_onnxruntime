@@ -74,6 +74,17 @@ class OrtValue {
       data = _convertListToTypedData(data);
     }
 
+    // Validate data length against shape
+    int expectedElements = _calculateExpectedElements(shape);
+    int actualElements = _getElementCount(data);
+
+    if (expectedElements != -1 && actualElements != expectedElements) {
+      throw ArgumentError(
+        'Shape/data size mismatch: data has $actualElements elements, '
+        'but shape $shape requires $expectedElements elements',
+      );
+    }
+
     String sourceType;
 
     if (data is Float32List) {
@@ -171,5 +182,27 @@ class OrtValue {
     }
 
     return result;
+  }
+
+  /// Calculates the expected number of elements based on the shape
+  ///
+  /// Returns -1 if the shape contains dynamic dimensions (negative values)
+  /// which indicates that validation should be skipped for that dimension
+  static int _calculateExpectedElements(List<int> shape) {
+    // If shape has a negative dimension (dynamic size),
+    // we can't validate the exact element count
+    if (shape.any((dim) => dim < 0)) {
+      return -1;
+    }
+    // Calculate product of all dimensions
+    return shape.fold(1, (product, dim) => product * dim);
+  }
+
+  /// Get the number of elements in the data
+  static int _getElementCount(dynamic data) {
+    if (data is Float32List || data is Int32List || data is Int64List || data is Uint8List || data is List) {
+      return data.length;
+    }
+    throw ArgumentError('Cannot determine element count for type: ${data.runtimeType}');
   }
 }
