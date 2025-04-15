@@ -249,7 +249,7 @@ void main() {
 
       final inputs = {'input1': ortValue1, 'input2': ortValue2};
 
-      final runOptions = OrtRunOptions(logSeverityLevel: true, logVerbosityLevel: false, terminate: true);
+      final runOptions = OrtRunOptions(logSeverityLevel: 1, logVerbosityLevel: 1, terminate: true);
 
       await session.run(inputs, options: runOptions);
 

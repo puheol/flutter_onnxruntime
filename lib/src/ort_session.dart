@@ -118,8 +118,15 @@ class OrtSessionOptions {
 }
 
 class OrtRunOptions {
-  final bool? logSeverityLevel;
-  final bool? logVerbosityLevel;
+  // 0 = Verbose
+  // 1 = Info
+  // 2 = Warning
+  // 3 = Error
+  // 4 = Fatal
+  final int? logSeverityLevel;
+  // the higher the number, the more verbose the logging is
+  final int? logVerbosityLevel;
+  // terminate all incomplete inference using this instance as soon as possible
   final bool? terminate;
 
   OrtRunOptions({this.logSeverityLevel, this.logVerbosityLevel, this.terminate});

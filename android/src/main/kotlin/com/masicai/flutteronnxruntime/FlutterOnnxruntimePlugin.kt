@@ -5,6 +5,7 @@ import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OnnxValue
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtException
+import ai.onnxruntime.OrtLoggingLevel
 import ai.onnxruntime.OrtSession
 import ai.onnxruntime.providers.OrtTensorRTProviderOptions
 import android.util.Log
@@ -278,6 +279,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                 try {
                     val sessionId = call.argument<String>("sessionId")
                     val inputs = call.argument<Map<String, Any>>("inputs")
+                    val runOptions = call.argument<Map<String, Any>>("runOptions")
 
                     if (sessionId == null || !sessions.containsKey(sessionId)) {
                         result.error("INVALID_SESSION", "Session not found", null)
@@ -327,8 +329,51 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                             }
                         }
 
-                        // Run inference with correctly typed inputs
-                        val ortOutputs = session.run(runInputs)
+                        // Create OrtSession.RunOptions if provided
+                        val ortRunOptions =
+                            if (runOptions != null && runOptions.isNotEmpty()) {
+                                val options = OrtSession.RunOptions()
+
+                                // Configure log severity level if provided
+                                if (runOptions.containsKey("logSeverityLevel")) {
+                                    val level = (runOptions["logSeverityLevel"] as Number).toInt()
+                                    val logLevel =
+                                        when (level) {
+                                            0 -> OrtLoggingLevel.ORT_LOGGING_LEVEL_VERBOSE
+                                            1 -> OrtLoggingLevel.ORT_LOGGING_LEVEL_INFO
+                                            2 -> OrtLoggingLevel.ORT_LOGGING_LEVEL_WARNING
+                                            3 -> OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR
+                                            4 -> OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL
+                                            // Handle unexpected levels
+                                            else -> OrtLoggingLevel.ORT_LOGGING_LEVEL_WARNING // default to warning
+                                        }
+                                    options.setLogLevel(logLevel)
+                                }
+
+                                // Configure log verbosity level if provided
+                                if (runOptions.containsKey("logVerbosityLevel")) {
+                                    val level = (runOptions["logVerbosityLevel"] as Number).toInt()
+                                    options.setLogVerbosityLevel(level)
+                                }
+
+                                // Configure terminate flag if provided
+                                if (runOptions.containsKey("terminate")) {
+                                    val terminate = runOptions["terminate"] as Boolean
+                                    options.setTerminate(terminate)
+                                }
+
+                                options
+                            } else {
+                                null
+                            }
+
+                        // Run inference with correctly typed inputs and optional run options
+                        val ortOutputs =
+                            if (ortRunOptions != null) {
+                                session.run(runInputs, ortRunOptions)
+                            } else {
+                                session.run(runInputs)
+                            }
 
                         // Process outputs
                         // Outputs will be a map of outputName -> OrtValue parameters
@@ -385,6 +430,9 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                         for (input in ortInputs.values) {
                             input.close()
                         }
+
+                        // Clean up run options if created
+                        ortRunOptions?.close()
 
                         result.success(outputs)
                     } catch (e: Exception) {
