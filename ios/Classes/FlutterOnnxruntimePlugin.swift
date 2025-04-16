@@ -766,7 +766,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
     }
 
     guard let tensor = ortValues[valueId] else {
-      result(FlutterError(code: "INVALID_VALUE", message: "OrtValue with ID \(valueId) not found", details: nil))
+      result(FlutterError(code: "INVALID_VALUE", message: "Tensor not found or already being disposed", details: nil))
       return
     }
 

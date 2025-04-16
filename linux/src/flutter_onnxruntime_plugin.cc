@@ -115,59 +115,82 @@ static void flutter_onnxruntime_plugin_handle_method_call(FlutterOnnxruntimePlug
   const gchar *method = fl_method_call_get_name(method_call);
   FlValue *args = fl_method_call_get_args(method_call);
 
-  if (strcmp(method, "getPlatformVersion") == 0) {
-    FlValue *result = get_platform_version();
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
-    fl_value_unref(result);
-  } else if (strcmp(method, "createSession") == 0) {
-    FlValue *result = create_session(self, args);
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
-    fl_value_unref(result);
-  } else if (strcmp(method, "getAvailableProviders") == 0) {
-    FlValue *result = get_available_providers(self, args);
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
-    fl_value_unref(result);
-  } else if (strcmp(method, "runInference") == 0) {
-    FlValue *result = run_inference(self, args);
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
-    fl_value_unref(result);
-  } else if (strcmp(method, "closeSession") == 0) {
-    FlValue *result = close_session(self, args);
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
-    fl_value_unref(result);
-  } else if (strcmp(method, "getMetadata") == 0) {
-    FlValue *result = get_metadata(self, args);
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
-    fl_value_unref(result);
-  } else if (strcmp(method, "getInputInfo") == 0) {
-    FlValue *result = get_input_info(self, args);
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
-    fl_value_unref(result);
-  } else if (strcmp(method, "getOutputInfo") == 0) {
-    FlValue *result = get_output_info(self, args);
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
-    fl_value_unref(result);
-  } else if (strcmp(method, "createOrtValue") == 0) {
-    FlValue *result = create_ort_value(self, args);
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
-    fl_value_unref(result);
-  } else if (strcmp(method, "convertOrtValue") == 0) {
-    FlValue *result = convert_ort_value(self, args);
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
-    fl_value_unref(result);
-  } else if (strcmp(method, "getOrtValueData") == 0) {
-    FlValue *result = get_ort_value_data(self, args);
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
-    fl_value_unref(result);
-  } else if (strcmp(method, "releaseOrtValue") == 0) {
-    FlValue *result = release_ort_value(self, args);
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
-    fl_value_unref(result);
-  } else {
-    response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
+  try {
+    if (strcmp(method, "getPlatformVersion") == 0) {
+      FlValue *result = get_platform_version();
+      response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
+      fl_value_unref(result);
+    } else if (strcmp(method, "createSession") == 0) {
+      FlValue *result = create_session(self, args);
+      response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
+      fl_value_unref(result);
+    } else if (strcmp(method, "getAvailableProviders") == 0) {
+      FlValue *result = get_available_providers(self, args);
+      response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
+      fl_value_unref(result);
+    } else if (strcmp(method, "runInference") == 0) {
+      FlValue *result = run_inference(self, args);
+      response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
+      fl_value_unref(result);
+    } else if (strcmp(method, "closeSession") == 0) {
+      FlValue *result = close_session(self, args);
+      response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
+      fl_value_unref(result);
+    } else if (strcmp(method, "getMetadata") == 0) {
+      FlValue *result = get_metadata(self, args);
+      response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
+      fl_value_unref(result);
+    } else if (strcmp(method, "getInputInfo") == 0) {
+      FlValue *result = get_input_info(self, args);
+      response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
+      fl_value_unref(result);
+    } else if (strcmp(method, "getOutputInfo") == 0) {
+      FlValue *result = get_output_info(self, args);
+      response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
+      fl_value_unref(result);
+    } else if (strcmp(method, "createOrtValue") == 0) {
+      FlValue *result = create_ort_value(self, args);
+      response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
+      fl_value_unref(result);
+    } else if (strcmp(method, "convertOrtValue") == 0) {
+      FlValue *result = convert_ort_value(self, args);
+      response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
+      fl_value_unref(result);
+    } else if (strcmp(method, "getOrtValueData") == 0) {
+      FlValue *result = get_ort_value_data(self, args);
+      response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
+      fl_value_unref(result);
+    } else if (strcmp(method, "releaseOrtValue") == 0) {
+      FlValue *result = release_ort_value(self, args);
+      response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
+      fl_value_unref(result);
+    } else {
+      response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
+    }
+  } catch (const std::exception &e) {
+    // The exception message should follow this format: "<ERROR_CODE>:<Error Message>"
+    std::string full_message = e.what();
+    std::string error_code = "PLUGIN_ERROR";
+    std::string error_message = full_message;
+
+    // parse the exception message to code and message
+    size_t colon_pos = full_message.find(':');
+    if (colon_pos != std::string::npos && colon_pos > 0 && colon_pos < full_message.length() - 1) {
+      error_code = full_message.substr(0, colon_pos);
+      error_message = full_message.substr(colon_pos + 1);
+    }
+
+    response = FL_METHOD_RESPONSE(fl_method_error_response_new(error_code.c_str(), error_message.c_str(), nullptr));
   }
 
-  fl_method_call_respond(method_call, response, nullptr);
+  if (response != nullptr) {
+    fl_method_call_respond(method_call, response, nullptr);
+  } else {
+    // Fallback if no response was created (should ideally not happen with the try-catch)
+    response =
+        FL_METHOD_RESPONSE(fl_method_error_response_new("INTERNAL_ERROR", "Failed to process method call", nullptr));
+    fl_method_call_respond(method_call, response, nullptr);
+  }
 }
 
 // Implementation of method functions
@@ -1116,12 +1139,10 @@ static FlValue *get_ort_value_data(FlutterOnnxruntimePlugin *self, FlValue *args
 
   // If tensor_data is null, return error
   if (tensor_data == nullptr || fl_value_get_type(tensor_data) == FL_VALUE_TYPE_NULL) {
-    g_autoptr(FlValue) result = fl_value_new_map();
-    fl_value_set_string_take(result, "error", fl_value_new_string("Tensor not found"));
     if (tensor_data != nullptr) {
       fl_value_unref(tensor_data);
     }
-    return fl_value_ref(result);
+    throw std::runtime_error("INVALID_VALUE:Tensor not found or already being disposed");
   }
 
   return tensor_data; // Already referenced in getTensorData

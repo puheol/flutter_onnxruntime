@@ -958,7 +958,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
 
                     val tensor = ortValues[valueId]
                     if (tensor == null) {
-                        result.error("INVALID_VALUE", "OrtValue with ID $valueId not found", null)
+                        result.error("INVALID_VALUE", "Tensor not found or already being disposed", null)
                         return
                     }
 

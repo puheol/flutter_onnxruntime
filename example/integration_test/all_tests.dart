@@ -315,6 +315,15 @@ void main() {
 
         await tensor.dispose();
       });
+
+      testWidgets('Using disposed tensor test', (WidgetTester tester) async {
+        final tensor = await OrtValue.fromList([1.0, 2.0, 3.0], [3]);
+        await tensor.dispose();
+        expect(
+          () async => await tensor.asList(),
+          throwsA(isA<PlatformException>().having((e) => e.code, 'code', "INVALID_VALUE")),
+        );
+      });
     });
   });
 
