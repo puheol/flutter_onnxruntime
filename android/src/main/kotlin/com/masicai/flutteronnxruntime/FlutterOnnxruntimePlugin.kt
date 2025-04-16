@@ -181,7 +181,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                     val sessionOptions = call.argument<Map<String, Any>>("sessionOptions") ?: emptyMap()
 
                     if (modelPath == null) {
-                        result.error("NULL_MODEL_PATH", "Model path cannot be null", null)
+                        result.error("INVALID_ARGUMENT", "Model path cannot be null", null)
                         return
                     }
 
@@ -290,7 +290,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                 } catch (e: OrtException) {
                     result.error("ORT_ERROR", e.message, e.stackTraceToString())
                 } catch (e: Exception) {
-                    result.error("GENERIC_ERROR", e.message, e.stackTraceToString())
+                    result.error("PLUGIN_ERROR", e.message, e.stackTraceToString())
                 }
             }
             "getAvailableProviders" -> {
@@ -310,7 +310,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                     }
 
                     if (inputs == null) {
-                        result.error("NULL_INPUTS", "Inputs cannot be null", null)
+                        result.error("INVALID_ARGUMENT", "Inputs must be a non-null map", null)
                         return
                     }
 
@@ -337,7 +337,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                             } else {
                                 result.error(
                                     "INVALID_INPUT_FORMAT",
-                                    "Input for '$name' must be an OrtValue reference with valueId",
+                                    "Input for '$name' must be an OrtValue reference with value ID",
                                     null,
                                 )
                                 return
@@ -459,7 +459,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                 } catch (e: OrtException) {
                     result.error("ORT_ERROR", e.message, e.stackTraceToString())
                 } catch (e: Exception) {
-                    result.error("GENERIC_ERROR", e.message, e.stackTraceToString())
+                    result.error("PLUGIN_ERROR", e.message, e.stackTraceToString())
                 }
             }
             "closeSession" -> {
@@ -476,8 +476,10 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                     sessions.remove(sessionId)
 
                     result.success(null)
+                } catch (e: OrtException) {
+                    result.error("ORT_ERROR", e.message, e.stackTraceToString())
                 } catch (e: Exception) {
-                    result.error("GENERIC_ERROR", e.message, e.stackTraceToString())
+                    result.error("PLUGIN_ERROR", e.message, e.stackTraceToString())
                 }
             }
             /** Get metadata about the model
@@ -512,8 +514,10 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                         )
 
                     result.success(metadataMap)
+                } catch (e: OrtException) {
+                    result.error("ORT_ERROR", e.message, e.stackTraceToString())
                 } catch (e: Exception) {
-                    result.error("GENERIC_ERROR", e.message, e.stackTraceToString())
+                    result.error("PLUGIN_ERROR", e.message, e.stackTraceToString())
                 }
             }
             /** Get input info about the model
@@ -559,8 +563,10 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                     }
 
                     result.success(nodeInfoList)
+                } catch (e: OrtException) {
+                    result.error("ORT_ERROR", e.message, e.stackTraceToString())
                 } catch (e: Exception) {
-                    result.error("GENERIC_ERROR", e.message, e.stackTraceToString())
+                    result.error("PLUGIN_ERROR", e.message, e.stackTraceToString())
                 }
             }
             /** Get output info about the model
@@ -606,8 +612,10 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                     }
 
                     result.success(nodeInfoList)
+                } catch (e: OrtException) {
+                    result.error("ORT_ERROR", e.message, e.stackTraceToString())
                 } catch (e: Exception) {
-                    result.error("GENERIC_ERROR", e.message, e.stackTraceToString())
+                    result.error("PLUGIN_ERROR", e.message, e.stackTraceToString())
                 }
             }
             // OrtValue methods
@@ -618,7 +626,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                     val shape = call.argument<List<Int>>("shape")
 
                     if (sourceType == null || data == null || shape == null) {
-                        result.error("INVALID_ARGS", "Missing required arguments", null)
+                        result.error("INVALID_ARG", "Missing required arguments", null)
                         return
                     }
 
@@ -767,7 +775,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                     val targetType = call.argument<String>("targetType")
 
                     if (valueId == null || targetType == null) {
-                        result.error("INVALID_ARGS", "Missing required arguments", null)
+                        result.error("INVALID_ARG", "Missing required arguments", null)
                         return
                     }
 
@@ -921,7 +929,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                             else -> {
                                 // Unsupported conversion
                                 result.error(
-                                    "UNSUPPORTED_CONVERSION",
+                                    "CONVERSION_ERROR",
                                     "Conversion from $dataType to $targetType is not supported",
                                     null,
                                 )
@@ -952,7 +960,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                     val valueId = call.argument<String>("valueId")
 
                     if (valueId == null) {
-                        result.error("INVALID_ARGS", "Missing value ID", null)
+                        result.error("INVALID_ARG", "Missing value ID", null)
                         return
                     }
 
@@ -1032,7 +1040,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                     val valueId = call.argument<String>("valueId")
 
                     if (valueId == null) {
-                        result.error("INVALID_ARGS", "Missing value ID", null)
+                        result.error("INVALID_ARGUMENT", "Invalid value ID", null)
                         return
                     }
 
