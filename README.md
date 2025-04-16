@@ -60,16 +60,18 @@ To get started with the Flutter ONNX Runtime plugin, see the [API Usage Guide](d
 
 A simple model with only one operator (Add) that takes two inputs and produces one output.
 
-Run the example with:
+Run this example with:
 ```bash
 cd example
 flutter pub get
 flutter run
 ```
 
-### Image Classification Model
+### [Image Classification Model](https://github.com/masicai/flutter-onnxruntime-examples)
 
 A more complex model that takes an image as input and classifies it into one of the predefined categories.
+
+Clone [this repository](https://github.com/masicai/flutter-onnxruntime-examples) and run the example following the repo's guidelines.
 
 ## Component Overview
 
@@ -113,8 +115,5 @@ For troubleshooting, see the [troubleshooting.md](docs/troubleshooting.md) file.
 ## Contributing
 Contributions to the Flutter ONNX Runtime plugin are welcome. Please see the [contributing.md](docs/contributing.md) file for more information.
 
-#### Documentation
-* For detailed Linux setup and troubleshooting:
-   - [Linux Development Setup Guide](docs/linux/LINUX_SETUP.md)
-   - [ONNX Runtime C++ API Guide](docs/linux/ONNX_RUNTIME_API.md)
-   - [Flutter Linux Plugin Architecture](docs/linux/FLUTTER_LINUX_PLUGINS.md)
+## Documentation
+Find more information in the [documentation](docs/).
