@@ -1,5 +1,5 @@
 name: flutter_onnxruntime
-description: "A new Flutter plugin project."
+description: "Native Wrapper Flutter Plugin for ONNX Runtime"
 version: 1.0.0
 homepage: https://github.com/masicai/flutter_onnxruntime
 repository: https://github.com/masicai/flutter_onnxruntime
