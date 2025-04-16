@@ -24,7 +24,7 @@ Native Wrapper Flutter Plugin for ONNX Runtime
       🔄 Easy Upgrades
       Stay current with the latest ONNX Runtime releases without the hassle of maintaining complex generated FFI wrappers.
 
-## Getting Started
+## 🚀 Getting Started
 
 ### Installation
 
@@ -60,7 +60,7 @@ print(await outputs['C']!.asList());
 
 To get started with the Flutter ONNX Runtime plugin, see the [API Usage Guide](doc/api_usage.md).
 
-## Examples
+## 🧪 Examples
 
 ### [Simple Addition Model](example/)
 
@@ -79,7 +79,7 @@ A more complex model that takes an image as input and classifies it into one of 
 
 Clone [this repository](https://github.com/masicai/flutter-onnxruntime-examples) and run the example following the repo's guidelines.
 
-## Component Overview
+## 📊 Component Overview
 
 | Component | Description |
 |-----------|-------------|
@@ -89,7 +89,7 @@ Clone [this repository](https://github.com/masicai/flutter-onnxruntime-examples)
 | OrtSessionOptions | Configuration options for session creation |
 | OrtRunOptions | Configuration options for inference execution |
 
-## Implementation Status
+## 🚧 Implementation Status
 
 | Feature | Android | iOS | Linux | macOS | Windows | Web |
 |---------|:-------:|:---:|:-----:|:-----:|:-------:|:---: |
@@ -114,12 +114,12 @@ Clone [this repository](https://github.com/masicai/flutter-onnxruntime-examples)
 
 `**`: Swift does not support FP16 type.
 
-## Troubleshooting
+## 🛠️ Troubleshooting
 
 For troubleshooting, see the [troubleshooting.md](doc/troubleshooting.md) file.
 
-## Contributing
+## 🤝 Contributing
 Contributions to the Flutter ONNX Runtime plugin are welcome. Please see the [contributing.md](doc/contributing.md) file for more information.
 
-## Documentation
+## 📚 Documentation
 Find more information in the [documentation](doc/).
