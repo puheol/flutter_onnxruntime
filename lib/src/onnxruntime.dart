@@ -6,7 +6,6 @@
 
 import 'dart:io';
 import 'package:flutter/services.dart';
-import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
 import 'package:flutter_onnxruntime/src/flutter_onnxruntime_platform_interface.dart';
@@ -32,8 +31,10 @@ class OnnxRuntime {
   Future<OrtSession> createSessionFromAsset(String assetKey, {OrtSessionOptions? options}) async {
     // Get the temporary directory
     final directory = await getTemporaryDirectory();
-    final fileName = path.basename(assetKey);
-    final filePath = path.join(directory.path, fileName);
+    // Extract filename from asset path using String manipulation
+    final fileName = assetKey.split('/').last;
+    // Join paths using string concatenation with platform-specific separator
+    final filePath = '${directory.path}${Platform.pathSeparator}$fileName';
 
     // Check if the model already exists
     final file = File(filePath);
