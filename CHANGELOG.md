@@ -1,3 +1,3 @@
-## 0.0.1
-
-* TODO: Describe initial release.
+## 1.0.0
+* Support running inference with an ONNX model on Android, iOS, Linux, and macOS
+* Support ONNX Runtime version 1.21.0

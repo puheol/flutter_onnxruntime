@@ -1,6 +1,12 @@
+<img src="flutter_onnxruntime.png" alt="flutter_onnxruntime" align="center"/>
+
+
 # flutter_onnxruntime
 
 Native Wrapper Flutter Plugin for ONNX Runtime
+
+*Current supported ONNX Runtime version:* **1.20.1**
+
 
 ## 🌟 Why This Project?
 
