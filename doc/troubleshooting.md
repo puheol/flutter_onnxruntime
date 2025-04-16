@@ -18,7 +18,7 @@ Common issues and their solutions.
     use_frameworks! :linkage => :static
     ```
 
-## MacOS
+## macOS
 * Target minimum version: MacOS 14
 * "The 'Pods-Runner' target has transitive dependencies that include statically linked binaries: (onnxruntime-objc and onnxruntime-c)". In `Podfile` change:
     ```

@@ -31,3 +31,10 @@ flutter:
         pluginClass: FlutterOnnxruntimePlugin
       macos:
         pluginClass: FlutterOnnxruntimePlugin
+
+topics:
+ - onnx
+ - onnxruntime
+ - machine-learning
+ - deep-learning
+ - model-inference
