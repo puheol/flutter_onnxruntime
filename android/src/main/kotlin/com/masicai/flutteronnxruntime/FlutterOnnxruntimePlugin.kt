@@ -409,8 +409,6 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                             // create a list of outputValue parameters
                             val outputValueParams = ArrayList<Any>()
 
-                            Log.d("outputValue", outputValue.toString())
-
                             // Output tensor is wrapped in Optional[] for safety, unwrap the Optional if needed
                             val outputTensor =
                                 when {
