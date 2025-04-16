@@ -449,20 +449,11 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                             outputs[outputName] = outputValueParams
                         }
 
-                        // Clean up
-                        for (input in ortInputs.values) {
-                            input.close()
-                        }
-
                         // Clean up run options if created
                         ortRunOptions?.close()
 
                         result.success(outputs)
                     } catch (e: Exception) {
-                        // Clean up in case of error
-                        for (input in ortInputs.values) {
-                            input.close()
-                        }
                         throw e
                     }
                 } catch (e: OrtException) {
