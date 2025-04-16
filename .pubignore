@@ -1,2 +1,6 @@
+build/
+example/
 hooks/
+onnxruntime_download/
 scripts/
+test/

@@ -58,7 +58,7 @@ final outputs = await session.run(inputs);
 print(await outputs['C']!.asList());
 ```
 
-To get started with the Flutter ONNX Runtime plugin, see the [API Usage Guide](docs/api_usage.md).
+To get started with the Flutter ONNX Runtime plugin, see the [API Usage Guide](doc/api_usage.md).
 
 ## Examples
 
@@ -116,10 +116,10 @@ Clone [this repository](https://github.com/masicai/flutter-onnxruntime-examples)
 
 ## Troubleshooting
 
-For troubleshooting, see the [troubleshooting.md](docs/troubleshooting.md) file.
+For troubleshooting, see the [troubleshooting.md](doc/troubleshooting.md) file.
 
 ## Contributing
-Contributions to the Flutter ONNX Runtime plugin are welcome. Please see the [contributing.md](docs/contributing.md) file for more information.
+Contributions to the Flutter ONNX Runtime plugin are welcome. Please see the [contributing.md](doc/contributing.md) file for more information.
 
 ## Documentation
-Find more information in the [documentation](docs/).
+Find more information in the [documentation](doc/).
