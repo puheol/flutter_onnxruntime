@@ -163,21 +163,16 @@ static FlMethodResponse *get_platform_version() {
 }
 
 static FlMethodResponse *create_session(FlutterOnnxruntimePlugin *self, FlValue *args) {
-  // Extract arguments
   FlValue *model_path_value = fl_value_lookup_string(args, "modelPath");
 
-  // Check if model path is provided and valid
   if (model_path_value == nullptr || fl_value_get_type(model_path_value) != FL_VALUE_TYPE_STRING) {
-    // Return error response directly
     return FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_ARG", "Model path cannot be null", nullptr));
   }
 
   const char *model_path = fl_value_get_string(model_path_value);
 
-  // Extract session options if provided
   FlValue *session_options_value = fl_value_lookup_string(args, "sessionOptions");
 
-  // Create session options
   Ort::SessionOptions session_options;
 
   // Configure session options if provided
@@ -231,10 +226,6 @@ static FlMethodResponse *create_session(FlutterOnnxruntimePlugin *self, FlValue 
           // CPU is implicitly added if no others are, or can be explicitly added.
           // No specific options needed here usually.
           continue;
-          continue;
-
-          continue;
-
         } else if (provider == "CUDAExecutionProvider") {
           OrtCUDAProviderOptionsV2 *cuda_options = nullptr;
           OrtStatus *status = Ort::GetApi().CreateCUDAProviderOptions(&cuda_options);
@@ -306,22 +297,17 @@ static FlMethodResponse *create_session(FlutterOnnxruntimePlugin *self, FlValue 
     }
   }
 
-  // Create session using session manager
   try {
     std::string session_id = self->session_manager->createSession(model_path, session_options);
 
-    // Get input and output names
     std::vector<std::string> input_names = self->session_manager->getInputNames(session_id);
     std::vector<std::string> output_names = self->session_manager->getOutputNames(session_id);
 
-    // Create success response payload
     g_autoptr(FlValue) result = fl_value_new_map();
     fl_value_set_string_take(result, "sessionId", fl_value_new_string(session_id.c_str()));
     fl_value_set_string_take(result, "inputNames", vector_to_fl_value(input_names));
     fl_value_set_string_take(result, "outputNames", vector_to_fl_value(output_names));
     fl_value_set_string_take(result, "status", fl_value_new_string("success")); // Keep status for compatibility maybe?
-
-    // Return success response
     return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
   } catch (const Ort::Exception &e) {
     return FL_METHOD_RESPONSE(fl_method_error_response_new("ORT_ERROR", e.what(), nullptr));
@@ -334,17 +320,14 @@ static FlMethodResponse *create_session(FlutterOnnxruntimePlugin *self, FlValue 
 static FlMethodResponse *get_available_providers(FlutterOnnxruntimePlugin *self, FlValue *args) {
   std::vector<std::string> providers = Ort::GetAvailableProviders();
 
-  // Create a response
   g_autoptr(FlValue) result = fl_value_new_list();
   for (const auto &provider : providers) {
     fl_value_append_take(result, fl_value_new_string(provider.c_str()));
   }
-  // Return success response
   return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
 }
 
 static FlMethodResponse *run_inference(FlutterOnnxruntimePlugin *self, FlValue *args) {
-  // Extract the session ID
   FlValue *session_id_value = fl_value_lookup_string(args, "sessionId");
   if (session_id_value == nullptr || fl_value_get_type(session_id_value) != FL_VALUE_TYPE_STRING) {
     return FL_METHOD_RESPONSE(
@@ -352,13 +335,11 @@ static FlMethodResponse *run_inference(FlutterOnnxruntimePlugin *self, FlValue *
   }
   const char *session_id = fl_value_get_string(session_id_value);
 
-  // Extract the inputs
   FlValue *inputs_value = fl_value_lookup_string(args, "inputs");
   if (inputs_value == nullptr || fl_value_get_type(inputs_value) != FL_VALUE_TYPE_MAP) { // inputs is a map from Dart
     return FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_ARG", "Inputs must be a non-null map", nullptr));
   }
 
-  // Extract run options if provided
   FlValue *run_options_value = fl_value_lookup_string(args, "runOptions");
 
   // Get the session
@@ -368,7 +349,6 @@ static FlMethodResponse *run_inference(FlutterOnnxruntimePlugin *self, FlValue *
   }
 
   try {
-    // Get input and output names
     std::vector<std::string> input_names = self->session_manager->getInputNames(session_id);
     std::vector<std::string> output_names = self->session_manager->getOutputNames(session_id);
 
@@ -550,8 +530,6 @@ static FlMethodResponse *run_inference(FlutterOnnxruntimePlugin *self, FlValue *
 
       fl_value_set_string_take(outputs_map, output_names[i].c_str(), output_info);
     }
-
-    // Return success response
     return FL_METHOD_RESPONSE(fl_method_success_response_new(outputs_map));
   } catch (const Ort::Exception &e) {
     return FL_METHOD_RESPONSE(fl_method_error_response_new("INFERENCE_FAILED", e.what(), nullptr));
@@ -573,27 +551,21 @@ static FlMethodResponse *close_session(FlutterOnnxruntimePlugin *self, FlValue *
 
   const char *session_id = fl_value_get_string(session_id_value);
 
-  // Close the session
   self->session_manager->closeSession(session_id);
 
-  // Return success
   return FL_METHOD_RESPONSE(fl_method_success_response_new(fl_value_new_null()));
 }
 
 static FlMethodResponse *get_metadata(FlutterOnnxruntimePlugin *self, FlValue *args) {
-  // Extract the session ID
   FlValue *session_id_value = fl_value_lookup_string(args, "sessionId");
 
   if (session_id_value == nullptr || fl_value_get_type(session_id_value) != FL_VALUE_TYPE_STRING) {
-    // Return error response directly
     return FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_SESSION", "Invalid session ID", nullptr));
   }
 
   const char *session_id = fl_value_get_string(session_id_value);
 
-  // Check if the session exists
   if (!self->session_manager->hasSession(session_id)) {
-    // Return error response directly
     return FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_SESSION", "Session not found", nullptr));
   }
 
@@ -601,7 +573,6 @@ static FlMethodResponse *get_metadata(FlutterOnnxruntimePlugin *self, FlValue *a
     // Get the session
     Ort::Session *session = self->session_manager->getSession(session_id);
     if (!session) {
-      // Return error response directly
       return FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_SESSION", "Session is invalid", nullptr));
     }
 
@@ -618,8 +589,6 @@ static FlMethodResponse *get_metadata(FlutterOnnxruntimePlugin *self, FlValue *a
 
     // Create empty custom metadata map
     g_autoptr(FlValue) custom_metadata_map = fl_value_new_map();
-
-    // Create response
     g_autoptr(FlValue) result = fl_value_new_map();
     fl_value_set_string_take(result, "producerName", fl_value_new_string(producer_name.get()));
     fl_value_set_string_take(result, "graphName", fl_value_new_string(graph_name.get()));
@@ -627,44 +596,33 @@ static FlMethodResponse *get_metadata(FlutterOnnxruntimePlugin *self, FlValue *a
     fl_value_set_string_take(result, "description", fl_value_new_string(description.get()));
     fl_value_set_string_take(result, "version", fl_value_new_int(version));
     fl_value_set_string_take(result, "customMetadataMap", custom_metadata_map);
-
-    // Return success response
     return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
   } catch (const Ort::Exception &e) {
-    // Return error response directly
     return FL_METHOD_RESPONSE(fl_method_error_response_new("ORT_ERROR", e.what(), nullptr));
   } catch (const std::exception &e) {
-    // Return error response directly
     return FL_METHOD_RESPONSE(fl_method_error_response_new("PLUGIN_ERROR", e.what(), nullptr));
   }
 }
 
 static FlMethodResponse *get_input_info(FlutterOnnxruntimePlugin *self, FlValue *args) {
-  // Extract the session ID
   FlValue *session_id_value = fl_value_lookup_string(args, "sessionId");
 
   if (session_id_value == nullptr || fl_value_get_type(session_id_value) != FL_VALUE_TYPE_STRING) {
-    // Return error response directly
     return FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_SESSION", "Invalid session ID", nullptr));
   }
 
   const char *session_id = fl_value_get_string(session_id_value);
 
-  // Check if the session exists
   if (!self->session_manager->hasSession(session_id)) {
-    // Return error response directly
     return FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_SESSION", "Session not found", nullptr));
   }
 
   try {
-    // Get the session
     Ort::Session *session = self->session_manager->getSession(session_id);
     if (!session) {
-      // Return error response directly
       return FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_SESSION", "Session is invalid", nullptr));
     }
 
-    // Get all input info
     size_t num_inputs = session->GetInputCount();
     Ort::AllocatorWithDefaultOptions allocator;
     g_autoptr(FlValue) result = fl_value_new_list();
@@ -712,44 +670,33 @@ static FlMethodResponse *get_input_info(FlutterOnnxruntimePlugin *self, FlValue 
         continue;
       }
     }
-
-    // Return success response
     return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
   } catch (const Ort::Exception &e) {
-    // Return error response directly
     return FL_METHOD_RESPONSE(fl_method_error_response_new("ORT_ERROR", e.what(), nullptr));
   } catch (const std::exception &e) {
-    // Return error response directly
     return FL_METHOD_RESPONSE(fl_method_error_response_new("PLUGIN_ERROR", e.what(), nullptr));
   }
 }
 
 static FlMethodResponse *get_output_info(FlutterOnnxruntimePlugin *self, FlValue *args) {
-  // Extract the session ID
   FlValue *session_id_value = fl_value_lookup_string(args, "sessionId");
 
   if (session_id_value == nullptr || fl_value_get_type(session_id_value) != FL_VALUE_TYPE_STRING) {
-    // Return error response directly
     return FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_SESSION", "Invalid session ID", nullptr));
   }
 
   const char *session_id = fl_value_get_string(session_id_value);
 
-  // Check if the session exists
   if (!self->session_manager->hasSession(session_id)) {
-    // Return error response directly
     return FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_SESSION", "Session not found", nullptr));
   }
 
   try {
-    // Get the session
     Ort::Session *session = self->session_manager->getSession(session_id);
     if (!session) {
-      // Return error response directly
       return FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_SESSION", "Session is invalid", nullptr));
     }
 
-    // Get all output info
     size_t num_outputs = session->GetOutputCount();
     Ort::AllocatorWithDefaultOptions allocator;
     g_autoptr(FlValue) result = fl_value_new_list();
@@ -776,7 +723,6 @@ static FlMethodResponse *get_output_info(FlutterOnnxruntimePlugin *self, FlValue
           }
           fl_value_set_string_take(info_map, "shape", shape_list);
 
-          // Add type info
           ONNXTensorElementDataType element_type = tensor_info.GetElementType();
           const char *type_str = self->tensor_manager->get_element_type_string(element_type);
 
@@ -792,24 +738,19 @@ static FlMethodResponse *get_output_info(FlutterOnnxruntimePlugin *self, FlValue
 
         fl_value_append_take(result, info_map);
       } catch (const Ort::Exception &e) {
-        // Log error and continue
         g_warning("Error getting output info for index %zu: %s", i, e.what());
         continue;
       }
     }
-    // Return success response
     return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
   } catch (const Ort::Exception &e) {
-    // Return error response directly
     return FL_METHOD_RESPONSE(fl_method_error_response_new("ORT_ERROR", e.what(), nullptr));
   } catch (const std::exception &e) {
-    // Return error response directly
     return FL_METHOD_RESPONSE(fl_method_error_response_new("PLUGIN_ERROR", e.what(), nullptr));
   }
 }
 
 static FlMethodResponse *create_ort_value(FlutterOnnxruntimePlugin *self, FlValue *args) {
-  // Extract arguments
   FlValue *source_type_value = fl_value_lookup_string(args, "sourceType");
   FlValue *data_value = fl_value_lookup_string(args, "data");
   FlValue *shape_value = fl_value_lookup_string(args, "shape");
@@ -818,7 +759,6 @@ static FlMethodResponse *create_ort_value(FlutterOnnxruntimePlugin *self, FlValu
   if (source_type_value == nullptr || data_value == nullptr || shape_value == nullptr ||
       fl_value_get_type(source_type_value) != FL_VALUE_TYPE_STRING ||
       fl_value_get_type(shape_value) != FL_VALUE_TYPE_LIST) {
-    // Return error response directly
     return FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_ARG", "Missing required arguments", nullptr));
   }
 
@@ -830,7 +770,6 @@ static FlMethodResponse *create_ort_value(FlutterOnnxruntimePlugin *self, FlValu
   for (size_t i = 0; i < shape_size; i++) {
     FlValue *dim = fl_value_get_list_value(shape_value, i);
     if (fl_value_get_type(dim) != FL_VALUE_TYPE_INT) {
-      // Return error response directly
       return FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_ARG", "Shape must contain integers", nullptr));
     }
     shape.push_back(fl_value_get_int(dim));
@@ -864,7 +803,6 @@ static FlMethodResponse *create_ort_value(FlutterOnnxruntimePlugin *self, FlValu
         return FL_METHOD_RESPONSE(
             fl_method_error_response_new("INVALID_DATA", "Data must be a list of numbers for float32 type", nullptr));
       }
-      // Create tensor
       valueId = self->tensor_manager->createFloat32Tensor(data_vec, shape);
     } else if (strcmp(source_type, "int32") == 0) {
       std::vector<int32_t> data_vec;
@@ -887,7 +825,6 @@ static FlMethodResponse *create_ort_value(FlutterOnnxruntimePlugin *self, FlValu
         return FL_METHOD_RESPONSE(
             fl_method_error_response_new("INVALID_DATA", "Data must be a list of numbers for int32 type", nullptr));
       }
-      // Create tensor
       valueId = self->tensor_manager->createInt32Tensor(data_vec, shape);
     } else if (strcmp(source_type, "int64") == 0) {
       std::vector<int64_t> data_vec;
@@ -910,7 +847,6 @@ static FlMethodResponse *create_ort_value(FlutterOnnxruntimePlugin *self, FlValu
         return FL_METHOD_RESPONSE(
             fl_method_error_response_new("INVALID_DATA", "Data must be a list of numbers for int64 type", nullptr));
       }
-      // Create tensor
       valueId = self->tensor_manager->createInt64Tensor(data_vec, shape);
     } else if (strcmp(source_type, "uint8") == 0) {
       std::vector<uint8_t> data_vec;
@@ -933,7 +869,6 @@ static FlMethodResponse *create_ort_value(FlutterOnnxruntimePlugin *self, FlValu
         return FL_METHOD_RESPONSE(
             fl_method_error_response_new("INVALID_DATA", "Data must be a list of numbers for int8 type", nullptr));
       }
-      // Create tensor
       valueId = self->tensor_manager->createUint8Tensor(data_vec, shape);
     } else if (strcmp(source_type, "bool") == 0) {
       std::vector<bool> data_vec;
@@ -952,7 +887,6 @@ static FlMethodResponse *create_ort_value(FlutterOnnxruntimePlugin *self, FlValu
         return FL_METHOD_RESPONSE(
             fl_method_error_response_new("INVALID_DATA", "Data must be a list of booleans for bool type", nullptr));
       }
-      // Create tensor
       valueId = self->tensor_manager->createBoolTensor(data_vec, shape);
     } else {
       std::string error_message = "Unsupported source data type: ";
@@ -960,11 +894,9 @@ static FlMethodResponse *create_ort_value(FlutterOnnxruntimePlugin *self, FlValu
       return FL_METHOD_RESPONSE(fl_method_error_response_new("UNSUPPORTED_TYPE", error_message.c_str(), nullptr));
     }
   } catch (const std::exception &e) {
-    // Return error response directly
     return FL_METHOD_RESPONSE(fl_method_error_response_new("TENSOR_CREATION_ERROR", e.what(), nullptr));
   }
 
-  // Create response
   g_autoptr(FlValue) result = fl_value_new_map();
   fl_value_set_string_take(result, "valueId", fl_value_new_string(valueId.c_str()));
   fl_value_set_string_take(result, "dataType", fl_value_new_string(source_type));
@@ -975,13 +907,10 @@ static FlMethodResponse *create_ort_value(FlutterOnnxruntimePlugin *self, FlValu
     fl_value_append_take(shape_list, fl_value_new_int(dim));
   }
   fl_value_set_string_take(result, "shape", shape_list);
-
-  // Return success response
   return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
 }
 
 static FlMethodResponse *convert_ort_value(FlutterOnnxruntimePlugin *self, FlValue *args) {
-  // Extract arguments
   FlValue *value_id_value = fl_value_lookup_string(args, "valueId");
   FlValue *target_type_value = fl_value_lookup_string(args, "targetType");
 
@@ -989,7 +918,6 @@ static FlMethodResponse *convert_ort_value(FlutterOnnxruntimePlugin *self, FlVal
   if (value_id_value == nullptr || target_type_value == nullptr ||
       fl_value_get_type(value_id_value) != FL_VALUE_TYPE_STRING ||
       fl_value_get_type(target_type_value) != FL_VALUE_TYPE_STRING) {
-    // Return error response directly
     return FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_ARG", "Missing required arguments", nullptr));
   }
 
@@ -1001,17 +929,13 @@ static FlMethodResponse *convert_ort_value(FlutterOnnxruntimePlugin *self, FlVal
   try {
     std::lock_guard<std::mutex> lock(self->mutex);
 
-    // Convert the tensor using TensorManager
     new_tensor_id = self->tensor_manager->convertTensor(value_id, target_type);
   } catch (const std::exception &e) {
-    // Return error response directly
     return FL_METHOD_RESPONSE(fl_method_error_response_new("CONVERSION_ERROR", e.what(), nullptr));
   }
 
-  // Get the shape of the converted tensor
   std::vector<int64_t> shape = self->tensor_manager->getTensorShape(new_tensor_id);
 
-  // Create response payload
   g_autoptr(FlValue) result = fl_value_new_map();
   fl_value_set_string_take(result, "valueId", fl_value_new_string(new_tensor_id.c_str()));
   fl_value_set_string_take(result, "dataType", fl_value_new_string(target_type)); // Use target type
@@ -1023,48 +947,40 @@ static FlMethodResponse *convert_ort_value(FlutterOnnxruntimePlugin *self, FlVal
   }
   fl_value_set_string_take(result, "shape", shape_list);
 
-  // Return success response
   return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
 }
 
 static FlMethodResponse *get_ort_value_data(FlutterOnnxruntimePlugin *self, FlValue *args) {
-  // Extract value ID
   FlValue *value_id_value = fl_value_lookup_string(args, "valueId");
 
   if (value_id_value == nullptr || fl_value_get_type(value_id_value) != FL_VALUE_TYPE_STRING) {
-    // Return error response directly
     return FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_ARG", "Invalid value ID", nullptr));
   }
 
   const char *value_id = fl_value_get_string(value_id_value);
 
-  FlValue *tensor_data = nullptr; // Initialize to nullptr
+  FlValue *tensor_data = nullptr;
   try {
-    // Get tensor data
     tensor_data = self->tensor_manager->getTensorData(value_id);
 
     // If tensor_data is null, it means tensor wasn't found or is invalid
     if (tensor_data == nullptr || fl_value_get_type(tensor_data) == FL_VALUE_TYPE_NULL) {
       if (tensor_data != nullptr) {
-        fl_value_unref(tensor_data); // Unref the null value if it was created
+        fl_value_unref(tensor_data);
       }
-      // Return error response directly
       return FL_METHOD_RESPONSE(
           fl_method_error_response_new("INVALID_VALUE", "Tensor not found or already being disposed", nullptr));
     }
-    // Return success response
     return FL_METHOD_RESPONSE(fl_method_success_response_new(tensor_data)); // tensor_data ownership transferred
   } catch (const std::exception &e) {
     if (tensor_data != nullptr) {
-      fl_value_unref(tensor_data); // Clean up if an exception occurred after creation
+      fl_value_unref(tensor_data);
     }
-    // Return error response directly
     return FL_METHOD_RESPONSE(fl_method_error_response_new("DATA_EXTRACTION_ERROR", e.what(), nullptr));
   }
 }
 
 static FlMethodResponse *release_ort_value(FlutterOnnxruntimePlugin *self, FlValue *args) {
-  // Get value ID
   FlValue *value_id_value = fl_value_lookup_string(args, "valueId");
 
   if (value_id_value == nullptr || fl_value_get_type(value_id_value) != FL_VALUE_TYPE_STRING) {
@@ -1073,7 +989,6 @@ static FlMethodResponse *release_ort_value(FlutterOnnxruntimePlugin *self, FlVal
 
   const char *value_id = fl_value_get_string(value_id_value);
 
-  // Release tensor
   self->tensor_manager->releaseTensor(value_id);
 
   return FL_METHOD_RESPONSE(fl_method_success_response_new(fl_value_new_null()));
