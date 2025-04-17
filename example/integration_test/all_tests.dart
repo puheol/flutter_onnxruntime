@@ -277,22 +277,37 @@ void main() {
     });
 
     group('Tensor Data Extraction Shape Test', () {
-      testWidgets('Test 2x2 tensor data extraction', (WidgetTester tester) async {
+      testWidgets('Test 2x2 tensor data as multi-dim list', (WidgetTester tester) async {
         final inputData = [1.1, 2.2, 3.3, 4.4];
         final shape = [2, 2];
         final tensor = await OrtValue.fromList(inputData, shape);
 
         final tensorData = await tensor.asList();
-        final tensorData1d = await tensor.asFlattenedList();
+        expect(tensorData, isA<List>());
+        expect(tensorData[0], isA<List>());
+
         expect(tensorData.length, shape[0]);
         var id = 0;
         for (final sublist in tensorData) {
           expect(sublist.length, shape[1]);
           for (final num in sublist) {
             expect(num, closeTo(inputData[id], 1e-5));
-            expect(tensorData1d[id], closeTo(inputData[id], 1e-5));
             id++;
           }
+        }
+      });
+
+      testWidgets('Test 2x2 tensor data as flat list', (WidgetTester tester) async {
+        final inputData = [1.1, 2.2, 3.3, 4.4];
+        final shape = [2, 2];
+        final tensor = await OrtValue.fromList(inputData, shape);
+
+        final tensorData1d = await tensor.asFlattenedList();
+        expect(tensorData1d, isA<List>());
+        expect(tensorData1d.length, 4);
+
+        for (int i = 0; i < inputData.length; i++) {
+          expect(tensorData1d[i], closeTo(inputData[i], 1e-5));
         }
       });
     });
