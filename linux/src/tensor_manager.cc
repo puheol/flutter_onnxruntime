@@ -38,8 +38,7 @@ std::string TensorManager::createFloat32Tensor(const std::vector<float> &data, c
 
     return tensor_id;
   } catch (const Ort::Exception &e) {
-    // Handle exception
-    return "";
+    throw;
   }
 }
 
@@ -61,8 +60,7 @@ std::string TensorManager::createInt32Tensor(const std::vector<int32_t> &data, c
 
     return tensor_id;
   } catch (const Ort::Exception &e) {
-    // Handle exception
-    return "";
+    throw;
   }
 }
 
@@ -84,8 +82,7 @@ std::string TensorManager::createInt64Tensor(const std::vector<int64_t> &data, c
 
     return tensor_id;
   } catch (const Ort::Exception &e) {
-    // Handle exception
-    return "";
+    throw;
   }
 }
 
@@ -107,8 +104,7 @@ std::string TensorManager::createUint8Tensor(const std::vector<uint8_t> &data, c
 
     return tensor_id;
   } catch (const Ort::Exception &e) {
-    // Handle exception
-    return "";
+    throw;
   }
 }
 
@@ -132,8 +128,7 @@ std::string TensorManager::createBoolTensor(const std::vector<bool> &data, const
 
     return tensor_id;
   } catch (const Ort::Exception &e) {
-    // Handle exception
-    return "";
+    throw;
   }
 }
 
@@ -258,10 +253,10 @@ FlValue *TensorManager::getTensorData(const std::string &tensor_id) {
       fl_value_set_string_take(result, "data", data_list);
     } else {
       // Unsupported tensor type
-      fl_value_set_string_take(result, "error", fl_value_new_string("Unsupported tensor type"));
+      throw std::runtime_error("Unsupported tensor type: " + tensor_type);
     }
   } catch (const Ort::Exception &e) {
-    fl_value_set_string_take(result, "error", fl_value_new_string(e.what()));
+    throw std::runtime_error(e.what());
   }
 
   return fl_value_ref(result);
@@ -381,8 +376,7 @@ std::string TensorManager::convertTensor(const std::string &tensor_id, const std
   auto shape_it = tensor_shapes_.find(tensor_id);
 
   if (tensor_it == tensors_.end() || type_it == tensor_types_.end() || shape_it == tensor_shapes_.end()) {
-    // Tensor not found
-    return "";
+    throw std::runtime_error("Tensor not found");
   }
 
   const std::string &source_type = type_it->second;
@@ -454,8 +448,7 @@ std::string TensorManager::convertTensor(const std::string &tensor_id, const std
     return convertBoolTo(tensor_id, target_type);
   }
 
-  // Unsupported source type
-  return "";
+  throw std::runtime_error("Unsupported type: " + source_type);
 }
 
 std::string TensorManager::convertFloat32To(const std::string &tensor_id, const std::string &target_type) {
@@ -511,8 +504,7 @@ std::string TensorManager::convertFloat32To(const std::string &tensor_id, const 
     tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
     tensor_types_[new_tensor_id] = "bool";
   } else {
-    // Unsupported target type
-    return "";
+    throw std::runtime_error("Unsupported type: " + target_type);
   }
 
   // Store the shape
@@ -572,8 +564,7 @@ std::string TensorManager::convertInt32To(const std::string &tensor_id, const st
     tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
     tensor_types_[new_tensor_id] = "bool";
   } else {
-    // Unsupported target type
-    return "";
+    throw std::runtime_error("Unsupported type: " + target_type);
   }
 
   // Store the shape
@@ -640,8 +631,7 @@ std::string TensorManager::convertInt64To(const std::string &tensor_id, const st
     tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
     tensor_types_[new_tensor_id] = "bool";
   } else {
-    // Unsupported target type
-    return "";
+    throw std::runtime_error("Unsupported type: " + target_type);
   }
 
   // Store the shape
@@ -699,8 +689,7 @@ std::string TensorManager::convertUint8To(const std::string &tensor_id, const st
     tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
     tensor_types_[new_tensor_id] = "bool";
   } else {
-    // Unsupported target type
-    return "";
+    throw std::runtime_error("Unsupported type: " + target_type);
   }
 
   // Store the shape
@@ -758,8 +747,7 @@ std::string TensorManager::convertBoolTo(const std::string &tensor_id, const std
     tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
     tensor_types_[new_tensor_id] = "uint8";
   } else {
-    // Unsupported target type
-    return "";
+    throw std::runtime_error("Unsupported type: " + target_type);
   }
 
   // Store the shape

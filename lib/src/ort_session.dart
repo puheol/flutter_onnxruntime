@@ -49,22 +49,12 @@ class OrtSession {
       inputs,
       runOptions: options?.toMap() ?? {},
     );
-    if (result.containsKey('error')) {
-      // throw an error
-      throw Exception('Error when running inference: ${result['error']}');
-    } else {
-      try {
-        // loop through the map and convert map to OrtValue
-        final outputs = <String, OrtValue>{};
-        for (final entry in result.entries) {
-          final tensorMap = {'valueId': entry.value[0], 'dataType': entry.value[1], 'shape': entry.value[2]};
-          outputs[entry.key] = OrtValue.fromMap(tensorMap);
-        }
-        return outputs;
-      } catch (e) {
-        throw Exception('Error when parsing inference outputs: $e');
-      }
+    final outputs = <String, OrtValue>{};
+    for (final entry in result.entries) {
+      final tensorMap = {'valueId': entry.value[0], 'dataType': entry.value[1], 'shape': entry.value[2]};
+      outputs[entry.key] = OrtValue.fromMap(tensorMap);
     }
+    return outputs;
   }
 
   Future<void> close() async {

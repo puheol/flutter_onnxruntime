@@ -82,3 +82,5 @@ You can also manually run tests for a specific platform:
 3. Make your changes and test on multiple platforms if possible
 4. Submit a pull request with a clear description of your changes
 
+## Debug Tips
+* Log printing does not work when debugging for C++/Linux. We could use early return of `FL_METHOD_RESPONSE()` to locate the error.

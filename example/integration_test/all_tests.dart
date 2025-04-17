@@ -315,6 +315,15 @@ void main() {
 
         await tensor.dispose();
       });
+
+      testWidgets('Using disposed tensor test', (WidgetTester tester) async {
+        final tensor = await OrtValue.fromList([1.0, 2.0, 3.0], [3]);
+        await tensor.dispose();
+        expect(
+          () async => await tensor.asList(),
+          throwsA(isA<PlatformException>().having((e) => e.code, 'code', "INVALID_VALUE")),
+        );
+      });
     });
   });
 
@@ -670,13 +679,11 @@ void main() {
           await tensorAFp16.dispose();
           await tensorBFp16.dispose();
           await output.dispose();
-        }
-        // TODO: Standardize behaviour across platforms
-        else if (Platform.isIOS || Platform.isMacOS) {
-          expect(() async => await tensorA.to(OrtDataType.float16), throwsA(isA<PlatformException>()));
         } else {
-          // not possible to create a fp16 tensor on non-Android platforms
-          expect(() async => await tensorA.to(OrtDataType.float16), throwsA(isA<TypeError>()));
+          expect(
+            () async => await tensorA.to(OrtDataType.float16),
+            throwsA(isA<PlatformException>().having((e) => e.code, 'code', "CONVERSION_ERROR")),
+          );
         }
       });
     });

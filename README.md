@@ -5,7 +5,7 @@
 
 Native Wrapper Flutter Plugin for ONNX Runtime
 
-*Current supported ONNX Runtime version:* **1.20.1**
+*Current supported ONNX Runtime version:* **1.21.0**
 
 
 ## 🌟 Why This Project?

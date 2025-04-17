@@ -76,7 +76,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
   private func handleCreateSession(call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = call.arguments as? [String: Any],
           let modelPath = args["modelPath"] as? String else {
-      result(FlutterError(code: "INVALID_ARGS", message: "Model path is required", details: nil))
+      result(FlutterError(code: "INVALID_ARG", message: "Model path is required", details: nil))
       return
     }
 
@@ -189,7 +189,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
     guard let args = call.arguments as? [String: Any],
           let sessionId = args["sessionId"] as? String,
           let inputs = args["inputs"] as? [String: Any] else {
-      result(FlutterError(code: "INVALID_ARGS", message: "Missing required arguments", details: nil))
+      result(FlutterError(code: "INVALID_ARG", message: "Missing required arguments", details: nil))
       return
     }
 
@@ -275,7 +275,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
   private func handleCloseSession(call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = call.arguments as? [String: Any],
           let sessionId = args["sessionId"] as? String else {
-      result(FlutterError(code: "INVALID_ARGS", message: "Session ID is required", details: nil))
+      result(FlutterError(code: "INVALID_ARG", message: "Session ID is required", details: nil))
       return
     }
 
@@ -289,7 +289,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
   private func handleGetMetadata(call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = call.arguments as? [String: Any],
           let sessionId = args["sessionId"] as? String else {
-      result(FlutterError(code: "INVALID_ARGS", message: "Session ID is required", details: nil))
+      result(FlutterError(code: "INVALID_ARG", message: "Session ID is required", details: nil))
       return
     }
 
@@ -323,7 +323,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
   private func handleGetInputInfo(call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = call.arguments as? [String: Any],
           let sessionId = args["sessionId"] as? String else {
-      result(FlutterError(code: "INVALID_ARGS", message: "Session ID is required", details: nil))
+      result(FlutterError(code: "INVALID_ARG", message: "Session ID is required", details: nil))
       return
     }
 
@@ -353,7 +353,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
   private func handleGetOutputInfo(call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = call.arguments as? [String: Any],
           let sessionId = args["sessionId"] as? String else {
-      result(FlutterError(code: "INVALID_ARGS", message: "Session ID is required", details: nil))
+      result(FlutterError(code: "INVALID_ARG", message: "Session ID is required", details: nil))
       return
     }
 
@@ -390,7 +390,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
           let sourceType = args["sourceType"] as? String,
           let data = args["data"],
           let shape = args["shape"] as? [Int] else {
-      result(FlutterError(code: "INVALID_ARGS", message: "Missing required arguments", details: nil))
+      result(FlutterError(code: "INVALID_ARG", message: "Missing required arguments", details: nil))
       return
     }
 
@@ -585,7 +585,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
     guard let args = call.arguments as? [String: Any],
           let valueId = args["valueId"] as? String,
           let targetType = args["targetType"] as? String else {
-      result(FlutterError(code: "INVALID_ARGS", message: "Missing required arguments", details: nil))
+      result(FlutterError(code: "INVALID_ARG", message: "Missing required arguments", details: nil))
       return
     }
 
@@ -735,7 +735,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
 
       default:
         // Unsupported conversion, return error
-        result(FlutterError(code: "UNSUPPORTED_CONVERSION",
+        result(FlutterError(code: "CONVERSION_ERROR",
                            message: "Conversion from \(sourceType) to \(targetType) is not supported",
                            details: nil))
         return
@@ -761,12 +761,12 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
   private func handleGetOrtValueData(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = call.arguments as? [String: Any],
           let valueId = args["valueId"] as? String else {
-      result(FlutterError(code: "INVALID_ARGS", message: "Missing valueId", details: nil))
+      result(FlutterError(code: "INVALID_ARG", message: "Missing valueId", details: nil))
       return
     }
 
     guard let tensor = ortValues[valueId] else {
-      result(FlutterError(code: "INVALID_VALUE", message: "OrtValue with ID \(valueId) not found", details: nil))
+      result(FlutterError(code: "INVALID_VALUE", message: "Tensor not found or already being disposed", details: nil))
       return
     }
 
@@ -834,7 +834,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
   private func handleReleaseOrtValue(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = call.arguments as? [String: Any],
           let valueId = args["valueId"] as? String else {
-      result(FlutterError(code: "INVALID_ARGS", message: "Missing value ID", details: nil))
+      result(FlutterError(code: "INVALID_ARG", message: "Missing value ID", details: nil))
       return
     }
 
