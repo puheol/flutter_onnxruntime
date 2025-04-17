@@ -7,7 +7,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
 import 'package:flutter_onnxruntime/src/flutter_onnxruntime_platform_interface.dart';
-import 'package:flutter_onnxruntime/src/ort_model_metadata.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements FlutterOnnxruntimePlatform {
@@ -196,6 +195,53 @@ class SessionOptionsMock extends MockFlutterOnnxruntimePlatform {
   }
 }
 
+class InferenceOutputsMock extends MockFlutterOnnxruntimePlatform {
+  @override
+  Future<Map<String, dynamic>> runInference(
+    String sessionId,
+    Map<String, dynamic> inputs, {
+    Map<String, dynamic>? runOptions,
+  }) {
+    // Track the call
+    lastInputsForRun = {};
+    for (final entry in inputs.entries) {
+      lastInputsForRun![entry.key] = {'valueId': (entry.value as OrtValue).id};
+    }
+
+    // Return mock outputs with proper structure
+    return Future.value({
+      'output1': [
+        'test_output_value_1',
+        'float32',
+        [1, 3],
+      ],
+      'output2': [
+        'test_output_value_2',
+        'float32',
+        [2, 2],
+      ],
+    });
+  }
+
+  @override
+  Future<Map<String, dynamic>> getOrtValueData(String valueId) {
+    // This method simulates retrieving data for an OrtValue
+    // It returns different data based on the valueId
+    if (valueId.contains('output1')) {
+      return Future.value({
+        'data': [1.0, 2.0, 3.0],
+        'shape': [1, 3],
+      });
+    } else if (valueId.contains('output2')) {
+      return Future.value({
+        'data': [4.0, 5.0, 6.0, 7.0],
+        'shape': [2, 2],
+      });
+    }
+    return Future.value({'data': [], 'shape': []});
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -371,15 +417,65 @@ void main() {
       final output1Data = await outputs['output1']!.asList();
       final output2Data = await outputs['output2']!.asList();
 
-      // Verify the extracted data
-      expect(output1Data, [1.0, 2.0, 3.0]);
+      // Verify the extracted data - shape [1, 3] becomes a 2D array
+      expect(output1Data, [
+        [1.0, 2.0, 3.0],
+      ]);
       expect(outputs['output1']!.shape, [1, 3]);
 
-      expect(output2Data, [4.0, 5.0, 6.0, 7.0]);
+      // Verify the extracted data - shape [2, 2] becomes a 2D array
+      expect(output2Data, [
+        [4.0, 5.0],
+        [6.0, 7.0],
+      ]);
       expect(outputs['output2']!.shape, [2, 2]);
+
+      // To demonstrate the difference, also use asFlattenedList()
+      final output1FlatData = await outputs['output1']!.asFlattenedList();
+      final output2FlatData = await outputs['output2']!.asFlattenedList();
+
+      // Flattened data should be 1D arrays
+      expect(output1FlatData, [1.0, 2.0, 3.0]);
+      expect(output2FlatData, [4.0, 5.0, 6.0, 7.0]);
 
       // Restore the original mock
       FlutterOnnxruntimePlatform.instance = mockPlatform;
+    });
+
+    test('run method returns output OrtValues and can retrieve data', () async {
+      // Replace with specialized mock
+      final mockInferenceOutputs = InferenceOutputsMock();
+      FlutterOnnxruntimePlatform.instance = mockInferenceOutputs;
+
+      // Create a test session using fromMap constructor
+      final testSession = OrtSession.fromMap({
+        'sessionId': 'test_session_id',
+        'inputNames': ['input1'],
+        'outputNames': ['output1', 'output2'],
+      });
+
+      // Create a mock input OrtValue
+      final inputValue = OrtValue.fromMap({
+        'valueId': 'test_input_value',
+        'dataType': 'float32',
+        'shape': [1, 3],
+      });
+
+      // Run inference
+      final outputs = await testSession.run({'input1': inputValue});
+
+      // Verify the processed inputs
+      expect(mockInferenceOutputs.lastInputsForRun, isNotNull);
+      expect(mockInferenceOutputs.lastInputsForRun!['input1'], {'valueId': 'test_input_value'});
+
+      // Verify the output OrtValues have the correct properties
+      expect(outputs['output1']!.id, 'test_output_value_1');
+      expect(outputs['output1']!.dataType, OrtDataType.float32);
+      expect(outputs['output1']!.shape, [1, 3]);
+
+      expect(outputs['output2']!.id, 'test_output_value_2');
+      expect(outputs['output2']!.dataType, OrtDataType.float32);
+      expect(outputs['output2']!.shape, [2, 2]);
     });
   });
 

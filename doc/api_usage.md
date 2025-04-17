@@ -149,9 +149,15 @@ final float16Tensor = await float32Tensor.to(OrtDataType.float16);
 ### Accessing Tensor Data
 
 ```dart
-// Get data as a List
+// Get data as a multi-dimensional List following the tensor's shape
 final tensorData = await float32Tensor.asList();
-print('Tensor data: $tensorData');
+print('Tensor data (shaped): $tensorData');
+// For a tensor with shape [2, 2], this prints: [[1.0, 2.0], [3.0, 4.0]]
+
+// Get data as a flattened 1D List
+final flattenedData = await float32Tensor.asFlattenedList();
+print('Tensor data (flattened): $flattenedData');
+// This prints: [1.0, 2.0, 3.0, 4.0]
 ```
 
 ### Important Memory Management

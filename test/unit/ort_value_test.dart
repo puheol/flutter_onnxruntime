@@ -115,6 +115,20 @@ class MockFlutterOnnxruntimePlatform with MockPlatformInterfaceMixin implements 
   Future<List<String>> getAvailableProviders() => Future.value(['CPU']);
 }
 
+class MockFlutterOnnxruntimePlatformWithShapedData extends MockFlutterOnnxruntimePlatform {
+  @override
+  Future<Map<String, dynamic>> getOrtValueData(String valueId) {
+    // Track the call
+    lastValueIdForData = valueId;
+
+    // Return data in a format that represents a 2D array
+    return Future.value({
+      'data': [1.0, 2.0, 3.0, 4.0],
+      'shape': [2, 2],
+    });
+  }
+}
+
 void main() {
   late MockFlutterOnnxruntimePlatform mockPlatform;
   final FlutterOnnxruntimePlatform initialPlatform = FlutterOnnxruntimePlatform.instance;
@@ -308,20 +322,50 @@ void main() {
   });
 
   group('OrtValue data extraction', () {
-    test('asList() should return data in native format', () async {
+    test('asList() should return data in multi-dimensional format based on shape', () async {
+      // Use the mock that returns shaped data
+      final shapedMockPlatform = MockFlutterOnnxruntimePlatformWithShapedData();
+      FlutterOnnxruntimePlatform.instance = shapedMockPlatform;
+
       // Create an OrtValue
       final tensor = await OrtValue.fromList(Float32List.fromList([1.0, 2.0, 3.0, 4.0]), [2, 2]);
 
-      // Get data in native format
+      // Get data as a shaped list
       final data = await tensor.asList();
+
+      // Verify the call
+      expect(shapedMockPlatform.lastValueIdForData, tensor.id);
+
+      // Verify the returned data is multi-dimensional according to shape
+      expect(data, isA<List>());
+      expect(data.length, 2); // 2 rows
+      expect(data[0], isA<List>());
+      expect(data[0].length, 2); // 2 columns
+      expect(data[0][0], 1.0);
+      expect(data[0][1], 2.0);
+      expect(data[1][0], 3.0);
+      expect(data[1][1], 4.0);
+
+      // Restore the original mock
+      FlutterOnnxruntimePlatform.instance = mockPlatform;
+    });
+
+    test('asFlattenedList() should return flattened data', () async {
+      // Create an OrtValue
+      final tensor = await OrtValue.fromList(Float32List.fromList([1.0, 2.0, 3.0, 4.0]), [2, 2]);
+
+      // Get data as flattened list
+      final data = await tensor.asFlattenedList();
 
       // Verify the call
       expect(mockPlatform.lastValueIdForData, tensor.id);
 
-      // Verify the returned data
+      // Verify the returned data is flat
       expect(data, isA<List>());
       expect(data.length, 4);
       expect(data[0], 1.0);
+      expect(data[1], 2.0);
+      expect(data[2], 3.0);
       expect(data[3], 4.0);
     });
   });
