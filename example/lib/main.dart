@@ -47,34 +47,31 @@ class _MyAppState extends State<MyApp> {
     super.dispose();
   }
 
+  // Run a simple Addition Model
   Future<void> _runAddition(double a, double b) async {
     if (_session == null) {
       await _initializeSession();
     }
 
+    // Prepare the inputs
     final inputA = await OrtValue.fromList([a], [1]);
     final inputB = await OrtValue.fromList([b], [1]);
-
     final inputs = {'A': inputA, 'B': inputB};
 
+    // Execute the inference
     final outputs = await _session!.run(inputs);
 
-    // extract the output data
-    try {
-      final outputData = await outputs['C']!.asList();
-      setState(() {
-        _result = outputData[0].toString(); // Update the result with the output from the model
-      });
-    } catch (e) {
-      setState(() {
-        _result = 'Error: $e';
-      });
-    } finally {
-      // clean up
-      inputA.dispose();
-      inputB.dispose();
-      outputs['C']!.dispose();
-    }
+    // Extract the output data
+    final outputData = await outputs['C']!.asList();
+
+    // Clean up
+    inputA.dispose();
+    inputB.dispose();
+    outputs['C']!.dispose();
+
+    setState(() {
+      _result = outputData[0].toString();
+    });
   }
 
   @override
