@@ -172,6 +172,22 @@ class ProviderOptionsMock extends MockFlutterOnnxruntimePlatform {
   }
 }
 
+class ArrayShapeMock extends MockFlutterOnnxruntimePlatform {
+  final Map<String, Map<String, dynamic>> dataStorage = {};
+
+  void setTensorData(String valueId, List<dynamic> data, List<int> shape) {
+    dataStorage[valueId] = {'data': data, 'shape': shape};
+  }
+
+  @override
+  Future<Map<String, dynamic>> getOrtValueData(String valueId) {
+    if (dataStorage.containsKey(valueId)) {
+      return Future.value(dataStorage[valueId]!);
+    }
+    return Future.value({'data': [], 'shape': []});
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -264,6 +280,46 @@ void main() {
 
       // Restore original mock
       FlutterOnnxruntimePlatform.instance = mockPlatform;
+    });
+
+    test('OrtValue.asList() returns multi-dimensional data while asFlattenedList() returns flat data', () async {
+      // Set up a specialized mock platform interface
+      final arrayShapeMock = ArrayShapeMock();
+      FlutterOnnxruntimePlatform.instance = arrayShapeMock;
+
+      // Create a mock tensor
+      final tensor = OrtValue.fromMap({
+        'valueId': 'test_tensor_id',
+        'dataType': 'float32',
+        'shape': [2, 3],
+      });
+
+      // Set up the mock data
+      arrayShapeMock.setTensorData('test_tensor_id', [1.0, 2.0, 3.0, 4.0, 5.0, 6.0], [2, 3]);
+
+      // Get data using both methods
+      final shapedData = await tensor.asList();
+      final flatData = await tensor.asFlattenedList();
+
+      // Verify shaped data has the right structure (2x3 matrix)
+      expect(shapedData, isA<List>());
+      expect(shapedData.length, 2);
+      expect(shapedData[0], isA<List>());
+      expect(shapedData[0].length, 3);
+      expect(shapedData[0][0], 1.0);
+      expect(shapedData[0][1], 2.0);
+      expect(shapedData[0][2], 3.0);
+      expect(shapedData[1][0], 4.0);
+      expect(shapedData[1][1], 5.0);
+      expect(shapedData[1][2], 6.0);
+
+      // Verify flat data is a simple 1D list
+      expect(flatData, isA<List>());
+      expect(flatData.length, 6);
+      expect(flatData, [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+
+      // Clean up
+      FlutterOnnxruntimePlatform.instance = initialPlatform;
     });
   });
 

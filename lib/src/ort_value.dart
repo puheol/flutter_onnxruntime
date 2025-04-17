@@ -73,6 +73,10 @@ class OrtValue {
   // ignore: unintended_html_in_doc_comment
   /// and their corresponding Dart List<num> types.
   ///
+  /// Note: the shape of the list is not necessary to be in the correct shapes as they will be flattened in
+  /// the preprocess. However, the order of the elements and the total number of elements must match exactly
+  /// with the target shape
+  ///
   /// [data] is the data to create the tensor from (any supported list type)
   /// [shape] is the shape of the tensor
   static Future<OrtValue> fromList(dynamic data, List<int> shape) async {
@@ -120,14 +124,31 @@ class OrtValue {
     return OrtValue.fromMap(result);
   }
 
-  /// Get the data from this tensor as a list with the native data type
+  /// Get the data from this tensor as a list
+  ///
+  /// Return a nested list following the shape if the tensor is multi-dimensional
   ///
   /// Returns the data in its original type:
   /// - Float values for float32 and float16 tensors
   /// - Int values for int32, int64, int16, int8, uint8, uint16, uint32, uint64 tensors
   /// - Boolean values for bool tensors
   /// - String values for string tensors
+  ///
   Future<List<dynamic>> asList() async {
+    final data = await FlutterOnnxruntimePlatform.instance.getOrtValueData(id);
+    final dataList1d = List<dynamic>.from(data['data']);
+    return _reshapeList(dataList1d, shape);
+  }
+
+  /// Get the data from this tensor as a flattened list (1D list)
+  ///
+  /// Returns the data in its original type:
+  /// - Float values for float32 and float16 tensors
+  /// - Int values for int32, int64, int16, int8, uint8, uint16, uint32, uint64 tensors
+  /// - Boolean values for bool tensors
+  /// - String values for string tensors
+  ///
+  Future<List<dynamic>> asFlattenedList() async {
     final data = await FlutterOnnxruntimePlatform.instance.getOrtValueData(id);
     return List<dynamic>.from(data['data']);
   }
@@ -211,5 +232,54 @@ class OrtValue {
       return data.length;
     }
     throw ArgumentError('Cannot determine element count for type: ${data.runtimeType}');
+  }
+
+  /// Reshapes a flattened list of data according to the provided shape.
+  ///
+  /// This function takes a flat list and reconstructs it into a nested structure
+  /// based on the specified shape dimensions.
+  static List _reshapeList(List<dynamic> data, List<int> shape) {
+    // Validate shape and data consistency
+    if (shape.isEmpty) {
+      return data; // No reshaping needed
+    }
+
+    // For single dimension, just return the flat list
+    if (shape.length == 1) {
+      return data;
+    }
+
+    // Validate data length against shape
+    int expectedElements = _calculateExpectedElements(shape);
+    if (data.length != expectedElements) {
+      throw ArgumentError(
+        'Shape/data size mismatch: data has ${data.length} elements, '
+        'but shape $shape requires $expectedElements elements',
+      );
+    }
+
+    // Start the recursive reshaping
+    return _buildNestedList(data, shape, 0);
+  }
+
+  // Recursive function to build nested structure
+  static List _buildNestedList(List<dynamic> flatData, List<int> dimensions, int offset) {
+    // Base case: if we're at the innermost dimension
+    if (dimensions.length == 1) {
+      return flatData.sublist(offset, offset + dimensions[0]);
+    }
+
+    int dimSize = dimensions[0];
+    List<int> remainingDims = dimensions.sublist(1);
+    int subArraySize = remainingDims.fold(1, (product, dim) => product * dim);
+
+    // Build the list for the current dimension
+    List result = [];
+    for (int i = 0; i < dimSize; i++) {
+      int newOffset = offset + (i * subArraySize);
+      result.add(_buildNestedList(flatData, remainingDims, newOffset));
+    }
+
+    return result;
   }
 }

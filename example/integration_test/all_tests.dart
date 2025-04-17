@@ -54,7 +54,7 @@ void main() {
         expect(tensor.dataType, OrtDataType.float32);
         expect(tensor.shape, shape);
 
-        final retrievedData = await tensor.asList();
+        final retrievedData = await tensor.asFlattenedList();
         expect(retrievedData.length, 4);
         for (int i = 0; i < inputData.length; i++) {
           expect(retrievedData[i], closeTo(inputData[i], 1e-5));
@@ -71,7 +71,7 @@ void main() {
         expect(tensor.dataType, OrtDataType.int32);
         expect(tensor.shape, shape);
 
-        final retrievedData = await tensor.asList();
+        final retrievedData = await tensor.asFlattenedList();
         expect(retrievedData.length, 6);
         for (int i = 0; i < inputData.length; i++) {
           expect(retrievedData[i], inputData[i]);
@@ -88,7 +88,7 @@ void main() {
         expect(tensor.dataType, OrtDataType.uint8);
         expect(tensor.shape, shape);
 
-        final retrievedData = await tensor.asList();
+        final retrievedData = await tensor.asFlattenedList();
         expect(retrievedData.length, 4);
         for (int i = 0; i < inputData.length; i++) {
           expect(retrievedData[i], inputData[i]);
@@ -105,7 +105,7 @@ void main() {
         expect(tensor.dataType, OrtDataType.bool);
         expect(tensor.shape, shape);
 
-        final retrievedData = await tensor.asList();
+        final retrievedData = await tensor.asFlattenedList();
         expect(retrievedData.length, 4);
         for (int i = 0; i < inputData.length; i++) {
           final retrievedBoolValue = retrievedData[i] == 1;
@@ -123,7 +123,7 @@ void main() {
         expect(tensor.dataType, OrtDataType.float32);
         expect(tensor.shape, shape);
 
-        final retrievedData = await tensor.asList();
+        final retrievedData = await tensor.asFlattenedList();
         expect(retrievedData.length, 4);
         for (int i = 0; i < inputData.length; i++) {
           expect(retrievedData[i], closeTo(inputData[i], 1e-5));
@@ -140,7 +140,7 @@ void main() {
         expect(tensor.dataType, OrtDataType.int32);
         expect(tensor.shape, shape);
 
-        final retrievedData = await tensor.asList();
+        final retrievedData = await tensor.asFlattenedList();
         expect(retrievedData.length, 4);
         for (int i = 0; i < inputData.length; i++) {
           expect(retrievedData[i], inputData[i]);
@@ -242,7 +242,7 @@ void main() {
       });
     });
 
-    group('Tensor Shape Tests', () {
+    group('Tensor Creation With Shape Tests', () {
       testWidgets('Tensor size and target shape mismatch', (WidgetTester tester) async {
         final inputData = [1.1, 2.2, 3.3, 4.4, 5.5];
         final shape = [2, 2];
@@ -263,7 +263,8 @@ void main() {
         expect(tensor.shape, shape);
 
         final retrievedData = await tensor.asList();
-        expect(retrievedData.length, 4);
+        expect(retrievedData.length, shape[0]);
+        expect(retrievedData[0].length, shape[1]);
       });
 
       testWidgets('Negative value in shape test', (WidgetTester tester) async {
@@ -272,6 +273,42 @@ void main() {
 
         // expect to throw an ArgumentError
         expect(() async => await OrtValue.fromList(inputData, shape), throwsA(isA<ArgumentError>()));
+      });
+    });
+
+    group('Tensor Data Extraction Shape Test', () {
+      testWidgets('Test 2x2 tensor data as multi-dim list', (WidgetTester tester) async {
+        final inputData = [1.1, 2.2, 3.3, 4.4];
+        final shape = [2, 2];
+        final tensor = await OrtValue.fromList(inputData, shape);
+
+        final tensorData = await tensor.asList();
+        expect(tensorData, isA<List>());
+        expect(tensorData[0], isA<List>());
+
+        expect(tensorData.length, shape[0]);
+        var id = 0;
+        for (final sublist in tensorData) {
+          expect(sublist.length, shape[1]);
+          for (final num in sublist) {
+            expect(num, closeTo(inputData[id], 1e-5));
+            id++;
+          }
+        }
+      });
+
+      testWidgets('Test 2x2 tensor data as flat list', (WidgetTester tester) async {
+        final inputData = [1.1, 2.2, 3.3, 4.4];
+        final shape = [2, 2];
+        final tensor = await OrtValue.fromList(inputData, shape);
+
+        final tensorData1d = await tensor.asFlattenedList();
+        expect(tensorData1d, isA<List>());
+        expect(tensorData1d.length, 4);
+
+        for (int i = 0; i < inputData.length; i++) {
+          expect(tensorData1d[i], closeTo(inputData[i], 1e-5));
+        }
       });
     });
 
@@ -513,7 +550,7 @@ void main() {
         await session.close();
       });
 
-      testWidgets('FP32 model inference test', (WidgetTester tester) async {
+      testWidgets('Inference test with single batch', (WidgetTester tester) async {
         inputs = {
           'A': await OrtValue.fromList([1.0, 1.0, 1.0, 1.0, 1.0, 1.0], [1, 2, 3]),
           'B': await OrtValue.fromList([2.0, 2.0, 2.0, 2.0, 2.0, 2.0], [1, 3, 2]),
@@ -523,8 +560,10 @@ void main() {
         expect(output!.dataType, OrtDataType.float32);
         expect(output.shape, [1, 2, 3]);
         final outputData = await output.asList();
-        expect(outputData.length, 6);
-        expect(outputData.every((e) => e == 1.5), true);
+        expect(outputData.length, output.shape[0]);
+        expect(outputData[0].length, output.shape[1]);
+        expect(outputData[0][0].length, output.shape[2]);
+        expect(outputData.expand((e0) => e0).expand((e) => e).every((element) => element == 1.5), true);
 
         // clean up
         for (var input in inputs.values) {
@@ -533,7 +572,7 @@ void main() {
         await output.dispose();
       });
 
-      testWidgets('FP32 model inference test with multi-batch', (WidgetTester tester) async {
+      testWidgets('Inference test with multi-batch', (WidgetTester tester) async {
         inputs = {
           'A': await OrtValue.fromList(
             [
@@ -555,8 +594,14 @@ void main() {
         expect(output!.dataType, OrtDataType.float32);
         expect(output.shape, [2, 2, 3]);
         final outputData = await output.asList();
-        expect(outputData.length, 12);
-        expect(outputData.every((e) => e == 1.5), true);
+        final outputData1d = await output.asFlattenedList();
+        // check values of 1d list
+        expect(outputData1d.length, 12);
+        expect(outputData1d.every((e) => e == 1.5), true);
+        // check shape of multi-dim list
+        expect(outputData.length, output.shape[0]);
+        expect(outputData[0].length, output.shape[1]);
+        expect(outputData[0][0].length, output.shape[2]);
 
         // clean up
         for (var input in inputs.values) {
@@ -630,7 +675,7 @@ void main() {
         expect(output!.dataType, OrtDataType.int32);
         expect(output.shape, [1, 2, 3]);
 
-        final outputData = await output.asList();
+        final outputData = await output.asFlattenedList();
         expect(outputData.length, 6);
         expect(outputData.every((e) => e == 1), true); // 1 + 2 = 3, 3 * 0.5 = 1.5 -> 1
 
@@ -670,8 +715,12 @@ void main() {
           expect(output.shape, [1, 2, 3]);
 
           final outputData = await output.asList();
-          expect(outputData.length, 6);
-          expect(outputData.every((e) => e == 1.5), true);
+          // check shape
+          expect(outputData.length, output.shape[0]);
+          expect(outputData[0].length, output.shape[1]);
+          expect(outputData[0][0].length, output.shape[2]);
+          // check value
+          expect(outputData.expand((e0) => e0).expand((e) => e).every((element) => element == 1.5), true);
 
           // clean up
           await tensorA.dispose();
