@@ -8,7 +8,7 @@ Add the following dependency to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  flutter_onnxruntime: ^1.0.0
+  flutter_onnxruntime: ^1.1.0
 ```
 
 ## Basic Usage
