@@ -17,6 +17,8 @@ Common issues and their solutions.
     target 'Runner' do
     use_frameworks! :linkage => :static
     ```
+* `RuntimeException` while running Reshape node with "input_shape_size == size was false"
+    If you are using an ORT optimized model, it's possible that there is some certain nodes that is not supported by ORT. Try using the original ONNX model (without ORT optimization) to see if the issue persists.
 
 ## macOS
 * Target minimum version: MacOS 14
