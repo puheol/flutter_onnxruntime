@@ -5,9 +5,13 @@ Common issues and their solutions.
 
 ## Android
 * `JNI DETECTED ERROR IN APPLICATION: mid == null`
-    For Android consumers using the library with R8-minimized builds, currently you need to add the following line to your `proguard-rules.pro` inside your Android project ([reference](https://onnxruntime.ai/docs/build/android.html#note-proguard-rules-for-r8-minimization-android-app-builds-to-work))
+    For Android consumers using the library with R8-minimized builds, currently you need to add the following line to your `proguard-rules.pro` inside your Android project at `android/app/` ([reference](https://onnxruntime.ai/docs/build/android.html#note-proguard-rules-for-r8-minimization-android-app-builds-to-work))
     ```
     -keep class ai.onnxruntime.** { *; }
+    ```
+    or run the below bash command from the project root:
+    ```bash
+    echo "-keep class ai.onnxruntime.** { *; }" > android/app/proguard-rules.pro
     ```
 
 ## iOS
