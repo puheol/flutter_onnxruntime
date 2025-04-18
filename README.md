@@ -1,5 +1,8 @@
 <img src="flutter_onnxruntime.png" alt="flutter_onnxruntime" align="center"/>
-
+<p align="center">
+<a href="https://pub.dev/packages/flutter_onnxruntime" alt="Flutter ONNX Runtime on pub.dev">
+        <img src="https://img.shields.io/pub/v/flutter_onnxruntime.svg" height="25" /></a>
+</p>
 
 # flutter_onnxruntime
 
