@@ -13,13 +13,10 @@ Native Wrapper Flutter Plugin for ONNX Runtime
 
 ## 🌟 Why This Project?
 
-`flutter_onnxruntime` is a lightweight plugin that provides native wrappers for running ONNX Runtime on multiple platforms without relying on pre-built libraries.
+`flutter_onnxruntime` is a lightweight plugin that provides native wrappers for running ONNX Runtime on multiple platforms.
 
       📦 No Pre-built Libraries
       Libraries are fetched directly from official repositories during installation, ensuring they are always up-to-date!
-
-      🪶 Lightweight Bundle Size
-      The native implementation keeps your app slim and efficient.
 
       🛡️ Memory Safety
       All memory management is handled in native code, reducing the risk of memory leaks.

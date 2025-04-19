@@ -1,3 +1,6 @@
+## 1.2.2
+* Improve example documentation
+
 ## 1.2.0
 * Returning a multi-dimensional list for tensor data extraction
 * Support return a flat list

@@ -54,9 +54,10 @@ class _MyAppState extends State<MyApp> {
     }
 
     // Prepare the inputs
-    final inputA = await OrtValue.fromList([a], [1]);
-    final inputB = await OrtValue.fromList([b], [1]);
-    final inputs = {'A': inputA, 'B': inputB};
+    final inputs = {
+      'A': await OrtValue.fromList([a], [1]),
+      'B': await OrtValue.fromList([b], [1]),
+    };
 
     // Execute the inference
     final outputs = await _session!.run(inputs);
@@ -65,8 +66,9 @@ class _MyAppState extends State<MyApp> {
     final outputData = await outputs['C']!.asList();
 
     // Clean up
-    inputA.dispose();
-    inputB.dispose();
+    for (final tensor in inputs.values) {
+      tensor.dispose();
+    }
     outputs['C']!.dispose();
 
     setState(() {
