@@ -1,3 +1,7 @@
+## 1.2.3
+* Standardize Execution Provider names across all platforms
+* Fix a bug in get_metadata method for Linux
+
 ## 1.2.2
 * Improve example documentation
 
