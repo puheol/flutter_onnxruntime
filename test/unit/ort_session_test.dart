@@ -526,7 +526,7 @@ void main() {
       final options = OrtSessionOptions(
         intraOpNumThreads: 2,
         interOpNumThreads: 4,
-        providers: ['CUDA', 'CPU'],
+        providers: [OrtProvider.CUDA, OrtProvider.CPU],
         useArena: true,
         deviceId: 0,
       );
@@ -541,7 +541,7 @@ void main() {
     });
 
     test('constructs with partial options and produces correct map', () {
-      final options = OrtSessionOptions(intraOpNumThreads: 2, providers: ['CUDA']);
+      final options = OrtSessionOptions(intraOpNumThreads: 2, providers: [OrtProvider.CUDA]);
 
       final map = options.toMap();
 
@@ -566,7 +566,7 @@ void main() {
       final optionsMock = SessionOptionsMock();
       FlutterOnnxruntimePlatform.instance = optionsMock;
 
-      final options = OrtSessionOptions(providers: ['CUDA', 'CPU'], deviceId: 1);
+      final options = OrtSessionOptions(providers: [OrtProvider.CUDA, OrtProvider.CPU], deviceId: 1);
 
       final onnxRuntime = OnnxRuntime();
       await onnxRuntime.createSession('test_model.onnx', options: options);

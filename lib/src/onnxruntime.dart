@@ -4,11 +4,14 @@
 // This source code is licensed under the license found in the
 // LICENSE file in the root directory of this source tree.
 
+// ignore_for_file: constant_identifier_names
+
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'package:flutter_onnxruntime/src/flutter_onnxruntime_platform_interface.dart';
+import 'package:flutter_onnxruntime/src/ort_provider.dart';
 import 'package:flutter_onnxruntime/src/ort_session.dart';
 
 class OnnxRuntime {
@@ -49,7 +52,16 @@ class OnnxRuntime {
   }
 
   /// Get the available providers
-  Future<List<String>> getAvailableProviders() async {
-    return FlutterOnnxruntimePlatform.instance.getAvailableProviders();
+  ///
+  /// Returns a list of the available providers
+  Future<List<OrtProvider>> getAvailableProviders() async {
+    final providers = await FlutterOnnxruntimePlatform.instance.getAvailableProviders();
+    return providers.map((p) {
+      final provider = OrtProvider.values.firstWhere(
+        (e) => e.name == p,
+        orElse: () => throw ArgumentError('Provider $p is not a valid OrtProvider.'),
+      );
+      return provider;
+    }).toList();
   }
 }

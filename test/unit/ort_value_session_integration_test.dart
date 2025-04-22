@@ -149,7 +149,7 @@ class ConversionTrackingMock extends MockFlutterOnnxruntimePlatform {
 
 class ProviderOptionsMock extends MockFlutterOnnxruntimePlatform {
   @override
-  Future<List<String>> getAvailableProviders() => Future.value(['CUDA', 'CPU', 'CoreML']);
+  Future<List<String>> getAvailableProviders() => Future.value(['CUDA', 'CPU', 'CORE_ML']);
 
   @override
   Future<Map<String, dynamic>> createSession(String modelPath, {Map<String, dynamic>? sessionOptions}) {
@@ -334,11 +334,11 @@ void main() {
       final availableProviders = await onnxRuntime.getAvailableProviders();
 
       // Verify we get our expected providers
-      expect(availableProviders, containsAll(['CUDA', 'CPU', 'CoreML']));
+      expect(availableProviders, containsAll([OrtProvider.CUDA, OrtProvider.CPU, OrtProvider.CORE_ML]));
 
       // Create session with preferred providers
       final options = OrtSessionOptions(
-        providers: ['CUDA', 'CPU'], // Prioritize CUDA, fallback to CPU
+        providers: [OrtProvider.CUDA, OrtProvider.CPU], // Prioritize CUDA, fallback to CPU
         deviceId: 0,
       );
 

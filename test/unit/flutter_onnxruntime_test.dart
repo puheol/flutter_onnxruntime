@@ -162,8 +162,8 @@ void main() {
       final providers = await onnxRuntime.getAvailableProviders();
 
       expect(providers, isNotNull);
-      expect(providers, isA<List<String>>());
-      expect(providers, contains('CPU'));
+      expect(providers, isA<List<OrtProvider>>());
+      expect(providers, contains(OrtProvider.CPU));
     });
   });
 
@@ -290,12 +290,17 @@ void main() {
 
   group('Options classes', () {
     test('OrtSessionOptions toMap converts options to map correctly', () {
-      final options = OrtSessionOptions(intraOpNumThreads: 4, interOpNumThreads: 2);
+      final options = OrtSessionOptions(
+        intraOpNumThreads: 4,
+        interOpNumThreads: 2,
+        providers: [OrtProvider.CUDA, OrtProvider.CPU],
+      );
 
       final map = options.toMap();
 
       expect(map['intraOpNumThreads'], 4);
       expect(map['interOpNumThreads'], 2);
+      expect(map['providers'], ['CUDA', 'CPU']);
     });
 
     test('OrtRunOptions toMap converts options to map correctly', () {
