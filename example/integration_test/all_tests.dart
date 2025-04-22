@@ -388,6 +388,34 @@ void main() {
         fail('Failed to get available providers: $e');
       }
     });
+
+    testWidgets('Create session with CPU provider', (WidgetTester tester) async {
+      final session = await onnxRuntime.createSessionFromAsset(
+        'assets/models/addition_model.ort',
+        options: OrtSessionOptions(providers: [OrtProvider.CPU]),
+      );
+      expect(session, isNotNull);
+      await session.close();
+    });
+
+    testWidgets('Create session with not available provider', (WidgetTester tester) async {
+      // set a negative provider
+      // we assume that CORE_ML is never available on Android and Linux
+      // and XNNPACK is never available on iOS and MacOS
+      OrtProvider negativeProvider = OrtProvider.CORE_ML;
+      if (Platform.isIOS || Platform.isMacOS) {
+        negativeProvider = OrtProvider.XNNPACK;
+      }
+      try {
+        await onnxRuntime.createSessionFromAsset(
+          'assets/models/addition_model.ort',
+          options: OrtSessionOptions(providers: [negativeProvider]),
+        );
+        fail('Session should not be created');
+      } catch (e) {
+        expect(e, isA<PlatformException>());
+      }
+    });
   });
 
   group('Session Info Tests', () {

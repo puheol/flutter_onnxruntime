@@ -65,6 +65,35 @@ static FlMethodResponse *convert_ort_value(FlutterOnnxruntimePlugin *self, FlVal
 static FlMethodResponse *get_ort_value_data(FlutterOnnxruntimePlugin *self, FlValue *args);
 static FlMethodResponse *release_ort_value(FlutterOnnxruntimePlugin *self, FlValue *args);
 
+// Helper function to map C++ API provider names to OrtProvider enum names
+static std::string mapProviderNameToEnumName(const std::string &providerName) {
+  // Map from C++ API provider names to OrtProvider enum names
+  static const std::unordered_map<std::string, std::string> providerNameMap = {
+      {"CPUExecutionProvider", "CPU"},
+      {"CUDAExecutionProvider", "CUDA"},
+      {"TensorrtExecutionProvider", "TENSOR_RT"},
+      {"MIGraphXExecutionProvider", "MIGRAPHX"},
+      {"ROCMExecutionProvider", "ROCM"},
+      {"CoreMLExecutionProvider", "CORE_ML"},
+      {"DnnlExecutionProvider", "DNNL"},
+      {"OpenVINOExecutionProvider", "OPEN_VINO"},
+      {"NnapiExecutionProvider", "NNAPI"},
+      {"QnnExecutionProvider", "QNN"},
+      {"DmlExecutionProvider", "DIRECT_ML"},
+      {"ACLExecutionProvider", "ACL"},
+      {"ArmNNExecutionProvider", "ARM_NN"},
+      {"XnnpackExecutionProvider", "XNNPACK"}};
+
+  auto it = providerNameMap.find(providerName);
+  if (it != providerNameMap.end()) {
+    return it->second;
+  }
+
+  // Return the original name if no mapping exists
+  // This handles cases like custom or new providers that aren't in the enum yet
+  return providerName;
+}
+
 // Plugin class initialization
 static void flutter_onnxruntime_plugin_class_init(FlutterOnnxruntimePluginClass *klass) {
   G_OBJECT_CLASS(klass)->dispose = flutter_onnxruntime_plugin_dispose;
@@ -216,17 +245,17 @@ static FlMethodResponse *create_session(FlutterOnnxruntimePlugin *self, FlValue 
 
     // Default to CPU provider if no providers are specified
     if (providers.empty()) {
-      providers.push_back("CPUExecutionProvider");
+      providers.push_back("CPU");
     }
 
     // Set providers in session options
     try {
       for (const auto &provider : providers) {
-        if (provider == "CPUExecutionProvider") {
+        if (provider == "CPU") {
           // CPU is implicitly added if no others are, or can be explicitly added.
           // No specific options needed here usually.
           continue;
-        } else if (provider == "CUDAExecutionProvider") {
+        } else if (provider == "CUDA") {
           OrtCUDAProviderOptionsV2 *cuda_options = nullptr;
           OrtStatus *status = Ort::GetApi().CreateCUDAProviderOptions(&cuda_options);
           if (status != nullptr) {
@@ -257,7 +286,7 @@ static FlMethodResponse *create_session(FlutterOnnxruntimePlugin *self, FlValue 
           // Append CUDA execution provider to session options
           session_options.AppendExecutionProvider_CUDA_V2(*cuda_options_ptr);
 
-        } else if (provider == "TensorrtExecutionProvider") {
+        } else if (provider == "TENSOR_RT") {
           OrtTensorRTProviderOptionsV2 *tensorrt_options = nullptr;
           OrtStatus *status = Ort::GetApi().CreateTensorRTProviderOptions(&tensorrt_options);
           if (status != nullptr) {
@@ -322,7 +351,9 @@ static FlMethodResponse *get_available_providers(FlutterOnnxruntimePlugin *self,
 
   g_autoptr(FlValue) result = fl_value_new_list();
   for (const auto &provider : providers) {
-    fl_value_append_take(result, fl_value_new_string(provider.c_str()));
+    // Map the provider name to the standardized enum name
+    std::string mappedName = mapProviderNameToEnumName(provider);
+    fl_value_append_take(result, fl_value_new_string(mappedName.c_str()));
   }
   return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
 }

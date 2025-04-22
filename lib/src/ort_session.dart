@@ -6,6 +6,7 @@
 
 import 'package:flutter_onnxruntime/src/flutter_onnxruntime_platform_interface.dart';
 import 'package:flutter_onnxruntime/src/ort_model_metadata.dart';
+import 'package:flutter_onnxruntime/src/ort_provider.dart';
 import 'package:flutter_onnxruntime/src/ort_value.dart';
 
 class OrtSession {
@@ -93,8 +94,8 @@ class OrtSessionOptions {
   // Sets the number of threads used to parallelize the execution of the graph (across nodes)
   final int? interOpNumThreads;
   // set a list of providers, if one provider is not available, ORT will fallback to the next provider in the list
-  // for example: ["CUDA", "CPU"]
-  final List<String>? providers;
+  // for example: [OrtProvider.CUDA, OrtProvider.CPU]
+  final List<OrtProvider>? providers;
   // arena allocator for memory management, default is true
   final bool? useArena;
   // set the device id for the session, default is 0
@@ -106,7 +107,7 @@ class OrtSessionOptions {
     return {
       if (intraOpNumThreads != null) 'intraOpNumThreads': intraOpNumThreads,
       if (interOpNumThreads != null) 'interOpNumThreads': interOpNumThreads,
-      if (providers != null && providers!.isNotEmpty) 'providers': providers,
+      if (providers != null && providers!.isNotEmpty) 'providers': providers!.map((p) => p.name).toList(),
       if (useArena != null) 'useArena': useArena,
       if (deviceId != null) 'deviceId': deviceId,
     };
