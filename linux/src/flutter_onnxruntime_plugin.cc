@@ -619,7 +619,7 @@ static FlMethodResponse *get_metadata(FlutterOnnxruntimePlugin *self, FlValue *a
     int64_t version = model_metadata.GetVersion();
 
     // Create empty custom metadata map
-    g_autoptr(FlValue) custom_metadata_map = fl_value_new_map();
+    FlValue *custom_metadata_map = fl_value_new_map();
     g_autoptr(FlValue) result = fl_value_new_map();
     fl_value_set_string_take(result, "producerName", fl_value_new_string(producer_name.get()));
     fl_value_set_string_take(result, "graphName", fl_value_new_string(graph_name.get()));

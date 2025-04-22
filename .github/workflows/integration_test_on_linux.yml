@@ -1,11 +1,21 @@
 name: Integration Tests on Linux
 
 on:
-  workflow_dispatch:
-  # push:
-  #   branches: [ main, master ]
-  # pull_request:
-  #   branches: [ main, master ]
+  # workflow_dispatch:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'linux/**/*.cc'
+      - 'linux/**/*.h'
+      - 'linux/**/*.cpp'
+      - 'linux/**/*.hpp'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'linux/**/*.cc'
+      - 'linux/**/*.h'
+      - 'linux/**/*.cpp'
+      - 'linux/**/*.hpp'
 
 jobs:
   linux_integration_test:
