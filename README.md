@@ -93,14 +93,14 @@ Clone [this repository](https://github.com/masicai/flutter-onnxruntime-examples)
 
 | Feature | Android | iOS | Linux | macOS | Windows | Web |
 |---------|:-------:|:---:|:-----:|:-----:|:-------:|:---: |
-| CPU Inference | ✅ | ✅ | ✅ | ✅ |   |   |
-| Inference on Emulator | ✅ | ✅ | ✅ | ✅ |   |   |
-| GPU Inference | ✅ | ✅ | ✅ | ✅ |   |   |
-| Input/Output names | ✅ | ✅ | ✅ | ✅ |   |   |
-| Input/Output Info | ✅ | ❌* | ✅ | ❌* |   |   |
-| Model Metadata | ✅ | ❌* | ✅ | ❌* |   |   |
-| Data Type Conversion | ✅ | ✅ | ✅ | ✅ |   |   |
-| FP16 Support | ✅ | ❌** | ✍️ | ❌** |   |   |
+| CPU Inference | ✅ | ✅ | ✅ | ✅ |   | ✅ |
+| GPU Inference | ✅ | ✅ | ✅ | ✅ |   | ✅ |
+| Input/Output names | ✅ | ✅ | ✅ | ✅ |   | ✅ |
+| Data Type Conversion | ✅ | ✅ | ✅ | ✅ |   | ✅ |
+| Inference on Emulator | ✅ | ✅ | ✅ | ✅ |   | ✅ |
+| Input/Output Info | ✅ | ❌* | ✅ | ❌* |   | ❌* |
+| Model Metadata | ✅ | ❌* | ✅ | ❌* |   | ❌* |
+| FP16 Support | ✅ | ❌** | ✍️ | ❌** |   | ✍️ |
 
 ✅: Complete
 
@@ -110,7 +110,7 @@ Clone [this repository](https://github.com/masicai/flutter-onnxruntime-examples)
 
 ✍️: Planned
 
-`*`: Retrieving model metadata and input/output info is not avialable in `onnxruntime-objc`, only names available.
+`*`: Retrieving model metadata and input/output info is not available for Swift and Javascript API.
 
 `**`: Swift does not support FP16 type.
 
