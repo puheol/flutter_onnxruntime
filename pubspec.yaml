@@ -11,8 +11,13 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_web_plugins:
+   sdk: flutter
   path_provider: ^2.1.5
   plugin_platform_interface: ^2.0.2
+  web: ^1.1.1
+  js_interop: any
+  js: ^0.6.7
 
 dev_dependencies:
   flutter_test:
@@ -31,6 +36,9 @@ flutter:
         pluginClass: FlutterOnnxruntimePlugin
       macos:
         pluginClass: FlutterOnnxruntimePlugin
+      web:
+        pluginClass: FlutterOnnxruntimeWebPlugin
+        fileName: web/flutter_onnxruntime_web_plugin.dart
 
 topics:
  - onnx

@@ -7,7 +7,7 @@ We welcome contributions to improve the flutter_onnxruntime plugin! Whether you'
 
 All native implementations are not glued by the Dart API but the Dart integration tests. All native implementations should adapt to pass the tests, not the other way.
 
-Apart from the unit tests at `test/unit`, we have sophisicated integration tests at `example/integration_test` that cover all the supported platforms. Make sure that you run the script at `scripts/run_tests.sh` to run all the tests before submitting a pull request.
+Apart from the unit tests at `test/unit`, we have sophisicated integration tests at `example/integration_test` that cover all the supported platforms. Make sure that you run the script at `scripts/run_tests_in_local.sh` to run all the tests before submitting a pull request.
 
 ## Setting Up Development Environment
 
@@ -49,10 +49,10 @@ The pre-commit hook will:
 
 ## Testing
 
-For testing, we use the `scripts/run_tests.sh` script to run unit and integration tests on all available platforms.
+For testing, we use the `scripts/run_tests_in_local.sh` script to run unit and integration tests on all available platforms.
 
 ```
-./scripts/run_tests.sh
+./scripts/run_tests_in_local.sh
 ```
 
 You can also manually run tests for a specific platform:
@@ -74,6 +74,27 @@ You can also manually run tests for a specific platform:
   * To run a test separately, you can run the following commands:
     ```
     flutter test integration_test/all_tests.dart --plain-name "<Test Name>" -d <device_id>
+    ```
+
+### Run integration tests on web
+To run integration tests on web, we need to have a web driver running. We will use Chrome Driver for this example.
+
+1. Download Chrome Driver from [here](https://googlechromelabs.github.io/chrome-for-testing/). Select the version that matches your Chrome version.
+
+2. After download and extract the file, you should see a binary file `chromedriver`. Run the following command to start the driver on port 4444:
+    ```
+    ./chromedriver --port=4444
+    ```
+
+3. Run the integration tests:
+    ```
+    cd example
+    flutter drive -d chrome --driver ./test_driver/integration_test.dart  --target ./integration_test/all_tests.dart
+    ```
+    Or you can run as a web server in port `8080` with the following command:
+    ```
+    cd example
+    flutter drive -d web-server --web-port=8080 --release  --driver ./test_driver/integration_test.dart  --target ./integration_test/all_tests.dart
     ```
 
 ## Contributing

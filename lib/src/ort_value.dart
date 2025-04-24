@@ -68,14 +68,16 @@ class OrtValue {
   /// Creates an OrtValue from any supported list type
   ///
   /// This method detects the list type and converts it to the appropriate format.
-  // ignore: unintended_html_in_doc_comment
-  /// Supported types include Float32List, Int32List, Int64List, Uint8List, List<bool>,
-  // ignore: unintended_html_in_doc_comment
-  /// and their corresponding Dart List<num> types.
+  /// Supported types include Float32List, Int32List, Int64List, Uint8List, List\<bool>,
+  /// and their corresponding Dart List\<num> types.
   ///
-  /// Note: the shape of the list is not necessary to be in the correct shapes as they will be flattened in
-  /// the preprocess. However, the order of the elements and the total number of elements must match exactly
-  /// with the target shape
+  /// Note:
+  /// - The shape of the list is not necessary to be in the correct shapes as they will be flattened in
+  ///   the preprocess. However, the order of the elements and the total number of elements must match exactly
+  ///   with the target shape
+  /// - A List\<int> will be detected and assigned to int32 type in all platforms except Web. The Web
+  ///   platform only recognize the float format or you have to typed list such as Int32List, Int64List, etc.
+  /// - Int64List is not supported in the web platform.
   ///
   /// [data] is the data to create the tensor from (any supported list type)
   /// [shape] is the shape of the tensor

@@ -36,6 +36,7 @@
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'dart:typed_data';
@@ -133,7 +134,9 @@ void main() {
       });
 
       testWidgets('Regular List to Int32 conversion test', (WidgetTester tester) async {
-        final inputData = [1, 2, 3, 4];
+        // List<int> is not detected as interger in web platform, we have to
+        // use typed list to specify it explicitly
+        final inputData = kIsWeb ? Int32List.fromList([1, 2, 3, 4]) : [1, 2, 3, 4];
         final shape = [4]; // 1D array
 
         final tensor = await OrtValue.fromList(inputData, shape);
@@ -196,6 +199,12 @@ void main() {
       });
 
       testWidgets('Int32 to Int64 conversion', (WidgetTester tester) async {
+        // skip the test for web platform as BigInt64Array required by ONNX Runtime Web for int64 tensors
+        // is not supported in all browsers
+        if (kIsWeb) {
+          return;
+        }
+
         final inputData = Int32List.fromList([1, 2, 3, 4]);
         final shape = [4]; // 1D array
 
@@ -403,8 +412,11 @@ void main() {
       // we assume that CORE_ML is never available on Android and Linux
       // and XNNPACK is never available on iOS and MacOS
       OrtProvider negativeProvider = OrtProvider.CORE_ML;
-      if (Platform.isIOS || Platform.isMacOS) {
-        negativeProvider = OrtProvider.XNNPACK;
+      // Note: the Platform.is<OS> call is not supported on web and will cause issue when testing in web environment
+      if (!kIsWeb) {
+        if (Platform.isIOS || Platform.isMacOS) {
+          negativeProvider = OrtProvider.XNNPACK;
+        }
       }
       try {
         await onnxRuntime.createSessionFromAsset(
@@ -454,6 +466,14 @@ void main() {
       expect(outputInfo, isNotNull);
       expect(outputInfo.length, 1); // Addition model has single output C
       expect(outputInfo[0]['name'], 'C');
+
+      // check shape of input and output tensor
+      // Note: Tensor input and output shapes are not available for Web, iOS and macOS
+      if (!kIsWeb && !Platform.isIOS && !Platform.isMacOS) {
+        expect(inputInfo[0]['shape'], [-1]);
+        expect(inputInfo[1]['shape'], [-1]);
+        expect(outputInfo[0]['shape'], [-1]);
+      }
     });
   });
 
@@ -542,9 +562,12 @@ void main() {
     });
 
     testWidgets('Run inference with run options and terminate', (WidgetTester tester) async {
-      // Skip the test for iOS and macOS as terminate is not supported
-      if (Platform.isIOS || Platform.isMacOS) {
-        return; // Skip the test
+      // Note: the Platform.is<OS> call is not supported on web and will cause issue when testing in web environment
+      if (!kIsWeb) {
+        // Skip the test for iOS and macOS as terminate is not supported
+        if (Platform.isIOS || Platform.isMacOS) {
+          return; // Skip the test
+        }
       }
       final runOptions = OrtRunOptions(logSeverityLevel: 1, logVerbosityLevel: 1, terminate: true);
       final inputs = {
@@ -668,8 +691,8 @@ void main() {
 
       testWidgets('Invalid input type', (WidgetTester tester) async {
         // create int tensors
-        final tensorA = await OrtValue.fromList([1, 1, 1, 1, 1, 1], [1, 2, 3]);
-        final tensorB = await OrtValue.fromList([2, 2, 2, 2, 2, 2], [1, 3, 2]);
+        final tensorA = await OrtValue.fromList(Int32List.fromList([1, 1, 1, 1, 1, 1]), [1, 2, 3]);
+        final tensorB = await OrtValue.fromList(Int32List.fromList([2, 2, 2, 2, 2, 2]), [1, 3, 2]);
         // expect to throw an exeption
         expect(() async => await session.run({'A': tensorA, 'B': tensorB}), throwsA(isA<Exception>()));
 
@@ -695,8 +718,8 @@ void main() {
 
       testWidgets('INT32 model inference test', (WidgetTester tester) async {
         inputs = {
-          'A': await OrtValue.fromList([1, 1, 1, 1, 1, 1], [1, 2, 3]),
-          'B': await OrtValue.fromList([2, 2, 2, 2, 2, 2], [1, 3, 2]),
+          'A': await OrtValue.fromList(Int32List.fromList([1, 1, 1, 1, 1, 1]), [1, 2, 3]),
+          'B': await OrtValue.fromList(Int32List.fromList([2, 2, 2, 2, 2, 2]), [1, 3, 2]),
         };
         final outputs = await session.run(inputs);
         final output = outputs['C'];
@@ -732,7 +755,7 @@ void main() {
         final tensorA = await OrtValue.fromList([1.0, 1.0, 1.0, 1.0, 1.0, 1.0], [1, 2, 3]);
         final tensorB = await OrtValue.fromList([2.0, 2.0, 2.0, 2.0, 2.0, 2.0], [1, 3, 2]);
         // only support Android
-        if (Platform.isAndroid) {
+        if (!kIsWeb && Platform.isAndroid) {
           // convert to fp16
           final tensorAFp16 = await tensorA.to(OrtDataType.float16);
           final tensorBFp16 = await tensorB.to(OrtDataType.float16);
