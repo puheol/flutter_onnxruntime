@@ -7,7 +7,7 @@ We welcome contributions to improve the flutter_onnxruntime plugin! Whether you'
 
 All native implementations are not glued by the Dart API but the Dart integration tests. All native implementations should adapt to pass the tests, not the other way.
 
-Apart from the unit tests at `test/unit`, we have sophisicated integration tests at `example/integration_test` that cover all the supported platforms. Make sure that you run the script at `scripts/run_tests.sh` to run all the tests before submitting a pull request.
+Apart from the unit tests at `test/unit`, we have sophisicated integration tests at `example/integration_test` that cover all the supported platforms. Make sure that you run the script at `scripts/run_tests_in_local.sh` to run all the tests before submitting a pull request.
 
 ## Setting Up Development Environment
 
@@ -49,10 +49,10 @@ The pre-commit hook will:
 
 ## Testing
 
-For testing, we use the `scripts/run_tests.sh` script to run unit and integration tests on all available platforms.
+For testing, we use the `scripts/run_tests_in_local.sh` script to run unit and integration tests on all available platforms.
 
 ```
-./scripts/run_tests.sh
+./scripts/run_tests_in_local.sh
 ```
 
 You can also manually run tests for a specific platform:
