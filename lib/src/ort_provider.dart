@@ -10,4 +10,22 @@
 ///
 /// Following the name of the execution provider in the ONNX Runtime Java API at:
 /// https://onnxruntime.ai/docs/api/java/ai/onnxruntime/OrtProvider.html
-enum OrtProvider { ACL, ARM_NN, CORE_ML, CPU, CUDA, DIRECT_ML, DNNL, NNAPI, OPEN_VINO, QNN, ROCM, TENSOR_RT, XNNPACK }
+enum OrtProvider {
+  ACL,
+  ARM_NN,
+  CORE_ML,
+  CPU,
+  CUDA,
+  DIRECT_ML,
+  DNNL,
+  NNAPI,
+  OPEN_VINO,
+  QNN,
+  ROCM,
+  TENSOR_RT,
+  XNNPACK,
+  WEB_ASSEMBLY,
+  WEB_GL,
+  WEB_GPU,
+  WEB_NN,
+}

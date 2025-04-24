@@ -76,6 +76,27 @@ You can also manually run tests for a specific platform:
     flutter test integration_test/all_tests.dart --plain-name "<Test Name>" -d <device_id>
     ```
 
+### Run integration tests on web
+To run integration tests on web, we need to have a web driver running. We will use Chrome Driver for this example.
+
+1. Download Chrome Driver from [here](https://googlechromelabs.github.io/chrome-for-testing/). Select the version that matches your Chrome version.
+
+2. After download and extract the file, you should see a binary file `chromedriver`. Run the following command to start the driver on port 4444:
+    ```
+    ./chromedriver --port=4444
+    ```
+
+3. Run the integration tests:
+    ```
+    cd example
+    flutter drive -d chrome --driver ./test_driver/integration_test.dart  --target ./integration_test/all_tests.dart
+    ```
+    Or you can run as a web server in port `8080` with the following command:
+    ```
+    cd example
+    flutter drive -d web-server --web-port=8080 --release  --driver ./test_driver/integration_test.dart  --target ./integration_test/all_tests.dart
+    ```
+
 ## Contributing
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/my-feature`
