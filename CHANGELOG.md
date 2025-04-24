@@ -1,3 +1,7 @@
+## 1.3.0
+* Support Web platform 🎉🎉🎉
+* Add integration tests for Web in both local and CI
+
 ## 1.2.3
 * Standardize Execution Provider names across all platforms
 * Fix a bug in get_metadata method for Linux
