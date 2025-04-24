@@ -119,7 +119,7 @@ Clone [this repository](https://github.com/masicai/flutter-onnxruntime-examples)
 For troubleshooting, see the [troubleshooting.md](doc/troubleshooting.md) file.
 
 ## 🤝 Contributing
-Contributions to the Flutter ONNX Runtime plugin are welcome. Please see the [contributing.md](doc/contributing.md) file for more information.
+Contributions to the Flutter ONNX Runtime plugin are welcome. Please see the [CONTRIBUTING.md](CONTRIBUTING.md) file for more information.
 
 ## 📚 Documentation
 Find more information in the [documentation](doc/).
