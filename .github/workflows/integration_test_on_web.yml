@@ -1,0 +1,64 @@
+name: Integration Tests on Web
+
+on:
+  # Uncomment to enable manual trigger
+  # workflow_dispatch:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'lib/**'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'lib/**'
+
+jobs:
+  web_integration_test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.0'
+          channel: 'stable'
+
+      - name: Install Flutter dependencies
+        run: |
+          flutter pub get
+          cd example
+          flutter pub get
+
+      - name: Enable web support
+        run: flutter config --enable-web
+
+      - name: Install Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+
+      - name: Download ChromeDriver
+        run: |
+          CHROME_VERSION=$(google-chrome --version | awk '{print $3}' | cut -d. -f1)
+          CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION")
+          curl -L -o chromedriver.zip "https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip"
+          unzip chromedriver.zip
+          chmod +x chromedriver
+          sudo mv chromedriver /usr/local/bin/
+
+      - name: Start ChromeDriver
+        run: |
+          chromedriver --port=4444 &
+          sleep 3  # Give ChromeDriver time to start
+
+      - name: Run integration tests on Web
+        run: |
+          cd example
+          flutter drive \
+            --driver=test_driver/integration_test.dart \
+            --target=integration_test/all_tests.dart \
+            -d web-server \
+            --web-port=8080 \
+            --browser-name=chrome
