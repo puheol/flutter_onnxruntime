@@ -466,6 +466,14 @@ void main() {
       expect(outputInfo, isNotNull);
       expect(outputInfo.length, 1); // Addition model has single output C
       expect(outputInfo[0]['name'], 'C');
+
+      // check shape of input and output tensor
+      // Note: Tensor input and output shapes are not available for Web, iOS and macOS
+      if (!kIsWeb && !Platform.isIOS && !Platform.isMacOS) {
+        expect(inputInfo[0]['shape'], [-1]);
+        expect(inputInfo[1]['shape'], [-1]);
+        expect(outputInfo[0]['shape'], [-1]);
+      }
     });
   });
 
