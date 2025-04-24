@@ -52,7 +52,7 @@ void main() {
         final shape = [2, 2]; // 2x2 matrix
 
         final tensor = await OrtValue.fromList(inputData, shape);
-        expect(tensor.dataType, OrtDataType.int32);
+        expect(tensor.dataType, OrtDataType.float32);
         expect(tensor.shape, shape);
 
         final retrievedData = await tensor.asFlattenedList();
