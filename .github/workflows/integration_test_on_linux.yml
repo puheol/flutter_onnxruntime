@@ -5,6 +5,7 @@ on:
   push:
     branches: [ main, master ]
     paths:
+      - 'lib/src/**'
       - 'linux/**/*.cc'
       - 'linux/**/*.h'
       - 'linux/**/*.cpp'
@@ -12,6 +13,7 @@ on:
   pull_request:
     branches: [ main, master ]
     paths:
+      - 'lib/src/**'
       - 'linux/**/*.cc'
       - 'linux/**/*.h'
       - 'linux/**/*.cpp'
