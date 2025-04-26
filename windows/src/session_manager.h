@@ -16,7 +16,7 @@ public:
   SessionManager &operator=(const SessionManager &) = delete;
 
   // Create a new session from model path
-  std::string createSession(const std::string &modelPath, const std::map<std::string, std::string> &options);
+  std::string createSession(const std::string &modelPath, const flutter::EncodableMap &sessionOptions);
 
   // Create a new session from model buffer
   std::string createSessionFromBuffer(const std::vector<uint8_t> &modelBuffer,
@@ -28,14 +28,18 @@ public:
   // Close and cleanup a session
   bool closeSession(const std::string &sessionId);
 
+  // Run inference
+  flutter::EncodableMap runInference(const std::string &sessionId, const std::map<std::string, Ort::Value *> &inputs,
+                                     const flutter::EncodableMap &runOptions);
+
   // Get session metadata
-  flutter::EncodableMap getSessionMetadata(const std::string &sessionId);
+  flutter::EncodableMap getMetadata(const std::string &sessionId);
 
   // Get input info from a session
-  flutter::EncodableMap getInputInfo(const std::string &sessionId);
+  flutter::EncodableList getInputInfo(const std::string &sessionId);
 
   // Get output info from a session
-  flutter::EncodableMap getOutputInfo(const std::string &sessionId);
+  flutter::EncodableList getOutputInfo(const std::string &sessionId);
 
   // Get a list of available execution providers
   flutter::EncodableList getAvailableExecutionProviders();
