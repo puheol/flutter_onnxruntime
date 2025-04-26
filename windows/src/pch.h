@@ -6,29 +6,33 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 
-#include <windows.h>
-#include <memory>
-#include <string>
-#include <vector>
-#include <map>
-#include <unordered_map>
-#include <mutex>
-#include <stdexcept>
 #include <algorithm>
 #include <functional>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <numeric> // For std::accumulate
+#include <random>  // For random number generation
+#include <sstream> // For std::stringstream
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <utility> // For std::pair
+#include <vector>
+#include <windows.h>
 
 // ONNX Runtime headers
 #include <onnxruntime_cxx_api.h>
 
 // Windows-specific utilities
-#include <shlwapi.h>
-#include <shlobj.h>
 #include <comdef.h>
+#include <shlobj.h>
+#include <shlwapi.h>
 
 // Flutter plugin headers
+#include <flutter/encodable_value.h>
 #include <flutter/method_channel.h>
 #include <flutter/plugin_registrar_windows.h>
 #include <flutter/standard_method_codec.h>
-#include <flutter/encodable_value.h>
 
-#endif  // FLUTTER_ONNXRUNTIME_PCH_H_ 
+#endif // FLUTTER_ONNXRUNTIME_PCH_H_

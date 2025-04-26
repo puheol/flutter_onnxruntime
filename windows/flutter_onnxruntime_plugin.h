@@ -8,8 +8,11 @@
 
 namespace flutter_onnxruntime {
 
+// Forward declaration
+class FlutterOnnxruntimePluginImpl;
+
 class FlutterOnnxruntimePlugin : public flutter::Plugin {
- public:
+public:
   static void RegisterWithRegistrar(flutter::PluginRegistrarWindows *registrar);
 
   FlutterOnnxruntimePlugin();
@@ -17,15 +20,31 @@ class FlutterOnnxruntimePlugin : public flutter::Plugin {
   virtual ~FlutterOnnxruntimePlugin();
 
   // Disallow copy and assign.
-  FlutterOnnxruntimePlugin(const FlutterOnnxruntimePlugin&) = delete;
-  FlutterOnnxruntimePlugin& operator=(const FlutterOnnxruntimePlugin&) = delete;
+  FlutterOnnxruntimePlugin(const FlutterOnnxruntimePlugin &) = delete;
+  FlutterOnnxruntimePlugin &operator=(const FlutterOnnxruntimePlugin &) = delete;
 
+private:
   // Called when a method is called on this plugin's channel from Dart.
-  void HandleMethodCall(
-      const flutter::MethodCall<flutter::EncodableValue> &method_call,
-      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+  void HandleMethodCall(const flutter::MethodCall<flutter::EncodableValue> &method_call,
+                        std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
+  // OrtValue method handlers
+  void HandleCreateOrtValue(const flutter::MethodCall<flutter::EncodableValue> &method_call,
+                            std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
+  void HandleConvertOrtValue(const flutter::MethodCall<flutter::EncodableValue> &method_call,
+                             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
+  void HandleGetOrtValueData(const flutter::MethodCall<flutter::EncodableValue> &method_call,
+                             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
+  void HandleReleaseOrtValue(const flutter::MethodCall<flutter::EncodableValue> &method_call,
+                             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
+  // Private implementation
+  std::unique_ptr<FlutterOnnxruntimePluginImpl> impl_;
 };
 
-}  // namespace flutter_onnxruntime
+} // namespace flutter_onnxruntime
 
-#endif  // FLUTTER_PLUGIN_FLUTTER_ONNXRUNTIME_PLUGIN_H_ 
+#endif // FLUTTER_PLUGIN_FLUTTER_ONNXRUNTIME_PLUGIN_H_

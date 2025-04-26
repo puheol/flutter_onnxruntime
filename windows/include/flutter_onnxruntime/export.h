@@ -7,4 +7,4 @@
 #define FLUTTER_PLUGIN_EXPORT __declspec(dllimport)
 #endif
 
-#endif  // FLUTTER_ONNXRUNTIME_EXPORT_H_ 
+#endif // FLUTTER_ONNXRUNTIME_EXPORT_H_
