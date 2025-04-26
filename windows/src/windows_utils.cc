@@ -1,4 +1,5 @@
 #include "windows_utils.h"
+#include <VersionHelpers.h>
 
 namespace flutter_onnxruntime {
 

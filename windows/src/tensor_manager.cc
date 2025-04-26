@@ -64,7 +64,7 @@ std::string TensorManager::createTensor(const flutter::EncodableValue &data, con
     tensors_[tensorId] = std::move(ortValue);
 
     return tensorId;
-  } catch (const Ort::Exception &e) {
+  } catch (...) {
     // Clean up any allocated resources on failure
     tensorDataBuffers_.erase(tensorId);
     throw;
@@ -147,7 +147,7 @@ flutter::EncodableValue TensorManager::getTensorData(const std::string &tensorId
         flutter::EncodableValue(ValueConversion::elementTypeToString(elementType));
 
     return flutter::EncodableValue(result);
-  } catch (const Ort::Exception &e) {
+  } catch (...) {
     throw;
   }
 }
@@ -226,7 +226,7 @@ std::string TensorManager::convertTensor(const std::string &tensorId, int64_t ne
     else {
       throw std::runtime_error("Unsupported tensor conversion");
     }
-  } catch (const Ort::Exception &e) {
+  } catch (...) {
     throw;
   }
 }
@@ -262,7 +262,7 @@ flutter::EncodableMap TensorManager::getTensorInfo(const std::string &tensorId) 
     result[flutter::EncodableValue("elementCount")] = flutter::EncodableValue(static_cast<int64_t>(elementCount));
 
     return result;
-  } catch (const Ort::Exception &e) {
+  } catch (...) {
     throw;
   }
 }
@@ -273,42 +273,51 @@ std::unique_ptr<Ort::Value> TensorManager::createOrtValue(const void *data, cons
   // Create memory info for CPU
   Ort::MemoryInfo memoryInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
 
+  // Calculate total element count
+  size_t elementCount =
+      shape.empty() ? 0
+                    : std::accumulate(shape.begin(), shape.end(), static_cast<size_t>(1), std::multiplies<size_t>());
+
   // Create OrtValue based on element type
   switch (elementType) {
   case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT: {
-    return std::make_unique<Ort::Value>(Ort::Value::CreateTensor<float>(
-        memoryInfo, static_cast<const float *>(data),
-        shape.empty() ? 0
-                      : std::accumulate(shape.begin(), shape.end(), static_cast<size_t>(1), std::multiplies<size_t>()),
-        shape.data(), shape.size()));
+    // Create a non-const copy of the data
+    std::vector<float> dataCopy(static_cast<const float *>(data), static_cast<const float *>(data) + elementCount);
+    return std::make_unique<Ort::Value>(
+        Ort::Value::CreateTensor<float>(memoryInfo, dataCopy.data(), elementCount, shape.data(), shape.size()));
   }
   case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32: {
-    return std::make_unique<Ort::Value>(Ort::Value::CreateTensor<int32_t>(
-        memoryInfo, static_cast<const int32_t *>(data),
-        shape.empty() ? 0
-                      : std::accumulate(shape.begin(), shape.end(), static_cast<size_t>(1), std::multiplies<size_t>()),
-        shape.data(), shape.size()));
+    // Create a non-const copy of the data
+    std::vector<int32_t> dataCopy(static_cast<const int32_t *>(data),
+                                  static_cast<const int32_t *>(data) + elementCount);
+    return std::make_unique<Ort::Value>(
+        Ort::Value::CreateTensor<int32_t>(memoryInfo, dataCopy.data(), elementCount, shape.data(), shape.size()));
   }
   case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64: {
-    return std::make_unique<Ort::Value>(Ort::Value::CreateTensor<int64_t>(
-        memoryInfo, static_cast<const int64_t *>(data),
-        shape.empty() ? 0
-                      : std::accumulate(shape.begin(), shape.end(), static_cast<size_t>(1), std::multiplies<size_t>()),
-        shape.data(), shape.size()));
+    // Create a non-const copy of the data
+    std::vector<int64_t> dataCopy(static_cast<const int64_t *>(data),
+                                  static_cast<const int64_t *>(data) + elementCount);
+    return std::make_unique<Ort::Value>(
+        Ort::Value::CreateTensor<int64_t>(memoryInfo, dataCopy.data(), elementCount, shape.data(), shape.size()));
   }
   case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8: {
-    return std::make_unique<Ort::Value>(Ort::Value::CreateTensor<uint8_t>(
-        memoryInfo, static_cast<const uint8_t *>(data),
-        shape.empty() ? 0
-                      : std::accumulate(shape.begin(), shape.end(), static_cast<size_t>(1), std::multiplies<size_t>()),
-        shape.data(), shape.size()));
+    // Create a non-const copy of the data
+    std::vector<uint8_t> dataCopy(static_cast<const uint8_t *>(data),
+                                  static_cast<const uint8_t *>(data) + elementCount);
+    return std::make_unique<Ort::Value>(
+        Ort::Value::CreateTensor<uint8_t>(memoryInfo, dataCopy.data(), elementCount, shape.data(), shape.size()));
   }
   case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL: {
-    return std::make_unique<Ort::Value>(Ort::Value::CreateTensor<bool>(
-        memoryInfo, static_cast<const bool *>(data),
-        shape.empty() ? 0
-                      : std::accumulate(shape.begin(), shape.end(), static_cast<size_t>(1), std::multiplies<size_t>()),
-        shape.data(), shape.size()));
+    // Create a non-const copy of the data
+    std::vector<bool> dataCopy;
+    dataCopy.reserve(elementCount);
+    const bool *boolData = static_cast<const bool *>(data);
+    for (size_t i = 0; i < elementCount; i++) {
+      dataCopy.push_back(boolData[i]);
+    }
+    std::vector<bool> nonConstData(dataCopy);
+    return std::make_unique<Ort::Value>(
+        Ort::Value::CreateTensor<bool>(memoryInfo, nonConstData.data(), elementCount, shape.data(), shape.size()));
   }
   default:
     throw std::runtime_error("Unsupported tensor element type");
