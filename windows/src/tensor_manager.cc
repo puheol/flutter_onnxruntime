@@ -287,44 +287,33 @@ std::unique_ptr<Ort::Value> TensorManager::createOrtValue(const void *data, cons
   // Create OrtValue based on element type
   switch (elementType) {
   case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT: {
-    // Create a non-const copy of the data
-    std::vector<float> dataCopy(static_cast<const float *>(data), static_cast<const float *>(data) + elementCount);
-    return std::make_unique<Ort::Value>(
-        Ort::Value::CreateTensor<float>(memoryInfo, dataCopy.data(), elementCount, shape.data(), shape.size()));
+    // Use the raw pointer directly if the data is guaranteed to remain valid
+    const float *tensor_data = static_cast<const float *>(data);
+    return std::make_unique<Ort::Value>(Ort::Value::CreateTensor<float>(memoryInfo, const_cast<float *>(tensor_data),
+                                                                        elementCount, shape.data(), shape.size()));
   }
   case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32: {
-    // Create a non-const copy of the data
-    std::vector<int32_t> dataCopy(static_cast<const int32_t *>(data),
-                                  static_cast<const int32_t *>(data) + elementCount);
-    return std::make_unique<Ort::Value>(
-        Ort::Value::CreateTensor<int32_t>(memoryInfo, dataCopy.data(), elementCount, shape.data(), shape.size()));
+    const int32_t *tensor_data = static_cast<const int32_t *>(data);
+    return std::make_unique<Ort::Value>(Ort::Value::CreateTensor<int32_t>(
+        memoryInfo, const_cast<int32_t *>(tensor_data), elementCount, shape.data(), shape.size()));
   }
   case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64: {
-    // Create a non-const copy of the data
-    std::vector<int64_t> dataCopy(static_cast<const int64_t *>(data),
-                                  static_cast<const int64_t *>(data) + elementCount);
-    return std::make_unique<Ort::Value>(
-        Ort::Value::CreateTensor<int64_t>(memoryInfo, dataCopy.data(), elementCount, shape.data(), shape.size()));
+    // Use the raw pointer directly if the data is guaranteed to remain valid
+    const int64_t *tensor_data = static_cast<const int64_t *>(data);
+    return std::make_unique<Ort::Value>(Ort::Value::CreateTensor<int64_t>(
+        memoryInfo, const_cast<int64_t *>(tensor_data), elementCount, shape.data(), shape.size()));
   }
   case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8: {
-    // Create a non-const copy of the data
-    std::vector<uint8_t> dataCopy(static_cast<const uint8_t *>(data),
-                                  static_cast<const uint8_t *>(data) + elementCount);
-    return std::make_unique<Ort::Value>(
-        Ort::Value::CreateTensor<uint8_t>(memoryInfo, dataCopy.data(), elementCount, shape.data(), shape.size()));
+    // Use the raw pointer directly if the data is guaranteed to remain valid
+    const uint8_t *tensor_data = static_cast<const uint8_t *>(data);
+    return std::make_unique<Ort::Value>(Ort::Value::CreateTensor<uint8_t>(
+        memoryInfo, const_cast<uint8_t *>(tensor_data), elementCount, shape.data(), shape.size()));
   }
   case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL: {
-    // Create a temporary array of bool values
-    std::unique_ptr<bool[]> nonConstData(new bool[elementCount]);
-    const bool *boolData = static_cast<const bool *>(data);
-
-    // Copy data directly into the temporary array
-    for (size_t i = 0; i < elementCount; i++) {
-      nonConstData[i] = boolData[i];
-    }
-
-    return std::make_unique<Ort::Value>(
-        Ort::Value::CreateTensor<bool>(memoryInfo, nonConstData.get(), elementCount, shape.data(), shape.size()));
+    // Use the raw pointer directly if the data is guaranteed to remain valid
+    const bool *tensor_data = static_cast<const bool *>(data);
+    return std::make_unique<Ort::Value>(Ort::Value::CreateTensor<bool>(memoryInfo, const_cast<bool *>(tensor_data),
+                                                                       elementCount, shape.data(), shape.size()));
   }
   default:
     throw std::runtime_error("Unsupported tensor element type");

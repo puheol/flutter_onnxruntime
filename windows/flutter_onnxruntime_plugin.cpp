@@ -155,6 +155,7 @@ void FlutterOnnxruntimePlugin::HandleCreateOrtValue(
     flutter::EncodableMap response;
     response[flutter::EncodableValue("valueId")] = flutter::EncodableValue(tensor_id);
     response[flutter::EncodableValue("dataType")] = flutter::EncodableValue(source_type);
+    response[flutter::EncodableValue("shape")] = flutter::EncodableValue(shape);
 
     result->Success(flutter::EncodableValue(response));
   } catch (const Ort::Exception &e) {

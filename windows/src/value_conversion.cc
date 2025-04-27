@@ -209,57 +209,65 @@ template <> flutter::EncodableList ValueConversion::vectorToFlValue<bool>(const 
 }
 
 // Extract tensor data from Flutter value
-std::pair<std::vector<uint8_t>, size_t> ValueConversion::flValueToTensorData(const flutter::EncodableValue &value,
+std::pair<std::vector<uint8_t>, size_t> ValueConversion::flValueToTensorData(const flutter::EncodableValue &data,
                                                                              ONNXTensorElementDataType elementType) {
 
-  std::vector<uint8_t> buffer;
-  size_t elementCount = 0;
-
-  if (std::holds_alternative<flutter::EncodableList>(value)) {
-    const auto &list = std::get<flutter::EncodableList>(value);
-    elementCount = list.size();
-
-    switch (elementType) {
-    case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT: {
-      auto typedData = flValueToVector<float>(list);
-      buffer.resize(typedData.size() * sizeof(float));
-      memcpy(buffer.data(), typedData.data(), buffer.size());
-      break;
-    }
-    case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32: {
-      auto typedData = flValueToVector<int32_t>(list);
-      buffer.resize(typedData.size() * sizeof(int32_t));
-      memcpy(buffer.data(), typedData.data(), buffer.size());
-      break;
-    }
-    case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64: {
-      auto typedData = flValueToVector<int64_t>(list);
-      buffer.resize(typedData.size() * sizeof(int64_t));
-      memcpy(buffer.data(), typedData.data(), buffer.size());
-      break;
-    }
-    case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8: {
-      auto typedData = flValueToVector<uint8_t>(list);
-      buffer.resize(typedData.size() * sizeof(uint8_t));
-      memcpy(buffer.data(), typedData.data(), buffer.size());
-      break;
-    }
-    case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL: {
-      auto typedData = flValueToVector<bool>(list);
-      buffer.resize(typedData.size() * sizeof(bool));
-      for (size_t i = 0; i < typedData.size(); i++) {
-        static_cast<bool *>(static_cast<void *>(buffer.data()))[i] = typedData[i];
-      }
-      break;
-    }
-    default:
-      // Unsupported type
-      elementCount = 0;
-      break;
+  switch (elementType) {
+  case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT: {
+    if (std::holds_alternative<std::vector<float>>(data)) {
+      const auto &floatData = std::get<std::vector<float>>(data);
+      std::vector<uint8_t> dataBuffer(reinterpret_cast<const uint8_t *>(floatData.data()),
+                                      reinterpret_cast<const uint8_t *>(floatData.data()) +
+                                          floatData.size() * sizeof(float));
+      return {dataBuffer, floatData.size()};
+    } else {
+      throw std::runtime_error("Expected Float32List data for FLOAT tensor");
     }
   }
-
-  return {buffer, elementCount};
+  case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32: {
+    if (std::holds_alternative<std::vector<int32_t>>(data)) {
+      const auto &int32Data = std::get<std::vector<int32_t>>(data);
+      std::vector<uint8_t> dataBuffer(reinterpret_cast<const uint8_t *>(int32Data.data()),
+                                      reinterpret_cast<const uint8_t *>(int32Data.data()) +
+                                          int32Data.size() * sizeof(int32_t));
+      return {dataBuffer, int32Data.size()};
+    } else {
+      throw std::runtime_error("Expected Int32List data for INT32 tensor");
+    }
+  }
+  case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64: {
+    if (std::holds_alternative<std::vector<int64_t>>(data)) {
+      const auto &int64Data = std::get<std::vector<int64_t>>(data);
+      std::vector<uint8_t> dataBuffer(reinterpret_cast<const uint8_t *>(int64Data.data()),
+                                      reinterpret_cast<const uint8_t *>(int64Data.data()) +
+                                          int64Data.size() * sizeof(int64_t));
+      return {dataBuffer, int64Data.size()};
+    } else {
+      throw std::runtime_error("Expected Int64List data for INT64 tensor");
+    }
+  }
+  case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8: {
+    if (std::holds_alternative<std::vector<uint8_t>>(data)) {
+      const auto &uint8Data = std::get<std::vector<uint8_t>>(data);
+      return {uint8Data, uint8Data.size()};
+    } else {
+      throw std::runtime_error("Expected Uint8List data for UINT8 tensor");
+    }
+  }
+  // case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL: {
+  //   if (std::holds_alternative<std::vector<bool>>(data)) {
+  //     const auto &boolData = std::get<std::vector<bool>>(data);
+  //     std::vector<uint8_t> dataBuffer(reinterpret_cast<const uint8_t*>(boolData.data()),
+  //                                     reinterpret_cast<const uint8_t*>(boolData.data()) + boolData.size() *
+  //                                     sizeof(bool));
+  //     return { dataBuffer, boolData.size() };
+  //   } else {
+  //     throw std::runtime_error("Expected BoolList data for BOOL tensor");
+  //   }
+  // }
+  default:
+    throw std::runtime_error("Unsupported tensor element type in ValueConversion::flValueToTensorData");
+  }
 }
 
 // Convert tensor data to Flutter value
