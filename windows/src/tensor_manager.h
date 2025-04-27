@@ -21,44 +21,70 @@ public:
   TensorManager(const TensorManager &) = delete;
   TensorManager &operator=(const TensorManager &) = delete;
 
-  // Create a new tensor from Flutter data
-  std::string createTensor(const flutter::EncodableValue &data, const flutter::EncodableList &shape,
-                           int64_t elementType);
+  // Create a tensor from Float32List data
+  std::string createFloat32Tensor(const std::vector<float> &data, const std::vector<int64_t> &shape);
 
-  // Get a tensor by ID
-  Ort::Value *getTensor(const std::string &tensorId);
+  // Create a tensor from Int32List data
+  std::string createInt32Tensor(const std::vector<int32_t> &data, const std::vector<int64_t> &shape);
 
-  // Release a tensor and free resources
-  bool releaseTensor(const std::string &tensorId);
+  // Create a tensor from Int64List data
+  std::string createInt64Tensor(const std::vector<int64_t> &data, const std::vector<int64_t> &shape);
+
+  // Create a tensor from Uint8List data
+  std::string createUint8Tensor(const std::vector<uint8_t> &data, const std::vector<int64_t> &shape);
+
+  // Create a tensor from Boolean data
+  std::string createBoolTensor(const std::vector<bool> &data, const std::vector<int64_t> &shape);
+
+  // Convert between tensor formats
+  std::string convertTensor(const std::string &tensor_id, const std::string &target_type);
+
+  // Store a tensor with a specific ID (used for output tensors)
+  void storeTensor(const std::string &tensor_id, Ort::Value &&tensor);
 
   // Get data from a tensor
-  flutter::EncodableValue getTensorData(const std::string &tensorId);
+  flutter::EncodableValue getTensorData(const std::string &tensor_id);
 
-  // Convert a tensor to a different data type
-  std::string convertTensor(const std::string &tensorId, int64_t newElementType);
+  // Release a tensor
+  bool releaseTensor(const std::string &tensor_id);
 
-  // Get tensor info
-  flutter::EncodableMap getTensorInfo(const std::string &tensorId);
+  // Get the OrtValue for a tensor ID
+  Ort::Value *getTensor(const std::string &tensor_id);
 
-private:
-  // Private implementation details
-  std::unordered_map<std::string, std::unique_ptr<Ort::Value>> tensors_;
-  std::mutex tensorsMutex_;
-  Ort::AllocatorWithDefaultOptions allocator_;
+  // Get the type of a tensor
+  std::string getTensorType(const std::string &tensor_id);
 
-  // Memory for tensor data that needs to persist
-  std::unordered_map<std::string, std::vector<uint8_t>> tensorDataBuffers_;
-
-  // Helper methods for tensor creation and conversion
-  std::unique_ptr<Ort::Value> createOrtValue(const void *data, const std::vector<int64_t> &shape,
-                                             ONNXTensorElementDataType elementType);
-
-  // Extract data from a tensor
-  template <typename T>
-  flutter::EncodableValue extractTensorData(const Ort::Value *tensor, const std::vector<int64_t> &shape);
+  // Get the shape of a tensor
+  std::vector<int64_t> getTensorShape(const std::string &tensor_id);
 
   // Generate a unique tensor ID
   std::string generateTensorId();
+
+  // Get the element type string
+  const char *get_element_type_string(ONNXTensorElementDataType element_type);
+
+private:
+  // Map of tensor IDs to OrtValue objects
+  std::unordered_map<std::string, std::unique_ptr<Ort::Value>> tensors_;
+
+  // Map of tensor IDs to their data types
+  std::unordered_map<std::string, std::string> tensor_types_;
+
+  // Map of tensor IDs to their shapes
+  std::unordered_map<std::string, std::vector<int64_t>> tensor_shapes_;
+
+  // Memory for tensor data that needs to persist
+  std::unordered_map<std::string, std::vector<uint8_t>> tensor_data_buffers_;
+
+  // Mutex for thread safety
+  std::mutex tensor_mutex_;
+
+  // Memory info for CPU memory
+  Ort::MemoryInfo memory_info_{nullptr};
+
+  // Create an OrtValue helper
+  std::unique_ptr<Ort::Value> createOrtValue(const void *data, const std::vector<int64_t> &shape,
+                                             ONNXTensorElementDataType element_type);
 };
 
 } // namespace flutter_onnxruntime

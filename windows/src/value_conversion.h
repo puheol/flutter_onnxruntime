@@ -14,28 +14,23 @@ namespace flutter_onnxruntime {
 // Utility class for converting between Flutter values and C++ types
 class ValueConversion {
 public:
-  // Convert Flutter list to C++ vector of specified type
-  template <typename T> static std::vector<T> flValueToVector(const flutter::EncodableList &list);
+  // Convert C++ vector to Flutter EncodableList
+  template <typename T> static flutter::EncodableValue vectorToFlValue(const std::vector<T> &vec);
 
-  // Convert C++ vector to Flutter list
-  template <typename T> static flutter::EncodableList vectorToFlValue(const std::vector<T> &vec);
+  // Specialization for float vectors
+  static flutter::EncodableValue vectorToFlValue(const std::vector<float> &vec);
 
-  // Extract tensor data from Flutter value
-  static std::pair<std::vector<uint8_t>, size_t> flValueToTensorData(const flutter::EncodableValue &value,
-                                                                     ONNXTensorElementDataType elementType);
+  // Specialization for int32_t vectors
+  static flutter::EncodableValue vectorToFlValue(const std::vector<int32_t> &vec);
 
-  // Convert tensor data to Flutter value
-  static flutter::EncodableValue tensorDataToFlValue(const void *data, size_t elementCount,
-                                                     ONNXTensorElementDataType elementType);
+  // Specialization for int64_t vectors
+  static flutter::EncodableValue vectorToFlValue(const std::vector<int64_t> &vec);
 
-  // Get element size in bytes for ONNX type
-  static size_t getElementSize(ONNXTensorElementDataType elementType);
+  // Specialization for uint8_t vectors
+  static flutter::EncodableValue vectorToFlValue(const std::vector<uint8_t> &vec);
 
-  // Convert element type enum to string
-  static std::string elementTypeToString(ONNXTensorElementDataType elementType);
-
-  // Convert string to element type enum
-  static ONNXTensorElementDataType stringToElementType(const std::string &typeStr);
+  // Specialization for bool vectors
+  static flutter::EncodableValue vectorToFlValue(const std::vector<bool> &vec);
 };
 
 } // namespace flutter_onnxruntime
