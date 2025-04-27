@@ -181,6 +181,10 @@ set_target_properties(${PLUGIN_NAME} PROPERTIES
   CXX_VISIBILITY_PRESET hidden)
 target_compile_definitions(${PLUGIN_NAME} PRIVATE FLUTTER_PLUGIN_IMPL)
 
+# Add WINDOWS_EXPORT_ALL_SYMBOLS to ensure the generation of the import library (.lib file)
+set_target_properties(${PLUGIN_NAME} PROPERTIES
+  WINDOWS_EXPORT_ALL_SYMBOLS ON)
+
 # Enable C++17 features
 target_compile_features(${PLUGIN_NAME} PRIVATE cxx_std_17)
 
@@ -203,15 +207,23 @@ message(STATUS "This file: ${CMAKE_CURRENT_LIST_FILE}")
 install(
   FILES
     "include/flutter_onnxruntime/flutter_onnxruntime_plugin.h"
+    "include/flutter_onnxruntime/export.h"
   DESTINATION
     "${CMAKE_BINARY_DIR}/include/flutter_onnxruntime"
 )
 
 # Also create symlinks in the build directory to ensure includes work during build
-execute_process(
-  COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/include/flutter_onnxruntime"
-  COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/include/flutter_onnxruntime/flutter_onnxruntime_plugin.h" "${CMAKE_BINARY_DIR}/include/flutter_onnxruntime/"
-)
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/flutter_onnxruntime")
+
+# Copy headers with error handling
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/include/flutter_onnxruntime/flutter_onnxruntime_plugin.h" 
+     DESTINATION "${CMAKE_BINARY_DIR}/include/flutter_onnxruntime/"
+     FOLLOW_SYMLINK_CHAIN)
+     
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/include/flutter_onnxruntime/export.h" 
+     DESTINATION "${CMAKE_BINARY_DIR}/include/flutter_onnxruntime/"
+     FOLLOW_SYMLINK_CHAIN)
+
 
 # Add include directories for the plugin
 target_include_directories(${PLUGIN_NAME} PUBLIC
@@ -227,6 +239,9 @@ target_link_libraries(${PLUGIN_NAME} PRIVATE flutter flutter_wrapper_plugin)
 
 # Link against ONNX Runtime
 target_link_libraries(${PLUGIN_NAME} PRIVATE ${ONNXRUNTIME_LIBRARIES})
+
+# Link against Windows Shell API library for PathRemoveFileSpecW
+target_link_libraries(${PLUGIN_NAME} PRIVATE Shlwapi)
 
 # Copy over ONNX Runtime DLL to the build directory
 if(NOT USE_SYSTEM_ONNXRUNTIME AND ONNXRUNTIME_DLL)

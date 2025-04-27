@@ -308,16 +308,17 @@ std::unique_ptr<Ort::Value> TensorManager::createOrtValue(const void *data, cons
         Ort::Value::CreateTensor<uint8_t>(memoryInfo, dataCopy.data(), elementCount, shape.data(), shape.size()));
   }
   case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL: {
-    // Create a non-const copy of the data
-    std::vector<bool> dataCopy;
-    dataCopy.reserve(elementCount);
+    // Create a temporary array of bool values
+    std::unique_ptr<bool[]> nonConstData(new bool[elementCount]);
     const bool *boolData = static_cast<const bool *>(data);
+
+    // Copy data directly into the temporary array
     for (size_t i = 0; i < elementCount; i++) {
-      dataCopy.push_back(boolData[i]);
+      nonConstData[i] = boolData[i];
     }
-    std::vector<bool> nonConstData(dataCopy);
+
     return std::make_unique<Ort::Value>(
-        Ort::Value::CreateTensor<bool>(memoryInfo, nonConstData.data(), elementCount, shape.data(), shape.size()));
+        Ort::Value::CreateTensor<bool>(memoryInfo, nonConstData.get(), elementCount, shape.data(), shape.size()));
   }
   default:
     throw std::runtime_error("Unsupported tensor element type");

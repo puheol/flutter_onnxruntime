@@ -7,6 +7,7 @@
 #include <VersionHelpers.h>
 
 #include <flutter/method_channel.h>
+#include <flutter/plugin_registrar.h>
 #include <flutter/plugin_registrar_windows.h>
 #include <flutter/standard_method_codec.h>
 
@@ -18,6 +19,8 @@
 #include "src/tensor_manager.h"
 #include "src/value_conversion.h"
 #include "src/windows_utils.h"
+
+#include "include/flutter_onnxruntime/export.h"
 
 namespace flutter_onnxruntime {
 
@@ -286,3 +289,14 @@ void FlutterOnnxruntimePlugin::HandleReleaseOrtValue(
 }
 
 } // namespace flutter_onnxruntime
+
+// C-style function for plugin registration
+// This must be implemented for the plugin to be loadable
+FLUTTER_PLUGIN_EXPORT void FlutterOnnxruntimePluginRegisterWithRegistrar(FlutterDesktopPluginRegistrarRef registrar) {
+  // Convert the C-style registrar to the C++ one
+  flutter::PluginRegistrarWindows *plugin_registrar =
+      flutter::PluginRegistrarManager::GetInstance()->GetRegistrar<flutter::PluginRegistrarWindows>(registrar);
+
+  // Call our plugin's static registration method
+  flutter_onnxruntime::FlutterOnnxruntimePlugin::RegisterWithRegistrar(plugin_registrar);
+}
