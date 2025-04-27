@@ -292,6 +292,7 @@ void FlutterOnnxruntimePlugin::HandleReleaseOrtValue(
 
 // C-style function for plugin registration
 // This must be implemented for the plugin to be loadable
+extern "C" {
 FLUTTER_PLUGIN_EXPORT void FlutterOnnxruntimePluginRegisterWithRegistrar(FlutterDesktopPluginRegistrarRef registrar) {
   // Convert the C-style registrar to the C++ one
   flutter::PluginRegistrarWindows *plugin_registrar =
@@ -299,4 +300,5 @@ FLUTTER_PLUGIN_EXPORT void FlutterOnnxruntimePluginRegisterWithRegistrar(Flutter
 
   // Call our plugin's static registration method
   flutter_onnxruntime::FlutterOnnxruntimePlugin::RegisterWithRegistrar(plugin_registrar);
+}
 }
