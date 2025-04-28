@@ -316,6 +316,13 @@ void FlutterOnnxruntimePlugin::HandleGetOrtValueData(
     }
     std::string value_id = std::get<std::string>(value_id_it->second);
 
+    // check if the tensor exists
+    Ort::Value *tensor = impl_->tensorManager_->getTensor(value_id);
+    if (!tensor) {
+      result->Error("INVALID_VALUE", "Tensor not found or already being disposed", nullptr);
+      return;
+    }
+
     // Get the tensor data
     flutter::EncodableValue tensor_data = impl_->tensorManager_->getTensorData(value_id);
 

@@ -182,7 +182,7 @@ flutter::EncodableValue TensorManager::getTensorData(const std::string &tensor_i
 
   if (tensor_it == tensors_.end() || type_it == tensor_types_.end() || shape_it == tensor_shapes_.end()) {
     // Return null if tensor not found
-    return flutter::EncodableValue();
+    return flutter::EncodableValue(nullptr);
   }
 
   // Create result map
