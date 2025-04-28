@@ -411,6 +411,12 @@ std::string TensorManager::convertTensor(const std::string &tensor_id, const std
 
   const std::string &source_type = type_it->second;
 
+  // Note: fails fast as Windows does not support float16 yet and to avoid FormationException when
+  // comparing source type and target type by "source_type == target_type" (!)
+  if (target_type == "float16") {
+    throw std::runtime_error("float16 is not supported on Windows");
+  }
+
   // If the target type is the same as the source type, just clone the tensor
   if (source_type == target_type) {
     // Create a new tensor ID

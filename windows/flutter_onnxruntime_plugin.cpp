@@ -278,8 +278,14 @@ void FlutterOnnxruntimePlugin::HandleConvertOrtValue(
     }
     std::string target_type = std::get<std::string>(target_type_it->second);
 
-    // Convert the tensor
-    std::string new_tensor_id = impl_->tensorManager_->convertTensor(value_id, target_type);
+    std::string new_tensor_id;
+    try {
+      // Convert the tensor
+      new_tensor_id = impl_->tensorManager_->convertTensor(value_id, target_type);
+    } catch (const std::exception &e) {
+      result->Error("CONVERSION_ERROR", e.what(), nullptr);
+      return;
+    }
 
     // Get the tensor shape
     std::vector<int64_t> shape = impl_->tensorManager_->getTensorShape(new_tensor_id);
