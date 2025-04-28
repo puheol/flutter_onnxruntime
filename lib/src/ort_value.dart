@@ -69,7 +69,7 @@ class OrtValue {
   ///
   /// This method detects the list type and converts it to the appropriate format.
   /// Supported types include Float32List, Int32List, Int64List, Uint8List, List\<bool>,
-  /// and their corresponding Dart List\<num> types.
+  /// List\<String>, and their corresponding Dart List\<num> types.
   ///
   /// Note:
   /// - The shape of the list is not necessary to be in the correct shapes as they will be flattened in
@@ -83,7 +83,8 @@ class OrtValue {
   /// [shape] is the shape of the tensor
   static Future<OrtValue> fromList(dynamic data, List<int> shape) async {
     // If data is a regular List, convert it to the appropriate TypedData
-    if (data is List && !(data is Float32List || data is Int32List || data is Int64List || data is Uint8List)) {
+    if (data is List &&
+        !(data is Float32List || data is Int32List || data is Int64List || data is Uint8List || data is List<String>)) {
       data = _convertListToTypedData(data);
     }
 
@@ -110,6 +111,8 @@ class OrtValue {
       sourceType = 'uint8';
     } else if (data is List<bool>) {
       sourceType = 'bool';
+    } else if (data is List<String>) {
+      sourceType = 'string';
     } else {
       throw ArgumentError('Unsupported data type: ${data.runtimeType}');
     }
@@ -179,6 +182,11 @@ class OrtValue {
     // Handle boolean lists
     if (firstElement is bool) {
       return data.cast<bool>();
+    }
+
+    // Handle string lists
+    if (firstElement is String) {
+      return data.cast<String>();
     }
 
     // Handle numeric lists
