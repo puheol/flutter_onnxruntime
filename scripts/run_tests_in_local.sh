@@ -214,12 +214,26 @@ run_macos_tests() {
     fi
 }
 
+# Function to run Windows tests
+run_window_tests() {
+    # Test on Windows desktop
+    WINDOWS_DEVICES=$(echo "$AVAILABLE_DEVICES" | grep -E "windows" | awk '{print $1}')
+    if [ -n "$WINDOWS_DEVICES" ]; then
+        # Take the first Windows device (usually just "windows")
+        WINDOWS_DEVICE=$(echo "$WINDOWS_DEVICES" | head -n 1)
+        run_integration_test_on_device "$WINDOWS_DEVICE" "Windows"
+    else
+        echo -e "${RED}Windows desktop not available. Skipping Windows tests.${NC}"
+    fi
+}
+
 # Function to run all tests
 run_all_tests() {
     run_android_tests
     run_ios_tests
     run_linux_tests
     run_macos_tests
+    run_window_tests
     run_web_tests
 }
 
@@ -248,7 +262,8 @@ echo "3) Run on iOS"
 echo "4) Run on Linux"
 echo "5) Run on macOS"
 echo "6) Run on Web"
-read -p "Enter your choice (1-6): " choice
+echo "7) Run on Windows"
+read -p "Enter your choice (1-7): " choice
 
 case $choice in
     1)
@@ -268,6 +283,9 @@ case $choice in
         ;;
     6)
         run_web_tests
+        ;;
+    7)
+        run_window_tests
         ;;
     *)
         echo -e "${RED}Invalid option. Exiting.${NC}"
