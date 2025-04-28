@@ -34,6 +34,28 @@ private:
   void HandleMethodCall(const flutter::MethodCall<flutter::EncodableValue> &method_call,
                         std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
 
+  // Session management method handlers
+  void HandleCreateSession(const flutter::MethodCall<flutter::EncodableValue> &method_call,
+                           std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
+  void HandleGetAvailableProviders(const flutter::MethodCall<flutter::EncodableValue> &method_call,
+                                   std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
+  void HandleRunInference(const flutter::MethodCall<flutter::EncodableValue> &method_call,
+                          std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
+  void HandleCloseSession(const flutter::MethodCall<flutter::EncodableValue> &method_call,
+                          std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
+  void HandleGetMetadata(const flutter::MethodCall<flutter::EncodableValue> &method_call,
+                         std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
+  void HandleGetInputInfo(const flutter::MethodCall<flutter::EncodableValue> &method_call,
+                          std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
+  void HandleGetOutputInfo(const flutter::MethodCall<flutter::EncodableValue> &method_call,
+                           std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
   // OrtValue method handlers
   void HandleCreateOrtValue(const flutter::MethodCall<flutter::EncodableValue> &method_call,
                             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);

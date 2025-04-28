@@ -8,8 +8,41 @@
 #define FLUTTER_ONNXRUNTIME_SESSION_MANAGER_H_
 
 #include "pch.h"
+#include <map>
+#include <memory>
+#include <mutex>
+#include <onnxruntime_cxx_api.h>
+#include <string>
+#include <vector>
 
 namespace flutter_onnxruntime {
+
+// Forward declaration
+class TensorManager;
+
+// Session information structure
+struct SessionInfo {
+  std::unique_ptr<Ort::Session> session;
+  std::vector<std::string> input_names;
+  std::vector<std::string> output_names;
+};
+
+// Model metadata structure
+struct ModelMetadata {
+  std::string producer_name;
+  std::string graph_name;
+  std::string domain;
+  std::string description;
+  int64_t version;
+  std::map<std::string, std::string> custom_metadata;
+};
+
+// Input/Output tensor info structure
+struct TensorInfo {
+  std::string name;
+  std::string type;
+  std::vector<int64_t> shape;
+};
 
 // Manages ONNX Runtime sessions with proper resource handling
 class SessionManager {
@@ -17,50 +50,52 @@ public:
   SessionManager();
   ~SessionManager();
 
-  // Disallow copy and assign
-  SessionManager(const SessionManager &) = delete;
-  SessionManager &operator=(const SessionManager &) = delete;
+  // Create a new session from a model file path
+  std::string createSession(const char *model_path, Ort::SessionOptions session_options);
 
-  // Create a new session from model path
-  std::string createSession(const std::string &modelPath, const flutter::EncodableMap &sessionOptions);
+  // Close and remove a session
+  bool closeSession(const std::string &session_id);
 
-  // Create a new session from model buffer
-  std::string createSessionFromBuffer(const std::vector<uint8_t> &modelBuffer,
-                                      const std::map<std::string, std::string> &options);
+  // Get session info
+  bool hasSession(const std::string &session_id);
 
-  // Get a session by ID
-  Ort::Session *getSession(const std::string &sessionId);
+  // Get input names for a session
+  std::vector<std::string> getInputNames(const std::string &session_id);
 
-  // Close and cleanup a session
-  bool closeSession(const std::string &sessionId);
+  // Get output names for a session
+  std::vector<std::string> getOutputNames(const std::string &session_id);
 
-  // Run inference
-  flutter::EncodableMap runInference(const std::string &sessionId, const std::map<std::string, Ort::Value *> &inputs,
-                                     const flutter::EncodableMap &runOptions);
+  // Get model metadata for a session
+  ModelMetadata getModelMetadata(const std::string &session_id);
 
-  // Get session metadata
-  flutter::EncodableMap getMetadata(const std::string &sessionId);
+  // Get input tensor info for a session
+  std::vector<TensorInfo> getInputInfo(const std::string &session_id);
 
-  // Get input info from a session
-  flutter::EncodableList getInputInfo(const std::string &sessionId);
+  // Get output tensor info for a session
+  std::vector<TensorInfo> getOutputInfo(const std::string &session_id);
 
-  // Get output info from a session
-  flutter::EncodableList getOutputInfo(const std::string &sessionId);
+  // Run inference with a session
+  std::vector<Ort::Value> runInference(const std::string &session_id, const std::vector<Ort::Value> &input_tensors,
+                                       Ort::RunOptions *run_options = nullptr);
 
-  // Get a list of available execution providers
-  flutter::EncodableList getAvailableExecutionProviders();
+  // Helper method to get element type string
+  static const char *getElementTypeString(ONNXTensorElementDataType element_type);
 
 private:
-  // Private implementation details
-  std::unordered_map<std::string, std::unique_ptr<Ort::Session>> sessions_;
-  std::mutex sessionsMutex_;
-  Ort::Env env_;
-
-  // Helper methods for configuring session options
-  std::unique_ptr<Ort::SessionOptions> configureSessionOptions(const std::map<std::string, std::string> &options);
-
   // Generate a unique session ID
   std::string generateSessionId();
+
+  // Map of session IDs to session info
+  std::map<std::string, SessionInfo> sessions_;
+
+  // Counter for generating unique session IDs
+  int next_session_id_;
+
+  // Mutex for thread safety
+  std::mutex mutex_;
+
+  // ONNX Runtime environment
+  Ort::Env env_;
 };
 
 } // namespace flutter_onnxruntime

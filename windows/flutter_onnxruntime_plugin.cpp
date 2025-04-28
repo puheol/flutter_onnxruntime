@@ -92,16 +92,27 @@ void FlutterOnnxruntimePlugin::HandleMethodCall(
     return;
   }
 
-  // Session-related methods (placeholders for now)
-  if (method_name == "createSession" || method_name == "runInference" || method_name == "closeSession" ||
-      method_name == "getMetadata" || method_name == "getInputInfo" || method_name == "getOutputInfo" ||
-      method_name == "getAvailableProviders") {
-    // Return placeholder responses for now
-    flutter::EncodableMap placeholder;
-    placeholder[flutter::EncodableValue("status")] = flutter::EncodableValue("placeholder_implementation");
-    placeholder[flutter::EncodableValue("message")] =
-        flutter::EncodableValue("This functionality will be implemented in the next iteration");
-    result->Success(flutter::EncodableValue(placeholder));
+  // Session-related methods
+  if (method_name == "createSession") {
+    HandleCreateSession(method_call, std::move(result));
+    return;
+  } else if (method_name == "getAvailableProviders") {
+    HandleGetAvailableProviders(method_call, std::move(result));
+    return;
+  } else if (method_name == "runInference") {
+    HandleRunInference(method_call, std::move(result));
+    return;
+  } else if (method_name == "closeSession") {
+    HandleCloseSession(method_call, std::move(result));
+    return;
+  } else if (method_name == "getMetadata") {
+    HandleGetMetadata(method_call, std::move(result));
+    return;
+  } else if (method_name == "getInputInfo") {
+    HandleGetInputInfo(method_call, std::move(result));
+    return;
+  } else if (method_name == "getOutputInfo") {
+    HandleGetOutputInfo(method_call, std::move(result));
     return;
   }
 
@@ -367,6 +378,582 @@ void FlutterOnnxruntimePlugin::HandleReleaseOrtValue(
     } else {
       result->Error("INVALID_VALUE", "Tensor not found", nullptr);
     }
+  } catch (const Ort::Exception &e) {
+    result->Error("ORT_ERROR", e.what(), nullptr);
+  } catch (const std::exception &e) {
+    result->Error("PLUGIN_ERROR", e.what(), nullptr);
+  } catch (...) {
+    result->Error("INTERNAL_ERROR", "Unknown error occurred", nullptr);
+  }
+}
+
+void FlutterOnnxruntimePlugin::HandleCreateSession(
+    const flutter::MethodCall<flutter::EncodableValue> &method_call,
+    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+
+  // Extract parameters
+  const auto *args = std::get_if<flutter::EncodableMap>(method_call.arguments());
+
+  if (!args) {
+    result->Error("INVALID_ARG", "Arguments must be provided as a map", nullptr);
+    return;
+  }
+
+  try {
+    // Extract model path
+    auto model_path_it = args->find(flutter::EncodableValue("modelPath"));
+    if (model_path_it == args->end() || !std::holds_alternative<std::string>(model_path_it->second)) {
+      result->Error("INVALID_ARG", "Model path must be a non-null string", nullptr);
+      return;
+    }
+    std::string model_path = std::get<std::string>(model_path_it->second);
+
+    // Create session options
+    Ort::SessionOptions session_options;
+
+    // Configure session options if provided
+    auto session_options_it = args->find(flutter::EncodableValue("sessionOptions"));
+    if (session_options_it != args->end() &&
+        std::holds_alternative<flutter::EncodableMap>(session_options_it->second)) {
+
+      const auto &options_map = std::get<flutter::EncodableMap>(session_options_it->second);
+
+      // Set threading options
+      auto intra_threads_it = options_map.find(flutter::EncodableValue("intraOpNumThreads"));
+      if (intra_threads_it != options_map.end() && std::holds_alternative<int32_t>(intra_threads_it->second)) {
+        session_options.SetIntraOpNumThreads(std::get<int32_t>(intra_threads_it->second));
+      }
+
+      auto inter_threads_it = options_map.find(flutter::EncodableValue("interOpNumThreads"));
+      if (inter_threads_it != options_map.end() && std::holds_alternative<int32_t>(inter_threads_it->second)) {
+        session_options.SetInterOpNumThreads(std::get<int32_t>(inter_threads_it->second));
+      }
+
+      // Get the device ID, if not provided, set to 0
+      int device_id = 0;
+      auto device_id_it = options_map.find(flutter::EncodableValue("deviceId"));
+      if (device_id_it != options_map.end() && std::holds_alternative<int32_t>(device_id_it->second)) {
+        device_id = std::get<int32_t>(device_id_it->second);
+      }
+
+      // Convert device_id to string for use with provider options
+      std::string device_id_str = std::to_string(device_id);
+
+      // Handle providers
+      auto providers_it = options_map.find(flutter::EncodableValue("providers"));
+      std::vector<std::string> providers;
+
+      if (providers_it != options_map.end() && std::holds_alternative<flutter::EncodableList>(providers_it->second)) {
+
+        const auto &providers_list = std::get<flutter::EncodableList>(providers_it->second);
+
+        for (const auto &provider_value : providers_list) {
+          if (std::holds_alternative<std::string>(provider_value)) {
+            providers.push_back(std::get<std::string>(provider_value));
+          }
+        }
+      }
+
+      // Default to CPU provider if no providers are specified
+      if (providers.empty()) {
+        providers.push_back("CPU");
+      }
+
+      // Set providers in session options
+      try {
+        for (const auto &provider : providers) {
+          if (provider == "CPU") {
+            // CPU is implicitly added if no others are, or can be explicitly added.
+            // No specific options needed here usually.
+            continue;
+          } else if (provider == "CUDA") {
+            // Use CUDA if available
+            OrtCUDAProviderOptionsV2 *cuda_options = nullptr;
+            OrtStatus *status = Ort::GetApi().CreateCUDAProviderOptions(&cuda_options);
+            if (status != nullptr) {
+              std::string error_message = "Failed to create CUDA provider options: ";
+              error_message += Ort::GetApi().GetErrorMessage(status);
+              Ort::GetApi().ReleaseStatus(status);
+              result->Error("PROVIDER_ERROR", error_message.c_str(), nullptr);
+              return;
+            }
+
+            // Use unique_ptr for automatic release
+            struct CudaOptionsDeleter {
+              void operator()(OrtCUDAProviderOptionsV2 *p) { Ort::GetApi().ReleaseCUDAProviderOptions(p); }
+            };
+            std::unique_ptr<OrtCUDAProviderOptionsV2, CudaOptionsDeleter> cuda_options_ptr(cuda_options);
+
+            // Set CUDA options
+            std::vector<const char *> keys{"device_id"};
+            std::vector<const char *> values{device_id_str.c_str()};
+            status = Ort::GetApi().UpdateCUDAProviderOptions(cuda_options_ptr.get(), keys.data(), values.data(),
+                                                             keys.size());
+
+            if (status != nullptr) {
+              std::string error_message = "Failed to update CUDA provider options: ";
+              error_message += Ort::GetApi().GetErrorMessage(status);
+              Ort::GetApi().ReleaseStatus(status);
+              result->Error("PROVIDER_ERROR", error_message.c_str(), nullptr);
+              return;
+            }
+
+            // Append CUDA execution provider to session options
+            session_options.AppendExecutionProvider_CUDA_V2(*cuda_options_ptr);
+          } else if (provider == "TENSOR_RT") {
+            // Use TensorRT if available
+            // This is just a placeholder - actual implementation would depend on TensorRT availability
+            result->Error("PROVIDER_ERROR", "TensorRT provider not implemented yet", nullptr);
+            return;
+          } else {
+            std::string error_message = "Provider is not supported: " + provider;
+            result->Error("INVALID_PROVIDER", error_message.c_str(), nullptr);
+            return;
+          }
+        }
+      } catch (const Ort::Exception &e) {
+        result->Error("PROVIDER_ERROR", e.what(), nullptr);
+        return;
+      }
+    }
+
+    // Create the session
+    std::string session_id = impl_->sessionManager_->createSession(model_path.c_str(), session_options);
+
+    if (session_id.empty()) {
+      result->Error("SESSION_CREATION_ERROR", "Failed to create ONNX Runtime session", nullptr);
+      return;
+    }
+
+    // Get input and output names
+    std::vector<std::string> input_names = impl_->sessionManager_->getInputNames(session_id);
+    std::vector<std::string> output_names = impl_->sessionManager_->getOutputNames(session_id);
+
+    // Prepare response
+    flutter::EncodableMap response;
+    response[flutter::EncodableValue("sessionId")] = flutter::EncodableValue(session_id);
+
+    // Convert input names to Flutter list
+    flutter::EncodableList input_names_list;
+    for (const auto &name : input_names) {
+      input_names_list.push_back(flutter::EncodableValue(name));
+    }
+    response[flutter::EncodableValue("inputNames")] = flutter::EncodableValue(input_names_list);
+
+    // Convert output names to Flutter list
+    flutter::EncodableList output_names_list;
+    for (const auto &name : output_names) {
+      output_names_list.push_back(flutter::EncodableValue(name));
+    }
+    response[flutter::EncodableValue("outputNames")] = flutter::EncodableValue(output_names_list);
+
+    // Add status for compatibility
+    response[flutter::EncodableValue("status")] = flutter::EncodableValue("success");
+
+    result->Success(flutter::EncodableValue(response));
+  } catch (const Ort::Exception &e) {
+    result->Error("ORT_ERROR", e.what(), nullptr);
+  } catch (const std::exception &e) {
+    result->Error("PLUGIN_ERROR", e.what(), nullptr);
+  } catch (...) {
+    result->Error("INTERNAL_ERROR", "Unknown error occurred", nullptr);
+  }
+}
+
+void FlutterOnnxruntimePlugin::HandleGetAvailableProviders(
+    const flutter::MethodCall<flutter::EncodableValue> &method_call,
+    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+
+  try {
+    // Get available providers from ONNX Runtime
+    std::vector<std::string> providers = Ort::GetAvailableProviders();
+
+    // Map provider names to standardized enum names
+    flutter::EncodableList providers_list;
+    for (const auto &provider : providers) {
+      std::string mapped_name = provider;
+
+      // Map C++ API provider names to enum names
+      static const std::unordered_map<std::string, std::string> provider_map = {
+          {"CPUExecutionProvider", "CPU"},
+          {"CUDAExecutionProvider", "CUDA"},
+          {"TensorrtExecutionProvider", "TENSOR_RT"},
+          {"MIGraphXExecutionProvider", "MIGRAPHX"},
+          {"ROCMExecutionProvider", "ROCM"},
+          {"CoreMLExecutionProvider", "CORE_ML"},
+          {"DnnlExecutionProvider", "DNNL"},
+          {"OpenVINOExecutionProvider", "OPEN_VINO"},
+          {"NnapiExecutionProvider", "NNAPI"},
+          {"QnnExecutionProvider", "QNN"},
+          {"DmlExecutionProvider", "DIRECT_ML"},
+          {"ACLExecutionProvider", "ACL"},
+          {"ArmNNExecutionProvider", "ARM_NN"},
+          {"XnnpackExecutionProvider", "XNNPACK"}};
+
+      auto it = provider_map.find(provider);
+      if (it != provider_map.end()) {
+        mapped_name = it->second;
+      }
+
+      providers_list.push_back(flutter::EncodableValue(mapped_name));
+    }
+
+    result->Success(flutter::EncodableValue(providers_list));
+  } catch (const Ort::Exception &e) {
+    result->Error("ORT_ERROR", e.what(), nullptr);
+  } catch (const std::exception &e) {
+    result->Error("PLUGIN_ERROR", e.what(), nullptr);
+  } catch (...) {
+    result->Error("INTERNAL_ERROR", "Unknown error occurred", nullptr);
+  }
+}
+
+void FlutterOnnxruntimePlugin::HandleRunInference(
+    const flutter::MethodCall<flutter::EncodableValue> &method_call,
+    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+
+  // Extract parameters
+  const auto *args = std::get_if<flutter::EncodableMap>(method_call.arguments());
+
+  if (!args) {
+    result->Error("INVALID_ARG", "Arguments must be provided as a map", nullptr);
+    return;
+  }
+
+  try {
+    // Extract session ID
+    auto session_id_it = args->find(flutter::EncodableValue("sessionId"));
+    if (session_id_it == args->end() || !std::holds_alternative<std::string>(session_id_it->second)) {
+      result->Error("INVALID_ARG", "Session ID must be a non-null string", nullptr);
+      return;
+    }
+    std::string session_id = std::get<std::string>(session_id_it->second);
+
+    // Check if session exists
+    if (!impl_->sessionManager_->hasSession(session_id)) {
+      result->Error("INVALID_SESSION", "Session not found", nullptr);
+      return;
+    }
+
+    // Extract inputs map
+    auto inputs_it = args->find(flutter::EncodableValue("inputs"));
+    if (inputs_it == args->end() || !std::holds_alternative<flutter::EncodableMap>(inputs_it->second)) {
+      result->Error("INVALID_ARG", "Inputs must be a non-null map", nullptr);
+      return;
+    }
+    const auto &inputs_map = std::get<flutter::EncodableMap>(inputs_it->second);
+
+    // Extract run options if provided
+    auto run_options_it = args->find(flutter::EncodableValue("runOptions"));
+    Ort::RunOptions run_options;
+
+    if (run_options_it != args->end() && std::holds_alternative<flutter::EncodableMap>(run_options_it->second)) {
+
+      const auto &options_map = std::get<flutter::EncodableMap>(run_options_it->second);
+
+      // Extract log severity level if provided
+      auto log_severity_it = options_map.find(flutter::EncodableValue("logSeverityLevel"));
+      if (log_severity_it != options_map.end() && std::holds_alternative<int32_t>(log_severity_it->second)) {
+        run_options.SetRunLogSeverityLevel(std::get<int32_t>(log_severity_it->second));
+      }
+
+      // Extract log verbosity level if provided
+      auto log_verbosity_it = options_map.find(flutter::EncodableValue("logVerbosityLevel"));
+      if (log_verbosity_it != options_map.end() && std::holds_alternative<int32_t>(log_verbosity_it->second)) {
+        run_options.SetRunLogVerbosityLevel(std::get<int32_t>(log_verbosity_it->second));
+      }
+
+      // Extract terminate option if provided
+      auto terminate_it = options_map.find(flutter::EncodableValue("terminate"));
+      if (terminate_it != options_map.end() && std::holds_alternative<bool>(terminate_it->second)) {
+        if (std::get<bool>(terminate_it->second)) {
+          run_options.SetTerminate();
+        }
+      }
+    }
+
+    // Get input and output names
+    std::vector<std::string> input_names = impl_->sessionManager_->getInputNames(session_id);
+    std::vector<std::string> output_names = impl_->sessionManager_->getOutputNames(session_id);
+
+    // Prepare input tensors
+    std::vector<Ort::Value> input_tensors;
+
+    // Iterate through each input
+    for (const auto &input_pair : inputs_map) {
+      if (!std::holds_alternative<std::string>(input_pair.first) ||
+          !std::holds_alternative<flutter::EncodableMap>(input_pair.second)) {
+        continue;
+      }
+
+      const auto &input_value_map = std::get<flutter::EncodableMap>(input_pair.second);
+      auto tensor_id_it = input_value_map.find(flutter::EncodableValue("valueId"));
+
+      if (tensor_id_it == input_value_map.end() || !std::holds_alternative<std::string>(tensor_id_it->second)) {
+        continue;
+      }
+
+      std::string tensor_id = std::get<std::string>(tensor_id_it->second);
+
+      // Get the tensor value
+      Ort::Value *tensor_ptr = impl_->tensorManager_->getTensor(tensor_id);
+      if (tensor_ptr != nullptr) {
+        try {
+          // Use the tensor manager to clone the tensor
+          Ort::Value new_tensor = impl_->tensorManager_->cloneTensor(tensor_id);
+          input_tensors.push_back(std::move(new_tensor));
+        } catch (const std::exception &e) {
+          // Log the error but continue with the next tensor
+          std::cerr << "Failed to clone tensor " << tensor_id << ": " << e.what() << std::endl;
+        }
+      }
+    }
+
+    // Run inference using SessionManager
+    std::vector<Ort::Value> output_tensors;
+    if (!input_tensors.empty()) {
+      output_tensors = impl_->sessionManager_->runInference(session_id, input_tensors, &run_options);
+    }
+
+    // Process outputs
+    flutter::EncodableMap outputs_map;
+
+    // For each output tensor, store it using TensorManager
+    for (size_t i = 0; i < output_tensors.size(); i++) {
+      // Create a tensor ID
+      std::string value_id = impl_->tensorManager_->generateTensorId();
+
+      // Store the tensor - this transfers ownership
+      impl_->tensorManager_->storeTensor(value_id, std::move(output_tensors[i]));
+
+      // Get the tensor type and shape
+      std::string tensor_type = impl_->tensorManager_->getTensorType(value_id);
+      std::vector<int64_t> shape = impl_->tensorManager_->getTensorShape(value_id);
+
+      // Add the value ID to the outputs map
+      flutter::EncodableList shape_list;
+      for (const auto &dim : shape) {
+        shape_list.push_back(static_cast<int64_t>(dim));
+      }
+
+      // Create output info (value_id, type, shape)
+      flutter::EncodableList output_info;
+      output_info.push_back(flutter::EncodableValue(value_id));
+      output_info.push_back(flutter::EncodableValue(tensor_type));
+      output_info.push_back(flutter::EncodableValue(shape_list));
+
+      if (i < output_names.size()) {
+        outputs_map[flutter::EncodableValue(output_names[i])] = flutter::EncodableValue(output_info);
+      }
+    }
+
+    result->Success(flutter::EncodableValue(outputs_map));
+  } catch (const Ort::Exception &e) {
+    result->Error("INFERENCE_FAILED", e.what(), nullptr);
+  } catch (const std::exception &e) {
+    result->Error("PLUGIN_ERROR", e.what(), nullptr);
+  } catch (...) {
+    result->Error("INTERNAL_ERROR", "Unknown error occurred", nullptr);
+  }
+}
+
+void FlutterOnnxruntimePlugin::HandleCloseSession(
+    const flutter::MethodCall<flutter::EncodableValue> &method_call,
+    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+
+  // Extract parameters
+  const auto *args = std::get_if<flutter::EncodableMap>(method_call.arguments());
+
+  if (!args) {
+    result->Error("INVALID_ARG", "Arguments must be provided as a map", nullptr);
+    return;
+  }
+
+  try {
+    // Extract session ID
+    auto session_id_it = args->find(flutter::EncodableValue("sessionId"));
+    if (session_id_it == args->end() || !std::holds_alternative<std::string>(session_id_it->second)) {
+      result->Error("INVALID_ARG", "Session ID must be a non-null string", nullptr);
+      return;
+    }
+    std::string session_id = std::get<std::string>(session_id_it->second);
+
+    // Close the session
+    impl_->sessionManager_->closeSession(session_id);
+
+    // Return null for success
+    result->Success(nullptr);
+  } catch (const Ort::Exception &e) {
+    result->Error("ORT_ERROR", e.what(), nullptr);
+  } catch (const std::exception &e) {
+    result->Error("PLUGIN_ERROR", e.what(), nullptr);
+  } catch (...) {
+    result->Error("INTERNAL_ERROR", "Unknown error occurred", nullptr);
+  }
+}
+
+void FlutterOnnxruntimePlugin::HandleGetMetadata(
+    const flutter::MethodCall<flutter::EncodableValue> &method_call,
+    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+
+  // Extract parameters
+  const auto *args = std::get_if<flutter::EncodableMap>(method_call.arguments());
+
+  if (!args) {
+    result->Error("INVALID_ARG", "Arguments must be provided as a map", nullptr);
+    return;
+  }
+
+  try {
+    // Extract session ID
+    auto session_id_it = args->find(flutter::EncodableValue("sessionId"));
+    if (session_id_it == args->end() || !std::holds_alternative<std::string>(session_id_it->second)) {
+      result->Error("INVALID_SESSION", "Invalid session ID", nullptr);
+      return;
+    }
+    std::string session_id = std::get<std::string>(session_id_it->second);
+
+    // Check if session exists
+    if (!impl_->sessionManager_->hasSession(session_id)) {
+      result->Error("INVALID_SESSION", "Session not found", nullptr);
+      return;
+    }
+
+    // Get metadata
+    ModelMetadata metadata = impl_->sessionManager_->getModelMetadata(session_id);
+
+    // Create response
+    flutter::EncodableMap response;
+    response[flutter::EncodableValue("producerName")] = flutter::EncodableValue(metadata.producer_name);
+    response[flutter::EncodableValue("graphName")] = flutter::EncodableValue(metadata.graph_name);
+    response[flutter::EncodableValue("domain")] = flutter::EncodableValue(metadata.domain);
+    response[flutter::EncodableValue("description")] = flutter::EncodableValue(metadata.description);
+    response[flutter::EncodableValue("version")] = flutter::EncodableValue(static_cast<int64_t>(metadata.version));
+
+    // Convert custom metadata map
+    flutter::EncodableMap custom_metadata_map;
+    for (const auto &pair : metadata.custom_metadata) {
+      custom_metadata_map[flutter::EncodableValue(pair.first)] = flutter::EncodableValue(pair.second);
+    }
+    response[flutter::EncodableValue("customMetadataMap")] = flutter::EncodableValue(custom_metadata_map);
+
+    result->Success(flutter::EncodableValue(response));
+  } catch (const Ort::Exception &e) {
+    result->Error("ORT_ERROR", e.what(), nullptr);
+  } catch (const std::exception &e) {
+    result->Error("PLUGIN_ERROR", e.what(), nullptr);
+  } catch (...) {
+    result->Error("INTERNAL_ERROR", "Unknown error occurred", nullptr);
+  }
+}
+
+void FlutterOnnxruntimePlugin::HandleGetInputInfo(
+    const flutter::MethodCall<flutter::EncodableValue> &method_call,
+    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+
+  // Extract parameters
+  const auto *args = std::get_if<flutter::EncodableMap>(method_call.arguments());
+
+  if (!args) {
+    result->Error("INVALID_ARG", "Arguments must be provided as a map", nullptr);
+    return;
+  }
+
+  try {
+    // Extract session ID
+    auto session_id_it = args->find(flutter::EncodableValue("sessionId"));
+    if (session_id_it == args->end() || !std::holds_alternative<std::string>(session_id_it->second)) {
+      result->Error("INVALID_SESSION", "Invalid session ID", nullptr);
+      return;
+    }
+    std::string session_id = std::get<std::string>(session_id_it->second);
+
+    // Check if session exists
+    if (!impl_->sessionManager_->hasSession(session_id)) {
+      result->Error("INVALID_SESSION", "Session not found", nullptr);
+      return;
+    }
+
+    // Get input info
+    std::vector<TensorInfo> input_info = impl_->sessionManager_->getInputInfo(session_id);
+
+    // Create response list
+    flutter::EncodableList response;
+
+    for (const auto &info : input_info) {
+      flutter::EncodableMap info_map;
+      info_map[flutter::EncodableValue("name")] = flutter::EncodableValue(info.name);
+      info_map[flutter::EncodableValue("type")] = flutter::EncodableValue(info.type);
+
+      // Convert shape to Flutter list
+      flutter::EncodableList shape_list;
+      for (const auto &dim : info.shape) {
+        shape_list.push_back(flutter::EncodableValue(static_cast<int64_t>(dim)));
+      }
+      info_map[flutter::EncodableValue("shape")] = flutter::EncodableValue(shape_list);
+
+      response.push_back(flutter::EncodableValue(info_map));
+    }
+
+    result->Success(flutter::EncodableValue(response));
+  } catch (const Ort::Exception &e) {
+    result->Error("ORT_ERROR", e.what(), nullptr);
+  } catch (const std::exception &e) {
+    result->Error("PLUGIN_ERROR", e.what(), nullptr);
+  } catch (...) {
+    result->Error("INTERNAL_ERROR", "Unknown error occurred", nullptr);
+  }
+}
+
+void FlutterOnnxruntimePlugin::HandleGetOutputInfo(
+    const flutter::MethodCall<flutter::EncodableValue> &method_call,
+    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+
+  // Extract parameters
+  const auto *args = std::get_if<flutter::EncodableMap>(method_call.arguments());
+
+  if (!args) {
+    result->Error("INVALID_ARG", "Arguments must be provided as a map", nullptr);
+    return;
+  }
+
+  try {
+    // Extract session ID
+    auto session_id_it = args->find(flutter::EncodableValue("sessionId"));
+    if (session_id_it == args->end() || !std::holds_alternative<std::string>(session_id_it->second)) {
+      result->Error("INVALID_SESSION", "Invalid session ID", nullptr);
+      return;
+    }
+    std::string session_id = std::get<std::string>(session_id_it->second);
+
+    // Check if session exists
+    if (!impl_->sessionManager_->hasSession(session_id)) {
+      result->Error("INVALID_SESSION", "Session not found", nullptr);
+      return;
+    }
+
+    // Get output info
+    std::vector<TensorInfo> output_info = impl_->sessionManager_->getOutputInfo(session_id);
+
+    // Create response list
+    flutter::EncodableList response;
+
+    for (const auto &info : output_info) {
+      flutter::EncodableMap info_map;
+      info_map[flutter::EncodableValue("name")] = flutter::EncodableValue(info.name);
+      info_map[flutter::EncodableValue("type")] = flutter::EncodableValue(info.type);
+
+      // Convert shape to Flutter list
+      flutter::EncodableList shape_list;
+      for (const auto &dim : info.shape) {
+        shape_list.push_back(flutter::EncodableValue(static_cast<int64_t>(dim)));
+      }
+      info_map[flutter::EncodableValue("shape")] = flutter::EncodableValue(shape_list);
+
+      response.push_back(flutter::EncodableValue(info_map));
+    }
+
+    result->Success(flutter::EncodableValue(response));
   } catch (const Ort::Exception &e) {
     result->Error("ORT_ERROR", e.what(), nullptr);
   } catch (const std::exception &e) {
