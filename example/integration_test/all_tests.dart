@@ -138,6 +138,20 @@ void main() {
         await tensor.dispose();
       });
 
+      testWidgets('String round-trip test', (WidgetTester tester) async {
+        final inputData = ['Hello', 'World'];
+        final shape = [2];
+
+        final tensor = await OrtValue.fromList(inputData, shape);
+        expect(tensor.dataType, OrtDataType.string);
+        expect(tensor.shape, shape);
+
+        final retrievedData = await tensor.asFlattenedList();
+        expect(retrievedData.length, 2);
+        expect(retrievedData[0], 'Hello');
+        expect(retrievedData[1], 'World');
+      });
+
       testWidgets('Round-trip test with regular list of float32', (WidgetTester tester) async {
         final inputData = [1.1, 2.2, 3.3, 4.4];
         final shape = [2, 2]; // 2x2 matrix
@@ -808,6 +822,60 @@ void main() {
           );
         }
       });
+    });
+  });
+
+  group('StringConcat Model Test', () {
+    late OnnxRuntime onnxRuntime;
+    late OrtSession session;
+
+    setUpAll(() async {
+      onnxRuntime = OnnxRuntime();
+      session = await onnxRuntime.createSessionFromAsset('assets/models/string_concat_model.onnx');
+    });
+
+    tearDownAll(() async {
+      await session.close();
+    });
+
+    testWidgets('StringConcat model inference test', (WidgetTester tester) async {
+      final inputs = {
+        'input1': await OrtValue.fromList(['Hello'], [1]),
+        'input2': await OrtValue.fromList(['World'], [1]),
+      };
+
+      final outputs = await session.run(inputs);
+      final output = outputs['output'];
+      expect(output!.dataType, OrtDataType.string);
+      expect(output.shape, [1]);
+      final outputData = await output.asFlattenedList();
+      expect(outputData, ['HelloWorld']);
+
+      // clean up
+      for (var input in inputs.values) {
+        input.dispose();
+      }
+      await output.dispose();
+    });
+
+    testWidgets('StringConcat model inference test with multi-batch', (WidgetTester tester) async {
+      final inputs = {
+        'input1': await OrtValue.fromList(['Hello', 'flutter'], [2]),
+        'input2': await OrtValue.fromList(['World!', '_onnxruntime'], [2]),
+      };
+
+      final outputs = await session.run(inputs);
+      final output = outputs['output'];
+      expect(output!.dataType, OrtDataType.string);
+      expect(output.shape, [2]);
+      final outputData = await output.asFlattenedList();
+      expect(outputData, ['HelloWorld!', 'flutter_onnxruntime']);
+
+      // clean up
+      for (var input in inputs.values) {
+        input.dispose();
+      }
+      await output.dispose();
     });
   });
 }
