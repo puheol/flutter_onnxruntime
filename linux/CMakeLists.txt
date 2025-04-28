@@ -218,10 +218,16 @@ install(
 )
 
 # Also create symlinks in the build directory to ensure includes work during build
-execute_process(
-  COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/include/flutter_onnxruntime"
-  COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/include/flutter_onnxruntime/flutter_onnxruntime_plugin.h" "${CMAKE_BINARY_DIR}/include/flutter_onnxruntime/"
-)
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/flutter_onnxruntime")
+
+# Copy headers with error handling
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/include/flutter_onnxruntime/flutter_onnxruntime_plugin.h" 
+     DESTINATION "${CMAKE_BINARY_DIR}/include/flutter_onnxruntime/"
+     FOLLOW_SYMLINK_CHAIN)
+     
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/include/flutter_onnxruntime/export.h" 
+     DESTINATION "${CMAKE_BINARY_DIR}/include/flutter_onnxruntime/"
+     FOLLOW_SYMLINK_CHAIN)
 
 # Add include directories for the plugin
 target_include_directories(${PLUGIN_NAME} PUBLIC
