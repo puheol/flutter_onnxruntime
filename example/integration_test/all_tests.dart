@@ -251,7 +251,7 @@ void main() {
       });
     });
 
-    group('Tensor Creation With Shape Tests', () {
+    group('Tensor Creation Tests', () {
       testWidgets('Tensor size and target shape mismatch', (WidgetTester tester) async {
         final inputData = [1.1, 2.2, 3.3, 4.4, 5.5];
         final shape = [2, 2];

@@ -394,9 +394,6 @@ static FlMethodResponse *run_inference(FlutterOnnxruntimePlugin *self, FlValue *
       input_names_char.push_back(name.c_str());
     }
 
-    // Create memory info for tensor creation
-    Ort::MemoryInfo memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-
     // Iterate through each input
     size_t num_inputs = fl_value_get_length(inputs_value);
     for (size_t i = 0; i < num_inputs; i++) {
@@ -418,73 +415,13 @@ static FlMethodResponse *run_inference(FlutterOnnxruntimePlugin *self, FlValue *
       // Get the tensor value
       Ort::Value *tensor_ptr = self->tensor_manager->getTensor(tensor_id);
       if (tensor_ptr != nullptr) {
-        // Get tensor info
-        Ort::TensorTypeAndShapeInfo tensor_info = tensor_ptr->GetTensorTypeAndShapeInfo();
-        ONNXTensorElementDataType element_type = tensor_info.GetElementType();
-        std::vector<int64_t> shape = tensor_info.GetShape();
-        size_t element_count = tensor_info.GetElementCount();
-
-        // Create a new tensor with the same data as the original
-        switch (element_type) {
-        case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT: {
-          float *data = tensor_ptr->GetTensorMutableData<float>();
-          float *new_data = new float[element_count];
-          std::memcpy(new_data, data, element_count * sizeof(float));
-
-          Ort::Value new_tensor =
-              Ort::Value::CreateTensor<float>(memory_info, new_data, element_count, shape.data(), shape.size());
-
+        try {
+          // Use the tensor manager to clone the tensor
+          Ort::Value new_tensor = self->tensor_manager->cloneTensor(tensor_id);
           input_tensors.push_back(std::move(new_tensor));
-          break;
-        }
-        case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32: {
-          int32_t *data = tensor_ptr->GetTensorMutableData<int32_t>();
-          int32_t *new_data = new int32_t[element_count];
-          std::memcpy(new_data, data, element_count * sizeof(int32_t));
-
-          Ort::Value new_tensor =
-              Ort::Value::CreateTensor<int32_t>(memory_info, new_data, element_count, shape.data(), shape.size());
-
-          input_tensors.push_back(std::move(new_tensor));
-          break;
-        }
-        case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64: {
-          int64_t *data = tensor_ptr->GetTensorMutableData<int64_t>();
-          int64_t *new_data = new int64_t[element_count];
-          std::memcpy(new_data, data, element_count * sizeof(int64_t));
-
-          Ort::Value new_tensor =
-              Ort::Value::CreateTensor<int64_t>(memory_info, new_data, element_count, shape.data(), shape.size());
-
-          input_tensors.push_back(std::move(new_tensor));
-          break;
-        }
-        case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8: {
-          uint8_t *data = tensor_ptr->GetTensorMutableData<uint8_t>();
-          uint8_t *new_data = new uint8_t[element_count];
-          std::memcpy(new_data, data, element_count * sizeof(uint8_t));
-
-          Ort::Value new_tensor =
-              Ort::Value::CreateTensor<uint8_t>(memory_info, new_data, element_count, shape.data(), shape.size());
-
-          input_tensors.push_back(std::move(new_tensor));
-          break;
-        }
-        case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL: {
-          bool *data = tensor_ptr->GetTensorMutableData<bool>();
-          bool *new_data = new bool[element_count];
-          std::memcpy(new_data, data, element_count * sizeof(bool));
-
-          Ort::Value new_tensor =
-              Ort::Value::CreateTensor<bool>(memory_info, new_data, element_count, shape.data(), shape.size());
-
-          input_tensors.push_back(std::move(new_tensor));
-          break;
-        }
-        // Add cases for other data types as needed
-        default:
-          // Skip unsupported tensor types
-          break;
+        } catch (const std::exception &e) {
+          g_warning("Failed to clone tensor %s: %s", tensor_id.c_str(), e.what());
+          // Continue with the next tensor
         }
       }
     }

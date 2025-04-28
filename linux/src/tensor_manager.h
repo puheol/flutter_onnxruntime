@@ -54,6 +54,9 @@ public:
   // Convert bool tensor to another type
   std::string convertBoolTo(const std::string &tensor_id, const std::string &target_type);
 
+  // Clone a tensor and return a new deep copy of it
+  Ort::Value cloneTensor(const std::string &tensor_id);
+
   // Store a tensor with a specific ID (used for output tensors)
   void storeTensor(const std::string &tensor_id, Ort::Value &&tensor);
 

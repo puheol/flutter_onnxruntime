@@ -755,3 +755,59 @@ std::string TensorManager::convertBoolTo(const std::string &tensor_id, const std
 
   return new_tensor_id;
 }
+
+Ort::Value TensorManager::cloneTensor(const std::string &tensor_id) {
+  std::lock_guard<std::mutex> lock(mutex_);
+
+  // Find the tensor
+  auto tensor_it = tensors_.find(tensor_id);
+  auto type_it = tensor_types_.find(tensor_id);
+  auto shape_it = tensor_shapes_.find(tensor_id);
+
+  if (tensor_it == tensors_.end() || type_it == tensor_types_.end() || shape_it == tensor_shapes_.end()) {
+    throw std::runtime_error("Tensor not found: " + tensor_id);
+  }
+
+  Ort::Value *tensor_ptr = tensor_it->second.get();
+  const std::string &tensor_type = type_it->second;
+  const std::vector<int64_t> &shape = shape_it->second;
+
+  // Get tensor info
+  Ort::TensorTypeAndShapeInfo tensor_info = tensor_ptr->GetTensorTypeAndShapeInfo();
+  size_t element_count = tensor_info.GetElementCount();
+
+  // Create a new tensor with the same data as the original
+  if (tensor_type == "float32") {
+    float *data = tensor_ptr->GetTensorMutableData<float>();
+    float *new_data = new float[element_count];
+    std::memcpy(new_data, data, element_count * sizeof(float));
+
+    return Ort::Value::CreateTensor<float>(memory_info_, new_data, element_count, shape.data(), shape.size());
+  } else if (tensor_type == "int32") {
+    int32_t *data = tensor_ptr->GetTensorMutableData<int32_t>();
+    int32_t *new_data = new int32_t[element_count];
+    std::memcpy(new_data, data, element_count * sizeof(int32_t));
+
+    return Ort::Value::CreateTensor<int32_t>(memory_info_, new_data, element_count, shape.data(), shape.size());
+  } else if (tensor_type == "int64") {
+    int64_t *data = tensor_ptr->GetTensorMutableData<int64_t>();
+    int64_t *new_data = new int64_t[element_count];
+    std::memcpy(new_data, data, element_count * sizeof(int64_t));
+
+    return Ort::Value::CreateTensor<int64_t>(memory_info_, new_data, element_count, shape.data(), shape.size());
+  } else if (tensor_type == "uint8") {
+    uint8_t *data = tensor_ptr->GetTensorMutableData<uint8_t>();
+    uint8_t *new_data = new uint8_t[element_count];
+    std::memcpy(new_data, data, element_count * sizeof(uint8_t));
+
+    return Ort::Value::CreateTensor<uint8_t>(memory_info_, new_data, element_count, shape.data(), shape.size());
+  } else if (tensor_type == "bool") {
+    bool *data = tensor_ptr->GetTensorMutableData<bool>();
+    bool *new_data = new bool[element_count];
+    std::memcpy(new_data, data, element_count * sizeof(bool));
+
+    return Ort::Value::CreateTensor<bool>(memory_info_, new_data, element_count, shape.data(), shape.size());
+  } else {
+    throw std::runtime_error("Unsupported tensor type: " + tensor_type);
+  }
+}
