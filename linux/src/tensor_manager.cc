@@ -5,6 +5,7 @@
 // LICENSE file in the root directory of this source tree.
 
 #include "tensor_manager.h"
+#include "session_manager.h"
 #include "value_conversion.h"
 
 TensorManager::TensorManager()
@@ -312,7 +313,7 @@ void TensorManager::storeTensor(const std::string &tensor_id, Ort::Value &&tenso
 
     // Get and store the tensor type
     ONNXTensorElementDataType element_type = tensor_info.GetElementType();
-    tensor_types_[tensor_id] = get_element_type_string(element_type);
+    tensor_types_[tensor_id] = SessionManager::getElementTypeString(element_type);
   } catch (const std::exception &e) {
     // Handle exception - maybe log it
   }
@@ -326,45 +327,6 @@ std::string TensorManager::getTensorType(const std::string &tensor_id) {
 std::vector<int64_t> TensorManager::getTensorShape(const std::string &tensor_id) {
   std::lock_guard<std::mutex> lock(mutex_);
   return tensor_shapes_.at(tensor_id);
-}
-
-const char *TensorManager::get_element_type_string(ONNXTensorElementDataType element_type) {
-  switch (element_type) {
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
-    return "float32";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8:
-    return "uint8";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8:
-    return "int8";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT16:
-    return "uint16";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT16:
-    return "int16";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32:
-    return "int32";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64:
-    return "int64";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING:
-    return "string";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL:
-    return "bool";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16:
-    return "float16";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE:
-    return "double";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT32:
-    return "uint32";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT64:
-    return "uint64";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_COMPLEX64:
-    return "complex64";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_COMPLEX128:
-    return "complex128";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_BFLOAT16:
-    return "bfloat16";
-  default:
-    return "unknown";
-  }
 }
 
 std::string TensorManager::convertTensor(const std::string &tensor_id, const std::string &target_type) {

@@ -15,6 +15,9 @@
 #include <string>
 #include <vector>
 
+// Forward declare SessionManager
+class SessionManager;
+
 // Class to manage tensor data
 class TensorManager {
 public:
@@ -77,9 +80,6 @@ public:
 
   // Generate a unique tensor ID
   std::string generateTensorId();
-
-  // Get the element type string
-  const char *get_element_type_string(ONNXTensorElementDataType element_type);
 
 private:
   // Map of tensor IDs to OrtValue objects

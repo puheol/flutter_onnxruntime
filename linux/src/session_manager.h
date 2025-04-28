@@ -14,11 +14,31 @@
 #include <string>
 #include <vector>
 
+// Forward declaration
+class TensorManager;
+
 // Session information structure
 struct SessionInfo {
   std::unique_ptr<Ort::Session> session;
   std::vector<std::string> input_names;
   std::vector<std::string> output_names;
+};
+
+// Model metadata structure
+struct ModelMetadata {
+  std::string producer_name;
+  std::string graph_name;
+  std::string domain;
+  std::string description;
+  int64_t version;
+  std::map<std::string, std::string> custom_metadata;
+};
+
+// Input/Output tensor info structure
+struct TensorInfo {
+  std::string name;
+  std::string type;
+  std::vector<int64_t> shape;
 };
 
 // Session Manager Class
@@ -30,16 +50,10 @@ public:
   // Create a new session from a model file path
   std::string createSession(const char *model_path, void *options);
 
-  // Get a session by ID
-  Ort::Session *getSession(const std::string &session_id);
-
   // Close and remove a session
   bool closeSession(const std::string &session_id);
 
   // Get session info
-  SessionInfo *getSessionInfo(const std::string &session_id);
-
-  // Check if a session exists
   bool hasSession(const std::string &session_id);
 
   // Get input names for a session
@@ -47,6 +61,22 @@ public:
 
   // Get output names for a session
   std::vector<std::string> getOutputNames(const std::string &session_id);
+
+  // Get model metadata for a session
+  ModelMetadata getModelMetadata(const std::string &session_id);
+
+  // Get input tensor info for a session
+  std::vector<TensorInfo> getInputInfo(const std::string &session_id);
+
+  // Get output tensor info for a session
+  std::vector<TensorInfo> getOutputInfo(const std::string &session_id);
+
+  // Run inference with a session
+  std::vector<Ort::Value> runInference(const std::string &session_id, const std::vector<Ort::Value> &input_tensors,
+                                       Ort::RunOptions *run_options = nullptr);
+
+  // Helper method to get element type string
+  static const char *getElementTypeString(ONNXTensorElementDataType element_type);
 
 private:
   // Generate a unique session ID
