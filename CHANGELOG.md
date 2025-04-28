@@ -1,3 +1,9 @@
+## 1.4.0
+* Support Windows platform 🎉🎉🎉
+* Refactor SessionManager in Linux for cleaner architecture
+* Add Azure to provider list
+* Improve the CMake build stability in Linux
+
 ## 1.3.0
 * Support Web platform 🎉🎉🎉
 * Add integration tests for Web in both local and CI

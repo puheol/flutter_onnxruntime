@@ -3,6 +3,7 @@ hooks/
 onnxruntime_download/
 scripts/
 test/
+doc/generated
 example/android/
 example/ios/
 example/lib/
