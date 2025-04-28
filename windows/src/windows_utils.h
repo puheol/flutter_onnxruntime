@@ -9,6 +9,9 @@
 
 #include "pch.h"
 
+// Include Windows headers
+#include <windows.h>
+
 namespace flutter_onnxruntime {
 
 // Utility class for Windows-specific functionality

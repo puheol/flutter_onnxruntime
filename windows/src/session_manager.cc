@@ -20,15 +20,27 @@ SessionManager::~SessionManager() {
   sessions_.clear();
 }
 
-std::string SessionManager::createSession(const char *model_path, Ort::SessionOptions session_options) {
+std::string SessionManager::createSession(const char *model_path, const Ort::SessionOptions &session_options) {
   std::lock_guard<std::mutex> lock(mutex_);
 
   // Generate a session ID
   std::string session_id = generateSessionId();
 
   try {
+    // On Windows, need to convert the model path from char* to wchar_t*
+    std::wstring wide_model_path;
+    // Convert UTF-8 to wchar_t* (UTF-16)
+    int required_size = MultiByteToWideChar(CP_UTF8, 0, model_path, -1, nullptr, 0);
+    if (required_size > 0) {
+      wide_model_path.resize(required_size);
+      MultiByteToWideChar(CP_UTF8, 0, model_path, -1, &wide_model_path[0], required_size);
+    } else {
+      throw std::runtime_error("Failed to convert model path to wide string");
+    }
+
     // Create a new session with the provided options
-    std::unique_ptr<Ort::Session> ort_session = std::make_unique<Ort::Session>(env_, model_path, session_options);
+    std::unique_ptr<Ort::Session> ort_session =
+        std::make_unique<Ort::Session>(env_, wide_model_path.c_str(), session_options);
 
     // Create session info
     SessionInfo session_info;

@@ -578,6 +578,7 @@ void FlutterOnnxruntimePlugin::HandleGetAvailableProviders(
           {"CPUExecutionProvider", "CPU"},
           {"CUDAExecutionProvider", "CUDA"},
           {"TensorrtExecutionProvider", "TENSOR_RT"},
+          {"AzureExecutionProvider", "AZURE"},
           {"MIGraphXExecutionProvider", "MIGRAPHX"},
           {"ROCMExecutionProvider", "ROCM"},
           {"CoreMLExecutionProvider", "CORE_ML"},
@@ -699,9 +700,12 @@ void FlutterOnnxruntimePlugin::HandleRunInference(
       Ort::Value *tensor_ptr = impl_->tensorManager_->getTensor(tensor_id);
       if (tensor_ptr != nullptr) {
         try {
-          // Use the tensor manager to clone the tensor
-          Ort::Value new_tensor = impl_->tensorManager_->cloneTensor(tensor_id);
-          input_tensors.push_back(std::move(new_tensor));
+          // Clone the tensor and move it into the input_tensors vector
+          // TensorManager::cloneTensor returns std::unique_ptr<Ort::Value>
+          auto cloned_tensor = impl_->tensorManager_->cloneTensor(tensor_id);
+          if (cloned_tensor) {
+            input_tensors.push_back(std::move(*cloned_tensor));
+          }
         } catch (const std::exception &e) {
           // Log the error but continue with the next tensor
           std::cerr << "Failed to clone tensor " << tensor_id << ": " << e.what() << std::endl;
@@ -724,6 +728,7 @@ void FlutterOnnxruntimePlugin::HandleRunInference(
       std::string value_id = impl_->tensorManager_->generateTensorId();
 
       // Store the tensor - this transfers ownership
+      // TensorManager::storeTensor returns void (not bool)
       impl_->tensorManager_->storeTensor(value_id, std::move(output_tensors[i]));
 
       // Get the tensor type and shape

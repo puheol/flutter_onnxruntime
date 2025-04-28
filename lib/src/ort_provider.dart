@@ -13,6 +13,7 @@
 enum OrtProvider {
   ACL,
   ARM_NN,
+  AZURE,
   CORE_ML,
   CPU,
   CUDA,
