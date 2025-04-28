@@ -93,14 +93,15 @@ Clone [this repository](https://github.com/masicai/flutter-onnxruntime-examples)
 
 | Feature | Android | iOS | Linux | macOS | Windows | Web |
 |---------|:-------:|:---:|:-----:|:-----:|:-------:|:---: |
-| CPU Inference | ✅ | ✅ | ✅ | ✅ |   | ✅ |
-| GPU Inference | ✅ | ✅ | ✅ | ✅ |   | ✅ |
-| Input/Output names | ✅ | ✅ | ✅ | ✅ |   | ✅ |
-| Data Type Conversion | ✅ | ✅ | ✅ | ✅ |   | ✅ |
-| Inference on Emulator | ✅ | ✅ | ✅ | ✅ |   | ✅ |
-| Input/Output Info | ✅ | ❌* | ✅ | ❌* |   | ❌* |
-| Model Metadata | ✅ | ❌* | ✅ | ❌* |   | ❌* |
-| FP16 Support | ✅ | ❌** | ✍️ | ❌** |   | ✍️ |
+| CPU Inference | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| GPU Inference | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Input/Output names | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Data Type Conversion | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Inference on Emulator | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Input/Output Info | ✅ | ❌* | ✅ | ❌* | ✅ | ❌* |
+| Model Metadata | ✅ | ❌* | ✅ | ❌* | ✅ | ❌* |
+| ORT Extensions support | ✍️ | ✍️ | ✍️ | ✍️ | ✍️ | ✍️ |
+| FP16 Support | ✅ | ❌** | ✍️ | ❌** | ✍️ | ✍️ |
 
 ✅: Complete
 
