@@ -373,9 +373,8 @@ static FlMethodResponse *run_inference(FlutterOnnxruntimePlugin *self, FlValue *
 
   FlValue *run_options_value = fl_value_lookup_string(args, "runOptions");
 
-  // Get the session
-  Ort::Session *session = self->session_manager->getSession(session_id);
-  if (session == nullptr) {
+  // Check if session exists
+  if (!self->session_manager->hasSession(session_id)) {
     return FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_SESSION", "Session not found", nullptr));
   }
 
@@ -384,18 +383,7 @@ static FlMethodResponse *run_inference(FlutterOnnxruntimePlugin *self, FlValue *
     std::vector<std::string> output_names = self->session_manager->getOutputNames(session_id);
 
     // Prepare input tensors
-    // Note: session.Run() requires a vector of Ort::Value objects so we need to clone the tensors
-    // Create a vector to hold the input tensors
     std::vector<Ort::Value> input_tensors;
-    std::vector<const char *> input_names_char;
-
-    // get input names from session manager
-    for (const auto &name : input_names) {
-      input_names_char.push_back(name.c_str());
-    }
-
-    // Create memory info for tensor creation
-    Ort::MemoryInfo memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
 
     // Iterate through each input
     size_t num_inputs = fl_value_get_length(inputs_value);
@@ -418,81 +406,15 @@ static FlMethodResponse *run_inference(FlutterOnnxruntimePlugin *self, FlValue *
       // Get the tensor value
       Ort::Value *tensor_ptr = self->tensor_manager->getTensor(tensor_id);
       if (tensor_ptr != nullptr) {
-        // Get tensor info
-        Ort::TensorTypeAndShapeInfo tensor_info = tensor_ptr->GetTensorTypeAndShapeInfo();
-        ONNXTensorElementDataType element_type = tensor_info.GetElementType();
-        std::vector<int64_t> shape = tensor_info.GetShape();
-        size_t element_count = tensor_info.GetElementCount();
-
-        // Create a new tensor with the same data as the original
-        switch (element_type) {
-        case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT: {
-          float *data = tensor_ptr->GetTensorMutableData<float>();
-          float *new_data = new float[element_count];
-          std::memcpy(new_data, data, element_count * sizeof(float));
-
-          Ort::Value new_tensor =
-              Ort::Value::CreateTensor<float>(memory_info, new_data, element_count, shape.data(), shape.size());
-
+        try {
+          // Use the tensor manager to clone the tensor
+          Ort::Value new_tensor = self->tensor_manager->cloneTensor(tensor_id);
           input_tensors.push_back(std::move(new_tensor));
-          break;
-        }
-        case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32: {
-          int32_t *data = tensor_ptr->GetTensorMutableData<int32_t>();
-          int32_t *new_data = new int32_t[element_count];
-          std::memcpy(new_data, data, element_count * sizeof(int32_t));
-
-          Ort::Value new_tensor =
-              Ort::Value::CreateTensor<int32_t>(memory_info, new_data, element_count, shape.data(), shape.size());
-
-          input_tensors.push_back(std::move(new_tensor));
-          break;
-        }
-        case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64: {
-          int64_t *data = tensor_ptr->GetTensorMutableData<int64_t>();
-          int64_t *new_data = new int64_t[element_count];
-          std::memcpy(new_data, data, element_count * sizeof(int64_t));
-
-          Ort::Value new_tensor =
-              Ort::Value::CreateTensor<int64_t>(memory_info, new_data, element_count, shape.data(), shape.size());
-
-          input_tensors.push_back(std::move(new_tensor));
-          break;
-        }
-        case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8: {
-          uint8_t *data = tensor_ptr->GetTensorMutableData<uint8_t>();
-          uint8_t *new_data = new uint8_t[element_count];
-          std::memcpy(new_data, data, element_count * sizeof(uint8_t));
-
-          Ort::Value new_tensor =
-              Ort::Value::CreateTensor<uint8_t>(memory_info, new_data, element_count, shape.data(), shape.size());
-
-          input_tensors.push_back(std::move(new_tensor));
-          break;
-        }
-        case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL: {
-          bool *data = tensor_ptr->GetTensorMutableData<bool>();
-          bool *new_data = new bool[element_count];
-          std::memcpy(new_data, data, element_count * sizeof(bool));
-
-          Ort::Value new_tensor =
-              Ort::Value::CreateTensor<bool>(memory_info, new_data, element_count, shape.data(), shape.size());
-
-          input_tensors.push_back(std::move(new_tensor));
-          break;
-        }
-        // Add cases for other data types as needed
-        default:
-          // Skip unsupported tensor types
-          break;
+        } catch (const std::exception &e) {
+          g_warning("Failed to clone tensor %s: %s", tensor_id.c_str(), e.what());
+          // Continue with the next tensor
         }
       }
-    }
-
-    // Prepare output names
-    std::vector<const char *> output_names_char;
-    for (const auto &name : output_names) {
-      output_names_char.push_back(name.c_str());
     }
 
     // Create and configure run options
@@ -519,16 +441,12 @@ static FlMethodResponse *run_inference(FlutterOnnxruntimePlugin *self, FlValue *
           run_options.SetTerminate();
         }
       }
-
-      // Add more run options as needed
     }
 
-    // Run inference - only if we have inputs
+    // Run inference using SessionManager
     std::vector<Ort::Value> output_tensors;
-
     if (!input_tensors.empty()) {
-      output_tensors = session->Run(run_options, input_names_char.data(), input_tensors.data(), input_tensors.size(),
-                                    output_names_char.data(), output_names_char.size());
+      output_tensors = self->session_manager->runInference(session_id, input_tensors, &run_options);
     }
 
     // Process outputs
@@ -601,31 +519,17 @@ static FlMethodResponse *get_metadata(FlutterOnnxruntimePlugin *self, FlValue *a
   }
 
   try {
-    // Get the session
-    Ort::Session *session = self->session_manager->getSession(session_id);
-    if (!session) {
-      return FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_SESSION", "Session is invalid", nullptr));
-    }
-
-    // Get metadata for the model
-    Ort::ModelMetadata model_metadata = session->GetModelMetadata();
-    Ort::AllocatorWithDefaultOptions allocator;
-
-    // Extract metadata details
-    auto producer_name = model_metadata.GetProducerNameAllocated(allocator);
-    auto graph_name = model_metadata.GetGraphNameAllocated(allocator);
-    auto domain = model_metadata.GetDomainAllocated(allocator);
-    auto description = model_metadata.GetDescriptionAllocated(allocator);
-    int64_t version = model_metadata.GetVersion();
+    // Get metadata using the SessionManager
+    ModelMetadata metadata = self->session_manager->getModelMetadata(session_id);
 
     // Create empty custom metadata map
     FlValue *custom_metadata_map = fl_value_new_map();
     g_autoptr(FlValue) result = fl_value_new_map();
-    fl_value_set_string_take(result, "producerName", fl_value_new_string(producer_name.get()));
-    fl_value_set_string_take(result, "graphName", fl_value_new_string(graph_name.get()));
-    fl_value_set_string_take(result, "domain", fl_value_new_string(domain.get()));
-    fl_value_set_string_take(result, "description", fl_value_new_string(description.get()));
-    fl_value_set_string_take(result, "version", fl_value_new_int(version));
+    fl_value_set_string_take(result, "producerName", fl_value_new_string(metadata.producer_name.c_str()));
+    fl_value_set_string_take(result, "graphName", fl_value_new_string(metadata.graph_name.c_str()));
+    fl_value_set_string_take(result, "domain", fl_value_new_string(metadata.domain.c_str()));
+    fl_value_set_string_take(result, "description", fl_value_new_string(metadata.description.c_str()));
+    fl_value_set_string_take(result, "version", fl_value_new_int(metadata.version));
     fl_value_set_string_take(result, "customMetadataMap", custom_metadata_map);
     return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
   } catch (const Ort::Exception &e) {
@@ -649,57 +553,25 @@ static FlMethodResponse *get_input_info(FlutterOnnxruntimePlugin *self, FlValue 
   }
 
   try {
-    Ort::Session *session = self->session_manager->getSession(session_id);
-    if (!session) {
-      return FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_SESSION", "Session is invalid", nullptr));
-    }
-
-    size_t num_inputs = session->GetInputCount();
-    Ort::AllocatorWithDefaultOptions allocator;
+    // Get input info from SessionManager
+    std::vector<TensorInfo> input_info = self->session_manager->getInputInfo(session_id);
     g_autoptr(FlValue) result = fl_value_new_list();
 
-    for (size_t i = 0; i < num_inputs; i++) {
-      try {
-        auto input_name = session->GetInputNameAllocated(i, allocator);
-        auto type_info = session->GetInputTypeInfo(i);
+    for (const auto &info : input_info) {
+      FlValue *info_map = fl_value_new_map();
+      fl_value_set_string_take(info_map, "name", fl_value_new_string(info.name.c_str()));
 
-        FlValue *info_map = fl_value_new_map();
-        fl_value_set_string_take(info_map, "name", fl_value_new_string(input_name.get()));
-
-        // Check if it's a tensor type
-        ONNXType onnx_type = type_info.GetONNXType();
-
-        if (onnx_type == ONNX_TYPE_TENSOR) {
-          auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
-          auto shape = tensor_info.GetShape();
-
-          // Convert shape to list
-          FlValue *shape_list = fl_value_new_list();
-          for (const auto &dim : shape) {
-            fl_value_append_take(shape_list, fl_value_new_int(dim));
-          }
-          fl_value_set_string_take(info_map, "shape", shape_list);
-
-          // Add type info
-          ONNXTensorElementDataType element_type = tensor_info.GetElementType();
-          const char *type_str = self->tensor_manager->get_element_type_string(element_type);
-
-          fl_value_set_string_take(info_map, "type", fl_value_new_string(type_str));
-        } else {
-          // Non-tensor type
-          fl_value_set_string_take(info_map, "type", fl_value_new_string("non-tensor"));
-
-          // Empty shape for non-tensor types
-          FlValue *shape_list = fl_value_new_list();
-          fl_value_set_string_take(info_map, "shape", shape_list);
-        }
-
-        fl_value_append_take(result, info_map);
-      } catch (const Ort::Exception &e) {
-        // Log error and continue
-        g_warning("Error getting input info for index %zu: %s", i, e.what());
-        continue;
+      // Add shape
+      FlValue *shape_list = fl_value_new_list();
+      for (const auto &dim : info.shape) {
+        fl_value_append_take(shape_list, fl_value_new_int(dim));
       }
+      fl_value_set_string_take(info_map, "shape", shape_list);
+
+      // Add type
+      fl_value_set_string_take(info_map, "type", fl_value_new_string(info.type.c_str()));
+
+      fl_value_append_take(result, info_map);
     }
     return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
   } catch (const Ort::Exception &e) {
@@ -723,55 +595,25 @@ static FlMethodResponse *get_output_info(FlutterOnnxruntimePlugin *self, FlValue
   }
 
   try {
-    Ort::Session *session = self->session_manager->getSession(session_id);
-    if (!session) {
-      return FL_METHOD_RESPONSE(fl_method_error_response_new("INVALID_SESSION", "Session is invalid", nullptr));
-    }
-
-    size_t num_outputs = session->GetOutputCount();
-    Ort::AllocatorWithDefaultOptions allocator;
+    // Get output info from SessionManager
+    std::vector<TensorInfo> output_info = self->session_manager->getOutputInfo(session_id);
     g_autoptr(FlValue) result = fl_value_new_list();
 
-    for (size_t i = 0; i < num_outputs; i++) {
-      try {
-        auto output_name = session->GetOutputNameAllocated(i, allocator);
-        auto type_info = session->GetOutputTypeInfo(i);
+    for (const auto &info : output_info) {
+      FlValue *info_map = fl_value_new_map();
+      fl_value_set_string_take(info_map, "name", fl_value_new_string(info.name.c_str()));
 
-        FlValue *info_map = fl_value_new_map();
-        fl_value_set_string_take(info_map, "name", fl_value_new_string(output_name.get()));
-
-        // Check if it's a tensor type
-        ONNXType onnx_type = type_info.GetONNXType();
-
-        if (onnx_type == ONNX_TYPE_TENSOR) {
-          auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
-          auto shape = tensor_info.GetShape();
-
-          // Convert shape to list
-          FlValue *shape_list = fl_value_new_list();
-          for (const auto &dim : shape) {
-            fl_value_append_take(shape_list, fl_value_new_int(dim));
-          }
-          fl_value_set_string_take(info_map, "shape", shape_list);
-
-          ONNXTensorElementDataType element_type = tensor_info.GetElementType();
-          const char *type_str = self->tensor_manager->get_element_type_string(element_type);
-
-          fl_value_set_string_take(info_map, "type", fl_value_new_string(type_str));
-        } else {
-          // Non-tensor type
-          fl_value_set_string_take(info_map, "type", fl_value_new_string("non-tensor"));
-
-          // Empty shape for non-tensor types
-          FlValue *shape_list = fl_value_new_list();
-          fl_value_set_string_take(info_map, "shape", shape_list);
-        }
-
-        fl_value_append_take(result, info_map);
-      } catch (const Ort::Exception &e) {
-        g_warning("Error getting output info for index %zu: %s", i, e.what());
-        continue;
+      // Add shape
+      FlValue *shape_list = fl_value_new_list();
+      for (const auto &dim : info.shape) {
+        fl_value_append_take(shape_list, fl_value_new_int(dim));
       }
+      fl_value_set_string_take(info_map, "shape", shape_list);
+
+      // Add type
+      fl_value_set_string_take(info_map, "type", fl_value_new_string(info.type.c_str()));
+
+      fl_value_append_take(result, info_map);
     }
     return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
   } catch (const Ort::Exception &e) {

@@ -13,10 +13,11 @@ This document outlines the architecture for the implementation of the Flutter ON
 5. **Testability** - Components designed to be easily testable in isolation
 6. **Robust error handling** - Clear error reporting and propagation
 7. **Thread safety** - Safe operation in multi-threaded Flutter applications
+8. **Proper encapsulation** - Components hide their internal implementation details
 
 ## High-Level Architecture
 
-The plugin will consist of several primary components:
+The plugin consists of several primary components:
 
 1. **Plugin Entry Point** (`FlutterOnnxruntimePlugin`) - Handles method channel calls and dispatches to appropriate managers
 2. **Session Manager** - Handles creation, management, and cleanup of ONNX Runtime sessions
@@ -37,7 +38,7 @@ The plugin will consist of several primary components:
   │                    │
 ┌─▼────────────┐  ┌────▼────────┐   ┌───────────────────┐
 │SessionManager│  │TensorManager│───►ValueConversionUtil│
-└──────┬───────┘  └─────┬───────┘   └───────────────────┘
+└──────────────┘  └─────────────┘   └───────────────────┘
        │                │               ▲
        │                │               │
        │         ┌──────▼────────┐      │
@@ -65,21 +66,32 @@ Key methods:
 - `getPlatformVersion` - Returns Linux version
 - Methods for each supported operation (createSession, runInference, etc.)
 
+The plugin does not directly interact with the ONNX Runtime APIs but delegates to the specialized managers.
+
 ### 2. SessionManager
 
-Manages ONNX Runtime sessions:
-- Creates and stores `Ort::Session` objects
+Manages ONNX Runtime sessions with proper encapsulation:
+- Creates and stores `Ort::Session` objects behind a clean interface
 - Generates unique session IDs
-- Provides sessions when needed for inference
 - Handles session cleanup
 - Manages session options (execution provider selection, graph optimization, etc.)
+- Provides model information and tensor details without exposing internal implementation
+- Executes inference operations using internal Ort::Session instances
 
 Key methods:
 - `createSession` - Creates a new ONNX Runtime session
-- `getSession` - Retrieves a session by ID
 - `closeSession` - Closes and removes a session
-- `getSessionInfo` - Retrieves metadata about a session
-- `configureSessionOptions` - Applies configuration options to a session
+- `hasSession` - Checks if a session exists
+- `getInputNames` / `getOutputNames` - Retrieves input/output tensor names
+- `getModelMetadata` - Retrieves model metadata as a structured object
+- `getInputInfo` / `getOutputInfo` - Retrieves tensor information as structured objects
+- `runInference` - Runs inference using encapsulated session objects
+- `getElementTypeString` - Static helper to convert ONNX tensor types to strings
+
+Data structures:
+- `ModelMetadata` - Encapsulates model metadata
+- `TensorInfo` - Encapsulates tensor information
+- `SessionInfo` - Internal structure to manage session data
 
 ### 3. TensorManager
 
@@ -91,11 +103,15 @@ Manages OrtValue (tensor) objects:
 - Thread-safe operations on tensors
 
 Key methods:
-- `createTensor` - Creates a new tensor from Flutter data
+- `createFloat32Tensor`, `createInt32Tensor`, etc. - Creates tensors of specific types
 - `getTensor` - Retrieves a tensor by ID
 - `releaseTensor` - Frees tensor resources
-- `getTensorData` - Extracts data from a tensor
+- `getTensorData` - Extracts data from a tensor for Flutter
 - `convertTensor` - Converts a tensor to a different data type
+- `cloneTensor` - Creates a deep copy of a tensor
+- `storeTensor` - Stores an existing tensor with a specific ID
+- `getTensorType` / `getTensorShape` - Retrieves tensor metadata
+
 ### 4. ValueConversionUtil
 
 Utility class for type conversion:
@@ -118,18 +134,12 @@ Utility for managing ONNX Runtime run options:
 - Manages execution providers
 - Configures memory patterns and optimizations
 
-Key methods:
-- `createRunOptions` - Creates Ort::RunOptions from Flutter configuration
-- `configureExecutionProviders` - Sets up execution providers (CPU/GPU)
-- `configureThreading` - Manages thread pool settings for inference
-
 ## Memory Management
 
-The new implementation will leverage C++ RAII principles:
+The implementation leverages C++ RAII principles:
 - `std::unique_ptr` for managing `Ort::Session` and `Ort::Value` objects
 - `std::vector` for tensor data storage
 - Clear ownership rules for all resources
-- No raw `new/delete` or `malloc/free` usage
 - Exception safety throughout the codebase
 - Memory reuse for frequently allocated buffers where appropriate
 
@@ -141,19 +151,14 @@ The new implementation will leverage C++ RAII principles:
    - Extract type, shape, and data from `FlValue` parameters
    - Create appropriate C++ vector to hold data
    - Create an `Ort::Value` using the data
-   - Store both the `Ort::Value` and the data vector in a wrapper class
+   - Store the `Ort::Value` using a unique_ptr
    - Generate and return a unique ID
 
 2. For inference:
-   - Retrieve tensors by ID
-   - Run inference using direct `Ort::Value` pointers
+   - Retrieve tensors by ID through TensorManager
+   - Run inference using SessionManager's encapsulated interface
    - Create result tensors and store them
    - Return IDs of result tensors to Dart
-
-3. Memory approach:
-   - Use `Ort::MemoryInfo` appropriately to control tensor memory allocation
-   - Leverage ONNX Runtime's memory management when possible
-   - Implement a simple buffer reuse strategy for frequent tensor operations
 
 ### Session Management
 
@@ -161,18 +166,16 @@ The new implementation will leverage C++ RAII principles:
    - Support both model path and model buffer loading
    - Apply session options from Dart configuration
    - Configure appropriate execution providers
-   - Support custom execution providers when available
+   - Encapsulate Ort::Session details from client code
 
-2. Session options:
-   - Thread pool configuration
-   - Execution mode (sequential/parallel)
-   - Graph optimization level
-   - Memory pattern optimization
-   - Execution provider selection and configuration
+2. Session operations:
+   - All ONNX operations happen through the SessionManager interface
+   - No direct access to Ort::Session objects from outside SessionManager
+   - Return standardized data structures (ModelMetadata, TensorInfo) rather than raw ONNX types
 
 ### Thread Safety
 
-The implementation will ensure:
+The implementation ensures:
 - Thread-safe access to session and tensor managers using mutexes
 - Safe concurrent model inference operations
 - Protection against race conditions when sharing tensors
@@ -203,21 +206,19 @@ linux/
 │   ├── tensor_manager.cc                # Tensor manager implementation
 │   ├── value_conversion.h               # Value conversion utilities header
 │   ├── value_conversion.cc              # Value conversion utilities implementation
-│   ├── tensor_data.h                    # Tensor data wrapper class
 │   └── exceptions.h                     # Custom exception classes
 └── test/
     ├── flutter_onnxruntime_plugin_test.cc # Plugin tests
     ├── session_manager_test.cc            # Session manager tests
     ├── tensor_manager_test.cc             # Tensor manager tests
-    ├── value_conversion_test.cc           # Value conversion tests
-    └── run_options_test.cc                # Run options tests
+    └── value_conversion_test.cc           # Value conversion tests
 ```
 
 ## API Design
 
 ### Method Channel Interface
 
-The plugin will expose the following methods:
+The plugin exposes the following methods:
 
 1. `getPlatformVersion` - Returns the platform version
 2. `createSession` - Creates a new ONNX Runtime session
@@ -231,4 +232,3 @@ The plugin will expose the following methods:
 10. `getOrtValueData` - Gets data from a tensor
 11. `releaseOrtValue` - Releases a tensor
 12. `getAvailableExecutionProviders` - Lists available execution providers
-13. `getMemoryInfo` - Gets memory usage information

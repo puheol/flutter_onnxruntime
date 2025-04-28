@@ -116,7 +116,7 @@ void main() {
         await tensor.dispose();
       });
 
-      testWidgets('Regular List to Float32 conversion test', (WidgetTester tester) async {
+      testWidgets('Round-trip test with regular list of float32', (WidgetTester tester) async {
         final inputData = [1.1, 2.2, 3.3, 4.4];
         final shape = [2, 2]; // 2x2 matrix
 
@@ -133,7 +133,7 @@ void main() {
         await tensor.dispose();
       });
 
-      testWidgets('Regular List to Int32 conversion test', (WidgetTester tester) async {
+      testWidgets('Round-trip test with regular list of int32', (WidgetTester tester) async {
         // List<int> is not detected as interger in web platform, we have to
         // use typed list to specify it explicitly
         final inputData = kIsWeb ? Int32List.fromList([1, 2, 3, 4]) : [1, 2, 3, 4];
@@ -251,7 +251,7 @@ void main() {
       });
     });
 
-    group('Tensor Creation With Shape Tests', () {
+    group('Tensor Creation Tests', () {
       testWidgets('Tensor size and target shape mismatch', (WidgetTester tester) async {
         final inputData = [1.1, 2.2, 3.3, 4.4, 5.5];
         final shape = [2, 2];

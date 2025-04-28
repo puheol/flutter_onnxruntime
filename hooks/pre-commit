@@ -82,13 +82,12 @@ if [ -d "cpp" ] || find . -name "*.cpp" -o -name "*.h" -o -name "*.cc" -o -name 
     echo "clang-format not found. Please install it with: 'sudo apt-get install clang-format' or equivalent for your OS"
     echo "Skipping C++ auto-formatting."
   else
-    # Find C++ files, excluding platform-specific, example, and build directories
-    CPP_FILES=$(find . -path ./cpp -prune -o \( -name "*.cpp" -o -name "*.h" -o -name "*.cc" -o -name "*.hpp" \) \
+    # Find C++ files, excluding certain build and library directories
+    CPP_FILES=$(find . \( -name "*.cpp" -o -name "*.h" -o -name "*.cc" -o -name "*.hpp" \) \
       -not -path "./build/*" \
       -not -path "./.dart_tool/*" \
       -not -path "./ios/*" \
       -not -path "./macos/*" \
-      -not -path "./windows/*" \
       -not -path "./android/*" \
       -not -path "./example/*" \
       -not -path "./onnxruntime_download/*" -print)

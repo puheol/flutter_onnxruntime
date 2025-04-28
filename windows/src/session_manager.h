@@ -4,15 +4,18 @@
 // This source code is licensed under the license found in the
 // LICENSE file in the root directory of this source tree.
 
-#ifndef SESSION_MANAGER_H
-#define SESSION_MANAGER_H
+#ifndef FLUTTER_ONNXRUNTIME_SESSION_MANAGER_H_
+#define FLUTTER_ONNXRUNTIME_SESSION_MANAGER_H_
 
+#include "pch.h"
 #include <map>
 #include <memory>
 #include <mutex>
 #include <onnxruntime_cxx_api.h>
 #include <string>
 #include <vector>
+
+namespace flutter_onnxruntime {
 
 // Forward declaration
 class TensorManager;
@@ -41,14 +44,14 @@ struct TensorInfo {
   std::vector<int64_t> shape;
 };
 
-// Session Manager Class
+// Manages ONNX Runtime sessions with proper resource handling
 class SessionManager {
 public:
   SessionManager();
   ~SessionManager();
 
   // Create a new session from a model file path
-  std::string createSession(const char *model_path, void *options);
+  std::string createSession(const char *model_path, const Ort::SessionOptions &session_options);
 
   // Close and remove a session
   bool closeSession(const std::string &session_id);
@@ -95,4 +98,6 @@ private:
   Ort::Env env_;
 };
 
-#endif // SESSION_MANAGER_H
+} // namespace flutter_onnxruntime
+
+#endif // FLUTTER_ONNXRUNTIME_SESSION_MANAGER_H_

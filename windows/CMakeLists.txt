@@ -16,42 +16,32 @@ set(PLUGIN_NAME "flutter_onnxruntime_plugin")
 option(USE_SYSTEM_ONNXRUNTIME "Use system-installed ONNX Runtime" ON)
 
 if(USE_SYSTEM_ONNXRUNTIME)
-  # Try to find ONNX Runtime using pkg-config
-  find_package(PkgConfig)
-  if(PkgConfig_FOUND)
-    pkg_check_modules(ONNXRUNTIME onnxruntime)
-  endif()
-
-  # If pkg-config didn't find it, try to find it manually
-  if(NOT ONNXRUNTIME_FOUND)
-    # Specify custom paths where ONNX Runtime might be installed
-    set(ONNXRUNTIME_ROOT_DIR "" CACHE PATH "ONNX Runtime root directory")
-    
-    # Look for the library
-    find_library(ONNXRUNTIME_LIBRARY
-      NAMES onnxruntime
-      PATHS ${ONNXRUNTIME_ROOT_DIR}/lib
-      DOC "ONNX Runtime library"
-    )
-    
-    # Look for the include directory
-    find_path(ONNXRUNTIME_INCLUDE_DIR
-      NAMES onnxruntime_cxx_api.h
-      PATHS ${ONNXRUNTIME_ROOT_DIR}/include
-      DOC "ONNX Runtime include directory"
-    )
-    
-    if(ONNXRUNTIME_LIBRARY AND ONNXRUNTIME_INCLUDE_DIR)
-      set(ONNXRUNTIME_FOUND TRUE)
-      set(ONNXRUNTIME_LIBRARIES ${ONNXRUNTIME_LIBRARY})
-      set(ONNXRUNTIME_INCLUDE_DIRS ${ONNXRUNTIME_INCLUDE_DIR})
-      message(STATUS "Found ONNX Runtime: ${ONNXRUNTIME_LIBRARY}")
-    else()
-      set(ONNXRUNTIME_FOUND FALSE)
-    endif()
-  endif()
+  # Try to find ONNX Runtime manually since pkg-config is less common on Windows
   
-  if(NOT ONNXRUNTIME_FOUND)
+  # Specify custom paths where ONNX Runtime might be installed
+  set(ONNXRUNTIME_ROOT_DIR "" CACHE PATH "ONNX Runtime root directory")
+  
+  # Look for the library
+  find_library(ONNXRUNTIME_LIBRARY
+    NAMES onnxruntime
+    PATHS ${ONNXRUNTIME_ROOT_DIR}/lib
+    DOC "ONNX Runtime library"
+  )
+  
+  # Look for the include directory
+  find_path(ONNXRUNTIME_INCLUDE_DIR
+    NAMES onnxruntime_cxx_api.h
+    PATHS ${ONNXRUNTIME_ROOT_DIR}/include
+    DOC "ONNX Runtime include directory"
+  )
+  
+  if(ONNXRUNTIME_LIBRARY AND ONNXRUNTIME_INCLUDE_DIR)
+    set(ONNXRUNTIME_FOUND TRUE)
+    set(ONNXRUNTIME_LIBRARIES ${ONNXRUNTIME_LIBRARY})
+    set(ONNXRUNTIME_INCLUDE_DIRS ${ONNXRUNTIME_INCLUDE_DIR})
+    message(STATUS "Found ONNX Runtime: ${ONNXRUNTIME_LIBRARY}")
+  else()
+    set(ONNXRUNTIME_FOUND FALSE)
     message(WARNING "System ONNX Runtime not found. Falling back to downloaded version.")
     set(USE_SYSTEM_ONNXRUNTIME OFF)
   endif()
@@ -76,24 +66,15 @@ if(NOT USE_SYSTEM_ONNXRUNTIME)
   # Debug output
   message(STATUS "ONNX Runtime version set to: ${ONNXRUNTIME_VERSION}")
   
-  # Determine platform and architecture for download URL
-  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    set(ONNXRUNTIME_PLATFORM "linux")
-    if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
-      set(ONNXRUNTIME_ARCH "x64")
-    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
-      set(ONNXRUNTIME_ARCH "aarch64")
-    else()
-      message(FATAL_ERROR "Unsupported architecture: ${CMAKE_SYSTEM_PROCESSOR}")
-    endif()
+  # Determine architecture for download URL
+  if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+    set(ONNXRUNTIME_ARCH "x64")
   else()
-    message(FATAL_ERROR "Unsupported platform: ${CMAKE_SYSTEM_NAME}")
+    set(ONNXRUNTIME_ARCH "x86")
   endif()
   
-  # Set download URL with correct naming pattern for 1.21.0
-  # Make sure all parts of the version are included
-  message(STATUS "Using ONNX Runtime version: ${ONNXRUNTIME_VERSION}")
-  set(ONNXRUNTIME_URL "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-${ONNXRUNTIME_ARCH}-${ONNXRUNTIME_VERSION}.tgz")
+  # Set download URL with correct naming pattern for Windows
+  set(ONNXRUNTIME_URL "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-win-${ONNXRUNTIME_ARCH}-${ONNXRUNTIME_VERSION}.zip")
   
   message(STATUS "Downloading ONNX Runtime from: ${ONNXRUNTIME_URL}")
   
@@ -101,27 +82,27 @@ if(NOT USE_SYSTEM_ONNXRUNTIME)
   set(ONNXRUNTIME_DOWNLOAD_DIR "${CMAKE_CURRENT_BINARY_DIR}/onnxruntime")
   
   # Download and extract ONNX Runtime - using file(DOWNLOAD) for more direct control
-  if(NOT EXISTS "${ONNXRUNTIME_DOWNLOAD_DIR}/onnxruntime-linux-${ONNXRUNTIME_ARCH}-${ONNXRUNTIME_VERSION}/include/onnxruntime_cxx_api.h")
+  if(NOT EXISTS "${ONNXRUNTIME_DOWNLOAD_DIR}/onnxruntime-win-${ONNXRUNTIME_ARCH}-${ONNXRUNTIME_VERSION}/include/onnxruntime_cxx_api.h")
     message(STATUS "Downloading ONNX Runtime...")
     file(MAKE_DIRECTORY ${ONNXRUNTIME_DOWNLOAD_DIR})
     
-    # Download the tarball
-    set(ONNXRUNTIME_TARBALL "${ONNXRUNTIME_DOWNLOAD_DIR}/onnxruntime.tgz")
-    file(DOWNLOAD ${ONNXRUNTIME_URL} ${ONNXRUNTIME_TARBALL} SHOW_PROGRESS)
+    # Download the zipfile
+    set(ONNXRUNTIME_ZIPFILE "${ONNXRUNTIME_DOWNLOAD_DIR}/onnxruntime.zip")
+    file(DOWNLOAD ${ONNXRUNTIME_URL} ${ONNXRUNTIME_ZIPFILE} SHOW_PROGRESS)
     
-    # Extract the tarball
+    # Extract the zipfile
     message(STATUS "Extracting ONNX Runtime...")
     execute_process(
-      COMMAND ${CMAKE_COMMAND} -E tar xzf ${ONNXRUNTIME_TARBALL}
+      COMMAND ${CMAKE_COMMAND} -E tar xf ${ONNXRUNTIME_ZIPFILE}
       WORKING_DIRECTORY ${ONNXRUNTIME_DOWNLOAD_DIR}
     )
     
-    # Clean up the tarball
-    file(REMOVE ${ONNXRUNTIME_TARBALL})
+    # Clean up the zipfile
+    file(REMOVE ${ONNXRUNTIME_ZIPFILE})
   endif()
   
   # Set paths to the extracted files
-  set(ONNXRUNTIME_EXTRACT_DIR "${ONNXRUNTIME_DOWNLOAD_DIR}/onnxruntime-linux-${ONNXRUNTIME_ARCH}-${ONNXRUNTIME_VERSION}")
+  set(ONNXRUNTIME_EXTRACT_DIR "${ONNXRUNTIME_DOWNLOAD_DIR}/onnxruntime-win-${ONNXRUNTIME_ARCH}-${ONNXRUNTIME_VERSION}")
   
   # Verify the directory exists
   if(NOT EXISTS ${ONNXRUNTIME_EXTRACT_DIR})
@@ -138,18 +119,26 @@ if(NOT USE_SYSTEM_ONNXRUNTIME)
     message(STATUS "Found file: ${FILE}")
   endforeach()
   
-  # Find the library files
-  if(EXISTS "${ONNXRUNTIME_EXTRACT_DIR}/lib/libonnxruntime.so")
-    set(ONNXRUNTIME_LIBRARY "${ONNXRUNTIME_EXTRACT_DIR}/lib/libonnxruntime.so")
+  # Find the library files (.dll and .lib)
+  if(EXISTS "${ONNXRUNTIME_EXTRACT_DIR}/lib/onnxruntime.lib")
+    set(ONNXRUNTIME_LIBRARY "${ONNXRUNTIME_EXTRACT_DIR}/lib/onnxruntime.lib")
+    set(ONNXRUNTIME_DLL "${ONNXRUNTIME_EXTRACT_DIR}/lib/onnxruntime.dll")
   else()
     # Try to find the library in case the structure changed
     file(GLOB_RECURSE ONNXRUNTIME_LIB_CANDIDATES
-      "${ONNXRUNTIME_EXTRACT_DIR}/*onnxruntime*${CMAKE_SHARED_LIBRARY_SUFFIX}"
+      "${ONNXRUNTIME_EXTRACT_DIR}/*onnxruntime*.lib"
     )
     
     if(ONNXRUNTIME_LIB_CANDIDATES)
       list(GET ONNXRUNTIME_LIB_CANDIDATES 0 ONNXRUNTIME_LIBRARY)
+      # Find the corresponding DLL
+      get_filename_component(LIB_PATH ${ONNXRUNTIME_LIBRARY} DIRECTORY)
+      file(GLOB ONNXRUNTIME_DLL_CANDIDATES "${LIB_PATH}/*onnxruntime*.dll")
+      if(ONNXRUNTIME_DLL_CANDIDATES)
+        list(GET ONNXRUNTIME_DLL_CANDIDATES 0 ONNXRUNTIME_DLL)
+      endif()
       message(STATUS "Found ONNX Runtime library: ${ONNXRUNTIME_LIBRARY}")
+      message(STATUS "Found ONNX Runtime DLL: ${ONNXRUNTIME_DLL}")
     else()
       message(FATAL_ERROR "Could not find ONNX Runtime library in extracted files")
     endif()
@@ -157,21 +146,26 @@ if(NOT USE_SYSTEM_ONNXRUNTIME)
   
   set(ONNXRUNTIME_LIBRARIES ${ONNXRUNTIME_LIBRARY})
   
-  # Add to bundled libraries
-  set(flutter_onnxruntime_bundled_libraries ${ONNXRUNTIME_LIBRARY})
+  # Add to bundled libraries for distribution
+  set(flutter_onnxruntime_bundled_libraries ${ONNXRUNTIME_DLL})
 endif()
+
+# Define Windows-specific preprocessor macros
+add_definitions(-DWIN32_LEAN_AND_MEAN -DNOMINMAX -DUNICODE -D_UNICODE)
 
 # Any new source files that you add to the plugin should be added here.
 list(APPEND PLUGIN_SOURCES
-  "src/flutter_onnxruntime_plugin.cc"
   "src/session_manager.cc"
   "src/value_conversion.cc"
   "src/tensor_manager.cc"
+  "src/windows_utils.cc"
 )
 
 # Define the plugin library target. Its name must not be changed (see comment
 # on PLUGIN_NAME above).
 add_library(${PLUGIN_NAME} SHARED
+  "flutter_onnxruntime_plugin.cpp"
+  "flutter_onnxruntime_plugin.h"
   ${PLUGIN_SOURCES}
 )
 
@@ -187,13 +181,20 @@ set_target_properties(${PLUGIN_NAME} PROPERTIES
   CXX_VISIBILITY_PRESET hidden)
 target_compile_definitions(${PLUGIN_NAME} PRIVATE FLUTTER_PLUGIN_IMPL)
 
+# Add WINDOWS_EXPORT_ALL_SYMBOLS to ensure the generation of the import library (.lib file)
+set_target_properties(${PLUGIN_NAME} PROPERTIES
+  WINDOWS_EXPORT_ALL_SYMBOLS ON)
+
+# Enable C++17 features
+target_compile_features(${PLUGIN_NAME} PRIVATE cxx_std_17)
+
 # Source include directories and library dependencies. Add any plugin-specific
 # dependencies here.
 target_include_directories(${PLUGIN_NAME} PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
   "${CMAKE_CURRENT_SOURCE_DIR}"
   "${FLUTTER_EPHEMERAL_DIR}"
-  "${FLUTTER_EPHEMERAL_DIR}/cpp_client_wrapper/include"
+  "${CMAKE_CURRENT_SOURCE_DIR}/windows/include"
   "${ONNXRUNTIME_INCLUDE_DIRS}"
 )
 
@@ -206,15 +207,9 @@ message(STATUS "This file: ${CMAKE_CURRENT_LIST_FILE}")
 install(
   FILES
     "include/flutter_onnxruntime/flutter_onnxruntime_plugin.h"
+    "include/flutter_onnxruntime/export.h"
   DESTINATION
     "${CMAKE_BINARY_DIR}/include/flutter_onnxruntime"
-)
-
-# Install utility header files with the proper path
-install(
-  FILES
-  DESTINATION
-    "${CMAKE_BINARY_DIR}/include"
 )
 
 # Also create symlinks in the build directory to ensure includes work during build
@@ -229,6 +224,7 @@ file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/include/flutter_onnxruntime/export.h"
      DESTINATION "${CMAKE_BINARY_DIR}/include/flutter_onnxruntime/"
      FOLLOW_SYMLINK_CHAIN)
 
+
 # Add include directories for the plugin
 target_include_directories(${PLUGIN_NAME} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
@@ -238,80 +234,29 @@ target_include_directories(${PLUGIN_NAME} PUBLIC
 # Add ONNX Runtime include directories
 target_include_directories(${PLUGIN_NAME} PRIVATE ${ONNXRUNTIME_INCLUDE_DIRS})
 
-target_link_libraries(${PLUGIN_NAME} PRIVATE flutter)
-target_link_libraries(${PLUGIN_NAME} PRIVATE PkgConfig::GTK)
+# Link against Flutter and other libraries
+target_link_libraries(${PLUGIN_NAME} PRIVATE flutter flutter_wrapper_plugin)
 
 # Link against ONNX Runtime
 target_link_libraries(${PLUGIN_NAME} PRIVATE ${ONNXRUNTIME_LIBRARIES})
 
-# Add a post-build command to copy ONNX Runtime libraries to the build directory
-if(NOT USE_SYSTEM_ONNXRUNTIME AND ONNXRUNTIME_LIBRARY)
+# Link against Windows Shell API library for PathRemoveFileSpecW
+target_link_libraries(${PLUGIN_NAME} PRIVATE Shlwapi)
+
+# Copy over ONNX Runtime DLL to the build directory
+if(NOT USE_SYSTEM_ONNXRUNTIME AND ONNXRUNTIME_DLL)
   add_custom_command(
     TARGET ${PLUGIN_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-      ${ONNXRUNTIME_LIBRARY} $<TARGET_FILE_DIR:${PLUGIN_NAME}>
-    COMMENT "Copying ONNX Runtime library to build directory"
+      ${ONNXRUNTIME_DLL} $<TARGET_FILE_DIR:${PLUGIN_NAME}>
+    COMMENT "Copying ONNX Runtime DLL to build directory"
   )
 endif()
 
 # List of absolute paths to libraries that should be bundled with the plugin.
 # This list could contain prebuilt libraries, or libraries created by an
 # external build triggered from this build file.
-if(NOT USE_SYSTEM_ONNXRUNTIME AND ONNXRUNTIME_LIBRARY)
-  # When using the downloaded version, we need to bundle the library
-  set(bundled_libs ${ONNXRUNTIME_LIBRARY})
-else()
-  # When using system library, don't bundle it
-  set(bundled_libs "")
-endif()
-
 set(flutter_onnxruntime_bundled_libraries
-  ${bundled_libs}
+  "${flutter_onnxruntime_bundled_libraries}"
   PARENT_SCOPE
-)
-
-# === Tests ===
-# These unit tests can be run from a terminal after building the example.
-
-# Only enable test builds when building the example (which sets this variable)
-# so that plugin clients aren't building the tests.
-if (${include_${PROJECT_NAME}_tests})
-if(${CMAKE_VERSION} VERSION_LESS "3.11.0")
-message("Unit tests require CMake 3.11.0 or later")
-else()
-set(TEST_RUNNER "${PROJECT_NAME}_test")
-enable_testing()
-
-# Add the Google Test dependency.
-include(FetchContent)
-FetchContent_Declare(
-  googletest
-  URL https://github.com/google/googletest/archive/release-1.11.0.zip
-)
-# Prevent overriding the parent project's compiler/linker settings
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-# Disable install commands for gtest so it doesn't end up in the bundle.
-set(INSTALL_GTEST OFF CACHE BOOL "Disable installation of googletest" FORCE)
-
-FetchContent_MakeAvailable(googletest)
-
-# The plugin's exported API is not very useful for unit testing, so build the
-# sources directly into the test binary rather than using the shared library.
-add_executable(${TEST_RUNNER}
-  test/flutter_onnxruntime_plugin_test.cc
-  ${PLUGIN_SOURCES}
-)
-apply_standard_settings(${TEST_RUNNER})
-target_include_directories(${TEST_RUNNER} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-target_include_directories(${TEST_RUNNER} PRIVATE ${ONNXRUNTIME_INCLUDE_DIRS})
-target_link_libraries(${TEST_RUNNER} PRIVATE flutter)
-target_link_libraries(${TEST_RUNNER} PRIVATE PkgConfig::GTK)
-target_link_libraries(${TEST_RUNNER} PRIVATE ${ONNXRUNTIME_LIBRARIES})
-target_link_libraries(${TEST_RUNNER} PRIVATE gtest_main gmock)
-
-# Enable automatic test discovery.
-include(GoogleTest)
-gtest_discover_tests(${TEST_RUNNER})
-
-endif()  # CMake version check
-endif()  # include_${PROJECT_NAME}_tests
+) 
