@@ -81,6 +81,28 @@ void main() {
         await tensor.dispose();
       });
 
+      testWidgets('Int64 round-trip test', (WidgetTester tester) async {
+        // Skip the test for web platform as BigInt64Array required by ONNX Runtime Web for int64 tensors
+        // is not supported in all browsers
+        if (kIsWeb) {
+          return;
+        }
+        // Use numbers outside the range of Int32 (e.g., greater than 2^31 - 1)
+        final inputData = Int64List.fromList([2147483648, -2147483649, 9223372036854775807, -9223372036854775808]);
+        final shape = [2, 2]; // 2x2 matrix
+
+        final tensor = await OrtValue.fromList(inputData, shape);
+        expect(tensor.dataType, OrtDataType.int64);
+        expect(tensor.shape, shape);
+
+        final retrievedData = await tensor.asFlattenedList();
+        expect(retrievedData.length, 4);
+        for (int i = 0; i < inputData.length; i++) {
+          expect(retrievedData[i], inputData[i]);
+        }
+        await tensor.dispose();
+      });
+
       testWidgets('Uint8 round-trip test', (WidgetTester tester) async {
         final inputData = Uint8List.fromList([10, 20, 30, 40]);
         final shape = [4]; // 1D array
