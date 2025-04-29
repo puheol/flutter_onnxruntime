@@ -24,6 +24,10 @@ public:
   TensorManager();
   ~TensorManager();
 
+  // Disallow copy and assign
+  TensorManager(const TensorManager &) = delete;
+  TensorManager &operator=(const TensorManager &) = delete;
+
   // Create a tensor from Float32List data
   std::string createFloat32Tensor(const std::vector<float> &data, const std::vector<int64_t> &shape);
 
@@ -57,9 +61,6 @@ public:
   // Convert bool tensor to another type
   std::string convertBoolTo(const std::string &tensor_id, const std::string &target_type);
 
-  // Clone a tensor and return a new deep copy of it
-  Ort::Value cloneTensor(const std::string &tensor_id);
-
   // Store a tensor with a specific ID (used for output tensors)
   void storeTensor(const std::string &tensor_id, Ort::Value &&tensor);
 
@@ -80,6 +81,9 @@ public:
 
   // Generate a unique tensor ID
   std::string generateTensorId();
+
+  // Clone a tensor and return a new deep copy of it
+  Ort::Value cloneTensor(const std::string &tensor_id);
 
 private:
   // Map of tensor IDs to OrtValue objects
