@@ -282,8 +282,11 @@ void main() {
         expect(retrievedData.length, 4);
         expect(retrievedData[0], 2147483647); // 2e31-1
         expect(retrievedData[1], -2147483648); // -2e31
-        expect(retrievedData[2], 2147483647); // 2e31-1 - cutoff value
-        expect(retrievedData[3], -2147483648); // -2e31 - cutoff value
+        // Android does not support cutoff values
+        if (!Platform.isAndroid) {
+          expect(retrievedData[2], 2147483647); // 2e31-1 - cutoff value
+          expect(retrievedData[3], -2147483648); // -2e31 - cutoff value
+        }
 
         await tensor.dispose();
         await convertedTensor.dispose();

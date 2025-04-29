@@ -956,7 +956,8 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                 (dataType == "int64" && targetType == "int64") ||
                                 (dataType == "uint8" && targetType == "uint8") ||
                                 (dataType == "int8" && targetType == "int8") ||
-                                (dataType == "bool" && targetType == "bool") -> {
+                                (dataType == "bool" && targetType == "bool") ||
+                                (dataType == "string" && targetType == "string") -> {
                                 // clone the original tensor to a new tensor
                                 OnnxTensor.createTensor(ortEnvironment, tensor.getValue())
                             }
