@@ -79,7 +79,7 @@ public:
   const char *get_element_type_string(ONNXTensorElementDataType element_type);
 
   // Clone a tensor
-  std::unique_ptr<Ort::Value> cloneTensor(const std::string &tensor_id);
+  Ort::Value cloneTensor(const std::string &tensor_id);
 
 private:
   // Map of tensor IDs to OrtValue objects
