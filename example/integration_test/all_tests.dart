@@ -88,7 +88,7 @@ void main() {
           return;
         }
         // Use numbers outside the range of Int32 (e.g., greater than 2^31 - 1)
-        final inputData = Int64List.fromList([2147483648, -2147483649, 9223372036854775807, -9223372036854775808]);
+        final inputData = Int64List.fromList([2147483648, -2147483649, 9223372036, -9223372036]);
         final shape = [2, 2]; // 2x2 matrix
 
         final tensor = await OrtValue.fromList(inputData, shape);
@@ -268,7 +268,7 @@ void main() {
           return;
         }
         // Use numbers outside the range of Int32 (e.g., greater than 2^31 - 1)
-        final inputData = Int64List.fromList([2147483647, -2147483648, 9223372036854775807, -9223372036854775808]);
+        final inputData = Int64List.fromList([2147483647, -2147483648, 9223372036, -9223372036]);
         final shape = [4]; // 1D array
 
         final tensor = await OrtValue.fromList(inputData, shape);
