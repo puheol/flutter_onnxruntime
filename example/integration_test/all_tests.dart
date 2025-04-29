@@ -261,7 +261,7 @@ void main() {
         await convertedTensor.dispose();
       });
 
-      testWidgets('Same type conversion', (WidgetTester tester) async {
+      testWidgets('Same type conversion Float32 to Float32', (WidgetTester tester) async {
         // same type conversion should clone the tensor to a new tensor
         final inputData = Float32List.fromList([1.1, 2.2]);
         final shape = [2]; // 1D array
@@ -273,17 +273,42 @@ void main() {
         expect(tensor1.dataType, OrtDataType.float32);
         expect(tensor1.shape, shape);
 
-        // release tensor1 but tensor0 should still be valid
-        tensor1.dispose();
-        expect(tensor0.dataType, OrtDataType.float32);
-        expect(tensor0.shape, shape);
+        // release tensor0 but tensor1 should still be valid
+        tensor0.dispose();
+        expect(tensor1.dataType, OrtDataType.float32);
+        expect(tensor1.shape, shape);
 
-        final retrievedData = await tensor0.asList();
+        final retrievedData = await tensor1.asList();
         expect(retrievedData.length, 2);
         expect(retrievedData[0], closeTo(1.1, 1e-5));
         expect(retrievedData[1], closeTo(2.2, 1e-5));
 
-        await tensor0.dispose();
+        await tensor1.dispose();
+      });
+
+      testWidgets('Same type conversion String to String', (WidgetTester tester) async {
+        // same type conversion should clone the tensor to a new tensor
+        final inputData = ['Hello', 'World'];
+        final shape = [2]; // 1D array
+
+        final tensor0 = await OrtValue.fromList(inputData, shape);
+        expect(tensor0.dataType, OrtDataType.string);
+
+        final tensor1 = await tensor0.to(OrtDataType.string);
+        expect(tensor1.dataType, OrtDataType.string);
+        expect(tensor1.shape, shape);
+
+        // release tensor0 but tensor1 should still be valid
+        tensor0.dispose();
+        expect(tensor1.dataType, OrtDataType.string);
+        expect(tensor1.shape, shape);
+
+        final retrievedData = await tensor1.asList();
+        expect(retrievedData.length, 2);
+        expect(retrievedData[0], 'Hello');
+        expect(retrievedData[1], 'World');
+
+        await tensor1.dispose();
       });
     });
 
