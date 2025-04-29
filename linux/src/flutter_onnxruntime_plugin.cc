@@ -761,6 +761,24 @@ static FlMethodResponse *create_ort_value(FlutterOnnxruntimePlugin *self, FlValu
             fl_method_error_response_new("INVALID_DATA", "Data must be a list of booleans for bool type", nullptr));
       }
       valueId = self->tensor_manager->createBoolTensor(data_vec, shape);
+    } else if (strcmp(source_type, "string") == 0) {
+      std::vector<std::string> data_vec;
+      if (fl_value_get_type(data_value) == FL_VALUE_TYPE_LIST) {
+        size_t length = fl_value_get_length(data_value);
+        data_vec.reserve(length);
+        for (size_t i = 0; i < length; i++) {
+          FlValue *val = fl_value_get_list_value(data_value, i);
+          if (fl_value_get_type(val) != FL_VALUE_TYPE_STRING) {
+            return FL_METHOD_RESPONSE(fl_method_error_response_new(
+                "INVALID_DATA", "Data must be a list of strings for string type", nullptr));
+          }
+          data_vec.push_back(fl_value_get_string(val));
+        }
+      } else {
+        return FL_METHOD_RESPONSE(
+            fl_method_error_response_new("INVALID_DATA", "Data must be a list of strings for string type", nullptr));
+      }
+      valueId = self->tensor_manager->createStringTensor(data_vec, shape);
     } else {
       std::string error_message = "Unsupported source data type: ";
       error_message += source_type;

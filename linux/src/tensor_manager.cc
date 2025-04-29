@@ -109,6 +109,41 @@ std::string TensorManager::createUint8Tensor(const std::vector<uint8_t> &data, c
   }
 }
 
+std::string TensorManager::createStringTensor(const std::vector<std::string> &data, const std::vector<int64_t> &shape) {
+  std::lock_guard<std::mutex> lock(mutex_);
+
+  try {
+    // Create a unique tensor ID
+    std::string tensor_id = generateTensorId();
+
+    // Create a C-style array of const char* for ONNX Runtime
+    const char **tensor_data = new const char *[data.size()];
+    for (size_t i = 0; i < data.size(); i++) {
+      tensor_data[i] = data[i].c_str();
+    }
+
+    OrtAllocator *allocator = nullptr;
+    // Follow the test at:
+    // https://github.com/microsoft/onnxruntime/blob/4adef01e741b2327188279dcd63bc55c5d2307e9/onnxruntime/test/shared_lib/test_inference.cc#L4278
+    // create allocator with default options
+    Ort::ThrowOnError(Ort::GetApi().GetAllocatorWithDefaultOptions(&allocator));
+    auto tensor = Ort::Value::CreateTensor(allocator, shape.data(), shape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING);
+
+    // Fill the tensor with string data
+    Ort::ThrowOnError(Ort::GetApi().FillStringTensor(tensor, tensor_data, data.size()));
+
+    delete[] tensor_data;
+
+    tensors_[tensor_id] = std::make_unique<Ort::Value>(std::move(tensor));
+    tensor_types_[tensor_id] = "string";
+    tensor_shapes_[tensor_id] = shape;
+
+    return tensor_id;
+  } catch (const Ort::Exception &e) {
+    throw;
+  }
+}
+
 std::string TensorManager::createBoolTensor(const std::vector<bool> &data, const std::vector<int64_t> &shape) {
   std::lock_guard<std::mutex> lock(mutex_);
 
@@ -252,6 +287,26 @@ FlValue *TensorManager::getTensorData(const std::string &tensor_id) {
 
       // Set data in result
       fl_value_set_string_take(result, "data", data_list);
+    } else if (tensor_type == "string") {
+      // Get string tensor
+      Ort::Value *tensor = tensor_it->second.get();
+
+      // Get tensor info
+      Ort::TensorTypeAndShapeInfo tensor_info = tensor->GetTensorTypeAndShapeInfo();
+      size_t elem_count = tensor_info.GetElementCount();
+
+      // Create a list for the strings
+      FlValue *data_list = fl_value_new_list();
+
+      // Extract strings from the tensor
+      for (size_t i = 0; i < elem_count; i++) {
+        std::string s = tensor->GetStringTensorElement(i);
+        // Add the string to the list
+        fl_value_append_take(data_list, fl_value_new_string(s.c_str()));
+      }
+
+      // Set data in result
+      fl_value_set_string_take(result, "data", data_list);
     } else {
       // Unsupported tensor type
       throw std::runtime_error("Unsupported tensor type: " + tensor_type);
@@ -374,7 +429,7 @@ std::string TensorManager::convertTensor(const std::string &tensor_id, const std
     return convertBoolTo(tensor_id, target_type);
   }
 
-  throw std::runtime_error("Unsupported type: " + source_type);
+  throw std::runtime_error("Unsupported type conversion: " + source_type + " to " + target_type);
 }
 
 std::string TensorManager::convertFloat32To(const std::string &tensor_id, const std::string &target_type) {
@@ -733,6 +788,38 @@ Ort::Value TensorManager::cloneTensor(const std::string &tensor_id) {
     std::memcpy(new_data, data, element_count * sizeof(bool));
 
     return Ort::Value::CreateTensor<bool>(memory_info_, new_data, element_count, shape.data(), shape.size());
+  } else if (tensor_type == "string") {
+    // Get string tensor
+    Ort::Value *tensor = tensor_it->second.get();
+
+    // Get tensor info
+    Ort::TensorTypeAndShapeInfo tensor_info = tensor->GetTensorTypeAndShapeInfo();
+    size_t elem_count = tensor_info.GetElementCount();
+
+    // Extract strings from the tensor
+    std::vector<std::string> data_vec;
+    for (size_t i = 0; i < elem_count; i++) {
+      std::string s = tensor->GetStringTensorElement(i);
+      data_vec.push_back(s);
+    }
+
+    // Create a C-style array of const char* for ONNX Runtime
+    const char **new_tensor_data = new const char *[data_vec.size()];
+    for (size_t i = 0; i < data_vec.size(); i++) {
+      new_tensor_data[i] = data_vec[i].c_str();
+    }
+    OrtAllocator *allocator = nullptr;
+    // Follow the test at:
+    // https://github.com/microsoft/onnxruntime/blob/4adef01e741b2327188279dcd63bc55c5d2307e9/onnxruntime/test/shared_lib/test_inference.cc#L4278
+    // create allocator with default options
+    Ort::ThrowOnError(Ort::GetApi().GetAllocatorWithDefaultOptions(&allocator));
+    auto new_tensor =
+        Ort::Value::CreateTensor(allocator, shape.data(), shape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING);
+    // Fill the tensor with string data
+    Ort::ThrowOnError(Ort::GetApi().FillStringTensor(new_tensor, new_tensor_data, data_vec.size()));
+    delete[] new_tensor_data;
+
+    return new_tensor;
   } else {
     throw std::runtime_error("Unsupported tensor type: " + tensor_type);
   }
