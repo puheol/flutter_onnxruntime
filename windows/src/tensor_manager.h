@@ -37,6 +37,9 @@ public:
   // Create a tensor from Boolean data
   std::string createBoolTensor(const std::vector<bool> &data, const std::vector<int64_t> &shape);
 
+  // Create a tensor from String data
+  std::string createStringTensor(const std::vector<std::string> &data, const std::vector<int64_t> &shape);
+
   // Convert between tensor formats
   std::string convertTensor(const std::string &tensor_id, const std::string &target_type);
 

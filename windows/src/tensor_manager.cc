@@ -802,13 +802,10 @@ Ort::Value TensorManager::cloneTensor(const std::string &tensor_id) {
 
     return Ort::Value::CreateTensor<bool>(memory_info_, new_data, element_count, shape.data(), shape.size());
   } else if (tensor_type == "string") {
-    // Get tensor info
-    Ort::TensorTypeAndShapeInfo tensor_info = tensor->GetTensorTypeAndShapeInfo();
-    size_t elem_count = tensor_info.GetElementCount();
 
     // Extract strings from the tensor
     std::vector<std::string> data_vec;
-    for (size_t i = 0; i < elem_count; i++) {
+    for (size_t i = 0; i < element_count; i++) {
       std::string s = tensor->GetStringTensorElement(i);
       data_vec.push_back(s);
     }
