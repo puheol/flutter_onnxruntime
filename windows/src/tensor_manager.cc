@@ -13,7 +13,7 @@ namespace flutter_onnxruntime {
 TensorManager::TensorManager() : memory_info_(Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault)) {}
 
 TensorManager::~TensorManager() {
-  std::lock_guard<std::mutex> lock(tensor_mutex_);
+  std::lock_guard<std::mutex> lock(mutex_);
   tensors_.clear();
   tensor_types_.clear();
   tensor_shapes_.clear();
@@ -36,22 +36,19 @@ std::string TensorManager::generateTensorId() {
 }
 
 std::string TensorManager::createFloat32Tensor(const std::vector<float> &data, const std::vector<int64_t> &shape) {
-  std::lock_guard<std::mutex> lock(tensor_mutex_);
+  std::lock_guard<std::mutex> lock(mutex_);
 
   try {
     // Create a unique tensor ID
     std::string tensor_id = generateTensorId();
-
-    // Create a persistent copy of the data
-    std::vector<uint8_t> data_buffer(reinterpret_cast<const uint8_t *>(data.data()),
-                                     reinterpret_cast<const uint8_t *>(data.data()) + data.size() * sizeof(float));
-    tensor_data_buffers_[tensor_id] = std::move(data_buffer);
-
+    // make a more robust copy, avoid the delocation of the original data
+    float *tensor_data = new float[data.size()];
+    std::copy(data.begin(), data.end(), tensor_data);
     // Create a new tensor with our persistent copy of the data
-    auto tensor = createOrtValue(tensor_data_buffers_[tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT);
-
+    auto tensor = Ort::Value::CreateTensor<float>(memory_info_, tensor_data, data.size(), shape.data(), shape.size());
     // Store the tensor with direct ownership, its type, and shape
-    tensors_[tensor_id] = std::move(tensor);
+    // Following RAII principles, use std::make_unique to tie the OrtValue lifetime to the pointer
+    tensors_[tensor_id] = std::make_unique<Ort::Value>(std::move(tensor));
     tensor_types_[tensor_id] = "float32";
     tensor_shapes_[tensor_id] = shape;
 
@@ -63,22 +60,18 @@ std::string TensorManager::createFloat32Tensor(const std::vector<float> &data, c
 }
 
 std::string TensorManager::createInt32Tensor(const std::vector<int32_t> &data, const std::vector<int64_t> &shape) {
-  std::lock_guard<std::mutex> lock(tensor_mutex_);
+  std::lock_guard<std::mutex> lock(mutex_);
 
   try {
     // Create a unique tensor ID
     std::string tensor_id = generateTensorId();
-
-    // Create a persistent copy of the data
-    std::vector<uint8_t> data_buffer(reinterpret_cast<const uint8_t *>(data.data()),
-                                     reinterpret_cast<const uint8_t *>(data.data()) + data.size() * sizeof(int32_t));
-    tensor_data_buffers_[tensor_id] = std::move(data_buffer);
-
+    // Make a robust copy of the data
+    int32_t *tensor_data = new int32_t[data.size()];
+    std::copy(data.begin(), data.end(), tensor_data);
     // Create a new tensor with our persistent copy of the data
-    auto tensor = createOrtValue(tensor_data_buffers_[tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32);
-
+    auto tensor = Ort::Value::CreateTensor<int32_t>(memory_info_, tensor_data, data.size(), shape.data(), shape.size());
     // Store the tensor with direct ownership, its type, and shape
-    tensors_[tensor_id] = std::move(tensor);
+    tensors_[tensor_id] = std::make_unique<Ort::Value>(std::move(tensor));
     tensor_types_[tensor_id] = "int32";
     tensor_shapes_[tensor_id] = shape;
 
@@ -90,22 +83,18 @@ std::string TensorManager::createInt32Tensor(const std::vector<int32_t> &data, c
 }
 
 std::string TensorManager::createInt64Tensor(const std::vector<int64_t> &data, const std::vector<int64_t> &shape) {
-  std::lock_guard<std::mutex> lock(tensor_mutex_);
+  std::lock_guard<std::mutex> lock(mutex_);
 
   try {
     // Create a unique tensor ID
     std::string tensor_id = generateTensorId();
-
-    // Create a persistent copy of the data
-    std::vector<uint8_t> data_buffer(reinterpret_cast<const uint8_t *>(data.data()),
-                                     reinterpret_cast<const uint8_t *>(data.data()) + data.size() * sizeof(int64_t));
-    tensor_data_buffers_[tensor_id] = std::move(data_buffer);
-
+    // Make a robust copy of the data
+    int64_t *tensor_data = new int64_t[data.size()];
+    std::copy(data.begin(), data.end(), tensor_data);
     // Create a new tensor with our persistent copy of the data
-    auto tensor = createOrtValue(tensor_data_buffers_[tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64);
-
+    auto tensor = Ort::Value::CreateTensor<int64_t>(memory_info_, tensor_data, data.size(), shape.data(), shape.size());
     // Store the tensor with direct ownership, its type, and shape
-    tensors_[tensor_id] = std::move(tensor);
+    tensors_[tensor_id] = std::make_unique<Ort::Value>(std::move(tensor));
     tensor_types_[tensor_id] = "int64";
     tensor_shapes_[tensor_id] = shape;
 
@@ -117,21 +106,18 @@ std::string TensorManager::createInt64Tensor(const std::vector<int64_t> &data, c
 }
 
 std::string TensorManager::createUint8Tensor(const std::vector<uint8_t> &data, const std::vector<int64_t> &shape) {
-  std::lock_guard<std::mutex> lock(tensor_mutex_);
+  std::lock_guard<std::mutex> lock(mutex_);
 
   try {
     // Create a unique tensor ID
     std::string tensor_id = generateTensorId();
-
-    // Create a persistent copy of the data
-    std::vector<uint8_t> data_buffer(data.begin(), data.end());
-    tensor_data_buffers_[tensor_id] = std::move(data_buffer);
-
+    // Make a robust copy of the data
+    uint8_t *tensor_data = new uint8_t[data.size()];
+    std::copy(data.begin(), data.end(), tensor_data);
     // Create a new tensor with our persistent copy of the data
-    auto tensor = createOrtValue(tensor_data_buffers_[tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8);
-
+    auto tensor = Ort::Value::CreateTensor<uint8_t>(memory_info_, tensor_data, data.size(), shape.data(), shape.size());
     // Store the tensor with direct ownership, its type, and shape
-    tensors_[tensor_id] = std::move(tensor);
+    tensors_[tensor_id] = std::make_unique<Ort::Value>(std::move(tensor));
     tensor_types_[tensor_id] = "uint8";
     tensor_shapes_[tensor_id] = shape;
 
@@ -143,25 +129,20 @@ std::string TensorManager::createUint8Tensor(const std::vector<uint8_t> &data, c
 }
 
 std::string TensorManager::createBoolTensor(const std::vector<bool> &data, const std::vector<int64_t> &shape) {
-  std::lock_guard<std::mutex> lock(tensor_mutex_);
+  std::lock_guard<std::mutex> lock(mutex_);
 
   try {
     // Create a unique tensor ID
     std::string tensor_id = generateTensorId();
-
-    // Create a regular array for boolean data (std::vector<bool> is specialized and can't be used directly)
-    std::vector<uint8_t> data_buffer(data.size() * sizeof(bool));
-    bool *bool_data = reinterpret_cast<bool *>(data_buffer.data());
+    // Create a regular array for the boolean data (std::vector<bool> is specialized and can't be used directly)
+    bool *tensor_data = new bool[data.size()];
     for (size_t i = 0; i < data.size(); i++) {
-      bool_data[i] = data[i];
+      tensor_data[i] = data[i];
     }
-    tensor_data_buffers_[tensor_id] = std::move(data_buffer);
-
     // Create a new tensor with our persistent copy of the data
-    auto tensor = createOrtValue(tensor_data_buffers_[tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL);
-
+    auto tensor = Ort::Value::CreateTensor<bool>(memory_info_, tensor_data, data.size(), shape.data(), shape.size());
     // Store the tensor with direct ownership, its type, and shape
-    tensors_[tensor_id] = std::move(tensor);
+    tensors_[tensor_id] = std::make_unique<Ort::Value>(std::move(tensor));
     tensor_types_[tensor_id] = "bool";
     tensor_shapes_[tensor_id] = shape;
 
@@ -173,7 +154,7 @@ std::string TensorManager::createBoolTensor(const std::vector<bool> &data, const
 }
 
 flutter::EncodableValue TensorManager::getTensorData(const std::string &tensor_id) {
-  std::lock_guard<std::mutex> lock(tensor_mutex_);
+  std::lock_guard<std::mutex> lock(mutex_);
 
   // Check if the tensor exists
   auto tensor_it = tensors_.find(tensor_id);
@@ -268,15 +249,16 @@ flutter::EncodableValue TensorManager::getTensorData(const std::string &tensor_i
       // Unsupported tensor type
       throw std::runtime_error("Unsupported tensor type: " + tensor_type);
     }
-  } catch (const Ort::Exception &e) {
-    throw std::runtime_error(e.what());
+  } catch (const Ort::Exception &) {
+    // Re-throw the exception
+    throw;
   }
 
   return flutter::EncodableValue(result);
 }
 
 bool TensorManager::releaseTensor(const std::string &tensor_id) {
-  std::lock_guard<std::mutex> lock(tensor_mutex_);
+  std::lock_guard<std::mutex> lock(mutex_);
 
   auto tensor_it = tensors_.find(tensor_id);
   auto type_it = tensor_types_.find(tensor_id);
@@ -303,7 +285,7 @@ bool TensorManager::releaseTensor(const std::string &tensor_id) {
 }
 
 Ort::Value *TensorManager::getTensor(const std::string &tensor_id) {
-  std::lock_guard<std::mutex> lock(tensor_mutex_);
+  std::lock_guard<std::mutex> lock(mutex_);
 
   auto it = tensors_.find(tensor_id);
   if (it == tensors_.end()) {
@@ -314,7 +296,7 @@ Ort::Value *TensorManager::getTensor(const std::string &tensor_id) {
 }
 
 void TensorManager::storeTensor(const std::string &tensor_id, Ort::Value &&tensor) {
-  std::lock_guard<std::mutex> lock(tensor_mutex_);
+  std::lock_guard<std::mutex> lock(mutex_);
 
   try {
     // Store the tensor
@@ -329,7 +311,7 @@ void TensorManager::storeTensor(const std::string &tensor_id, Ort::Value &&tenso
 
     // Get and store the tensor type
     ONNXTensorElementDataType element_type = tensor_info.GetElementType();
-    tensor_types_[tensor_id] = get_element_type_string(element_type);
+    tensor_types_[tensor_id] = SessionManager::getElementTypeString(element_type);
   } catch (const std::exception &) {
     // Handle exception - just log and rethrow as needed
     throw;
@@ -337,7 +319,7 @@ void TensorManager::storeTensor(const std::string &tensor_id, Ort::Value &&tenso
 }
 
 std::string TensorManager::getTensorType(const std::string &tensor_id) {
-  std::lock_guard<std::mutex> lock(tensor_mutex_);
+  std::lock_guard<std::mutex> lock(mutex_);
 
   auto it = tensor_types_.find(tensor_id);
   if (it == tensor_types_.end()) {
@@ -348,7 +330,7 @@ std::string TensorManager::getTensorType(const std::string &tensor_id) {
 }
 
 std::vector<int64_t> TensorManager::getTensorShape(const std::string &tensor_id) {
-  std::lock_guard<std::mutex> lock(tensor_mutex_);
+  std::lock_guard<std::mutex> lock(mutex_);
 
   auto it = tensor_shapes_.find(tensor_id);
   if (it == tensor_shapes_.end()) {
@@ -358,47 +340,7 @@ std::vector<int64_t> TensorManager::getTensorShape(const std::string &tensor_id)
   return it->second;
 }
 
-const char *TensorManager::get_element_type_string(ONNXTensorElementDataType element_type) {
-  switch (element_type) {
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
-    return "float32";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8:
-    return "uint8";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8:
-    return "int8";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT16:
-    return "uint16";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT16:
-    return "int16";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32:
-    return "int32";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64:
-    return "int64";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING:
-    return "string";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL:
-    return "bool";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16:
-    return "float16";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE:
-    return "double";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT32:
-    return "uint32";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT64:
-    return "uint64";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_COMPLEX64:
-    return "complex64";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_COMPLEX128:
-    return "complex128";
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_BFLOAT16:
-    return "bfloat16";
-  default:
-    return "unknown";
-  }
-}
-
 std::string TensorManager::convertTensor(const std::string &tensor_id, const std::string &target_type) {
-  std::lock_guard<std::mutex> lock(tensor_mutex_);
 
   // Check if the tensor exists
   auto tensor_it = tensors_.find(tensor_id);
@@ -419,67 +361,23 @@ std::string TensorManager::convertTensor(const std::string &tensor_id, const std
 
   // If the target type is the same as the source type, just clone the tensor
   if (source_type == target_type) {
+    // Clone the tensor
+    auto new_tensor = cloneTensor(tensor_id);
     // Create a new tensor ID
     std::string new_tensor_id = generateTensorId();
-
-    // Clone the tensor
-    Ort::Value *tensor = tensor_it->second.get();
-    Ort::TensorTypeAndShapeInfo tensor_info = tensor->GetTensorTypeAndShapeInfo();
-    size_t elem_count = tensor_info.GetElementCount();
-    std::vector<int64_t> shape = tensor_info.GetShape();
-
-    // Create a new tensor based on the data type
-    if (source_type == "float32") {
-      const float *data = tensor->GetTensorData<float>();
-      std::vector<uint8_t> data_buffer(reinterpret_cast<const uint8_t *>(data),
-                                       reinterpret_cast<const uint8_t *>(data) + elem_count * sizeof(float));
-      tensor_data_buffers_[new_tensor_id] = std::move(data_buffer);
-      auto new_tensor =
-          createOrtValue(tensor_data_buffers_[new_tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT);
-      tensors_[new_tensor_id] = std::move(new_tensor);
-    } else if (source_type == "int32") {
-      const int32_t *data = tensor->GetTensorData<int32_t>();
-      std::vector<uint8_t> data_buffer(reinterpret_cast<const uint8_t *>(data),
-                                       reinterpret_cast<const uint8_t *>(data) + elem_count * sizeof(int32_t));
-      tensor_data_buffers_[new_tensor_id] = std::move(data_buffer);
-      auto new_tensor =
-          createOrtValue(tensor_data_buffers_[new_tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32);
-      tensors_[new_tensor_id] = std::move(new_tensor);
-    } else if (source_type == "int64") {
-      const int64_t *data = tensor->GetTensorData<int64_t>();
-      std::vector<uint8_t> data_buffer(reinterpret_cast<const uint8_t *>(data),
-                                       reinterpret_cast<const uint8_t *>(data) + elem_count * sizeof(int64_t));
-      tensor_data_buffers_[new_tensor_id] = std::move(data_buffer);
-      auto new_tensor =
-          createOrtValue(tensor_data_buffers_[new_tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64);
-      tensors_[new_tensor_id] = std::move(new_tensor);
-    } else if (source_type == "uint8") {
-      const uint8_t *data = tensor->GetTensorData<uint8_t>();
-      std::vector<uint8_t> data_buffer(data, data + elem_count);
-      tensor_data_buffers_[new_tensor_id] = std::move(data_buffer);
-      auto new_tensor =
-          createOrtValue(tensor_data_buffers_[new_tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8);
-      tensors_[new_tensor_id] = std::move(new_tensor);
-    } else if (source_type == "bool") {
-      const bool *data = tensor->GetTensorData<bool>();
-      std::vector<uint8_t> data_buffer(elem_count * sizeof(bool));
-      bool *bool_data = reinterpret_cast<bool *>(data_buffer.data());
-      for (size_t i = 0; i < elem_count; i++) {
-        bool_data[i] = data[i];
-      }
-      tensor_data_buffers_[new_tensor_id] = std::move(data_buffer);
-      auto new_tensor =
-          createOrtValue(tensor_data_buffers_[new_tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL);
-      tensors_[new_tensor_id] = std::move(new_tensor);
-    }
+    tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
 
     // Store the type and shape
+    Ort::Value *tensor = tensor_it->second.get();
+    Ort::TensorTypeAndShapeInfo tensor_info = tensor->GetTensorTypeAndShapeInfo();
+    std::vector<int64_t> shape = tensor_info.GetShape();
     tensor_types_[new_tensor_id] = source_type;
     tensor_shapes_[new_tensor_id] = shape;
 
     return new_tensor_id;
   }
 
+  std::lock_guard<std::mutex> lock(mutex_);
   // Convert based on the source type
   if (source_type == "float32") {
     return convertFloat32To(tensor_id, target_type);
@@ -502,7 +400,7 @@ std::string TensorManager::convertFloat32To(const std::string &tensor_id, const 
   Ort::TensorTypeAndShapeInfo tensor_info = tensor->GetTensorTypeAndShapeInfo();
   size_t elem_count = tensor_info.GetElementCount();
   std::vector<int64_t> shape = tensor_info.GetShape();
-  const float *data = tensor->GetTensorData<float>();
+  float *data = tensor->GetTensorMutableData<float>();
 
   // Create a new tensor ID
   std::string new_tensor_id = generateTensorId();
@@ -510,55 +408,43 @@ std::string TensorManager::convertFloat32To(const std::string &tensor_id, const 
   // Convert to the target type
   if (target_type == "int32") {
     // Convert float32 to int32
-    std::vector<uint8_t> data_buffer(elem_count * sizeof(int32_t));
-    int32_t *new_data = reinterpret_cast<int32_t *>(data_buffer.data());
+    int32_t *new_data = new int32_t[elem_count];
     for (size_t i = 0; i < elem_count; i++) {
       // Round float to int
       new_data[i] = static_cast<int32_t>(data[i] + (data[i] >= 0 ? 0.5f : -0.5f));
     }
-    tensor_data_buffers_[new_tensor_id] = std::move(data_buffer);
-    auto new_tensor =
-        createOrtValue(tensor_data_buffers_[new_tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32);
-    tensors_[new_tensor_id] = std::move(new_tensor);
+    auto new_tensor = Ort::Value::CreateTensor<int32_t>(memory_info_, new_data, elem_count, shape.data(), shape.size());
+    tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
     tensor_types_[new_tensor_id] = "int32";
   } else if (target_type == "int64") {
     // Convert float32 to int64
-    std::vector<uint8_t> data_buffer(elem_count * sizeof(int64_t));
-    int64_t *new_data = reinterpret_cast<int64_t *>(data_buffer.data());
+    int64_t *new_data = new int64_t[elem_count];
     for (size_t i = 0; i < elem_count; i++) {
       // Round float to int64
       new_data[i] = static_cast<int64_t>(data[i] + (data[i] >= 0 ? 0.5f : -0.5f));
     }
-    tensor_data_buffers_[new_tensor_id] = std::move(data_buffer);
-    auto new_tensor =
-        createOrtValue(tensor_data_buffers_[new_tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64);
-    tensors_[new_tensor_id] = std::move(new_tensor);
+    auto new_tensor = Ort::Value::CreateTensor<int64_t>(memory_info_, new_data, elem_count, shape.data(), shape.size());
+    tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
     tensor_types_[new_tensor_id] = "int64";
   } else if (target_type == "uint8") {
     // Convert float32 to uint8
-    std::vector<uint8_t> data_buffer(elem_count);
-    uint8_t *new_data = data_buffer.data();
+    uint8_t *new_data = new uint8_t[elem_count];
     for (size_t i = 0; i < elem_count; i++) {
       // Clamp between 0 and 255
       float val = data[i] < 0 ? 0 : (data[i] > 255 ? 255 : data[i] + 0.5f);
       new_data[i] = static_cast<uint8_t>(val);
     }
-    tensor_data_buffers_[new_tensor_id] = std::move(data_buffer);
-    auto new_tensor =
-        createOrtValue(tensor_data_buffers_[new_tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8);
-    tensors_[new_tensor_id] = std::move(new_tensor);
+    auto new_tensor = Ort::Value::CreateTensor<uint8_t>(memory_info_, new_data, elem_count, shape.data(), shape.size());
+    tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
     tensor_types_[new_tensor_id] = "uint8";
   } else if (target_type == "bool") {
     // Convert float32 to bool
-    std::vector<uint8_t> data_buffer(elem_count * sizeof(bool));
-    bool *new_data = reinterpret_cast<bool *>(data_buffer.data());
+    bool *new_data = new bool[elem_count];
     for (size_t i = 0; i < elem_count; i++) {
       new_data[i] = data[i] != 0.0f;
     }
-    tensor_data_buffers_[new_tensor_id] = std::move(data_buffer);
-    auto new_tensor =
-        createOrtValue(tensor_data_buffers_[new_tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL);
-    tensors_[new_tensor_id] = std::move(new_tensor);
+    auto new_tensor = Ort::Value::CreateTensor<bool>(memory_info_, new_data, elem_count, shape.data(), shape.size());
+    tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
     tensor_types_[new_tensor_id] = "bool";
   } else {
     throw std::runtime_error("Unsupported type: " + target_type);
@@ -576,7 +462,7 @@ std::string TensorManager::convertInt32To(const std::string &tensor_id, const st
   Ort::TensorTypeAndShapeInfo tensor_info = tensor->GetTensorTypeAndShapeInfo();
   size_t elem_count = tensor_info.GetElementCount();
   std::vector<int64_t> shape = tensor_info.GetShape();
-  const int32_t *data = tensor->GetTensorData<int32_t>();
+  int32_t *data = tensor->GetTensorMutableData<int32_t>();
 
   // Create a new tensor ID
   std::string new_tensor_id = generateTensorId();
@@ -584,53 +470,41 @@ std::string TensorManager::convertInt32To(const std::string &tensor_id, const st
   // Convert to the target type
   if (target_type == "float32") {
     // Convert int32 to float32
-    std::vector<uint8_t> data_buffer(elem_count * sizeof(float));
-    float *new_data = reinterpret_cast<float *>(data_buffer.data());
+    float *new_data = new float[elem_count];
     for (size_t i = 0; i < elem_count; i++) {
       new_data[i] = static_cast<float>(data[i]);
     }
-    tensor_data_buffers_[new_tensor_id] = std::move(data_buffer);
-    auto new_tensor =
-        createOrtValue(tensor_data_buffers_[new_tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT);
-    tensors_[new_tensor_id] = std::move(new_tensor);
+    auto new_tensor = Ort::Value::CreateTensor<float>(memory_info_, new_data, elem_count, shape.data(), shape.size());
+    tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
     tensor_types_[new_tensor_id] = "float32";
   } else if (target_type == "int64") {
     // Convert int32 to int64
-    std::vector<uint8_t> data_buffer(elem_count * sizeof(int64_t));
-    int64_t *new_data = reinterpret_cast<int64_t *>(data_buffer.data());
+    int64_t *new_data = new int64_t[elem_count];
     for (size_t i = 0; i < elem_count; i++) {
       new_data[i] = static_cast<int64_t>(data[i]);
     }
-    tensor_data_buffers_[new_tensor_id] = std::move(data_buffer);
-    auto new_tensor =
-        createOrtValue(tensor_data_buffers_[new_tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64);
-    tensors_[new_tensor_id] = std::move(new_tensor);
+    auto new_tensor = Ort::Value::CreateTensor<int64_t>(memory_info_, new_data, elem_count, shape.data(), shape.size());
+    tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
     tensor_types_[new_tensor_id] = "int64";
   } else if (target_type == "uint8") {
     // Convert int32 to uint8
-    std::vector<uint8_t> data_buffer(elem_count);
-    uint8_t *new_data = data_buffer.data();
+    uint8_t *new_data = new uint8_t[elem_count];
     for (size_t i = 0; i < elem_count; i++) {
       // Clamp between 0 and 255
       int32_t val = data[i] < 0 ? 0 : (data[i] > 255 ? 255 : data[i]);
       new_data[i] = static_cast<uint8_t>(val);
     }
-    tensor_data_buffers_[new_tensor_id] = std::move(data_buffer);
-    auto new_tensor =
-        createOrtValue(tensor_data_buffers_[new_tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8);
-    tensors_[new_tensor_id] = std::move(new_tensor);
+    auto new_tensor = Ort::Value::CreateTensor<uint8_t>(memory_info_, new_data, elem_count, shape.data(), shape.size());
+    tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
     tensor_types_[new_tensor_id] = "uint8";
   } else if (target_type == "bool") {
     // Convert int32 to bool
-    std::vector<uint8_t> data_buffer(elem_count * sizeof(bool));
-    bool *new_data = reinterpret_cast<bool *>(data_buffer.data());
+    bool *new_data = new bool[elem_count];
     for (size_t i = 0; i < elem_count; i++) {
       new_data[i] = data[i] != 0;
     }
-    tensor_data_buffers_[new_tensor_id] = std::move(data_buffer);
-    auto new_tensor =
-        createOrtValue(tensor_data_buffers_[new_tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL);
-    tensors_[new_tensor_id] = std::move(new_tensor);
+    auto new_tensor = Ort::Value::CreateTensor<bool>(memory_info_, new_data, elem_count, shape.data(), shape.size());
+    tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
     tensor_types_[new_tensor_id] = "bool";
   } else {
     throw std::runtime_error("Unsupported type: " + target_type);
@@ -648,7 +522,7 @@ std::string TensorManager::convertInt64To(const std::string &tensor_id, const st
   Ort::TensorTypeAndShapeInfo tensor_info = tensor->GetTensorTypeAndShapeInfo();
   size_t elem_count = tensor_info.GetElementCount();
   std::vector<int64_t> shape = tensor_info.GetShape();
-  const int64_t *data = tensor->GetTensorData<int64_t>();
+  int64_t *data = tensor->GetTensorMutableData<int64_t>();
 
   // Create a new tensor ID
   std::string new_tensor_id = generateTensorId();
@@ -656,21 +530,17 @@ std::string TensorManager::convertInt64To(const std::string &tensor_id, const st
   // Convert to the target type
   if (target_type == "float32") {
     // Convert int64 to float32
-    std::vector<uint8_t> data_buffer(elem_count * sizeof(float));
-    float *new_data = reinterpret_cast<float *>(data_buffer.data());
+    float *new_data = new float[elem_count];
     for (size_t i = 0; i < elem_count; i++) {
       // Note: potential precision loss for large int64 values
       new_data[i] = static_cast<float>(data[i]);
     }
-    tensor_data_buffers_[new_tensor_id] = std::move(data_buffer);
-    auto new_tensor =
-        createOrtValue(tensor_data_buffers_[new_tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT);
-    tensors_[new_tensor_id] = std::move(new_tensor);
+    auto new_tensor = Ort::Value::CreateTensor<float>(memory_info_, new_data, elem_count, shape.data(), shape.size());
+    tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
     tensor_types_[new_tensor_id] = "float32";
   } else if (target_type == "int32") {
     // Convert int64 to int32
-    std::vector<uint8_t> data_buffer(elem_count * sizeof(int32_t));
-    int32_t *new_data = reinterpret_cast<int32_t *>(data_buffer.data());
+    int32_t *new_data = new int32_t[elem_count];
     for (size_t i = 0; i < elem_count; i++) {
       // Clamp to int32 range to prevent overflow
       int64_t val = data[i];
@@ -680,36 +550,28 @@ std::string TensorManager::convertInt64To(const std::string &tensor_id, const st
         val = INT32_MIN;
       new_data[i] = static_cast<int32_t>(val);
     }
-    tensor_data_buffers_[new_tensor_id] = std::move(data_buffer);
-    auto new_tensor =
-        createOrtValue(tensor_data_buffers_[new_tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32);
-    tensors_[new_tensor_id] = std::move(new_tensor);
+    auto new_tensor = Ort::Value::CreateTensor<int32_t>(memory_info_, new_data, elem_count, shape.data(), shape.size());
+    tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
     tensor_types_[new_tensor_id] = "int32";
   } else if (target_type == "uint8") {
     // Convert int64 to uint8
-    std::vector<uint8_t> data_buffer(elem_count);
-    uint8_t *new_data = data_buffer.data();
+    uint8_t *new_data = new uint8_t[elem_count];
     for (size_t i = 0; i < elem_count; i++) {
       // Clamp between 0 and 255
       int64_t val = data[i] < 0 ? 0 : (data[i] > 255 ? 255 : data[i]);
       new_data[i] = static_cast<uint8_t>(val);
     }
-    tensor_data_buffers_[new_tensor_id] = std::move(data_buffer);
-    auto new_tensor =
-        createOrtValue(tensor_data_buffers_[new_tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8);
-    tensors_[new_tensor_id] = std::move(new_tensor);
+    auto new_tensor = Ort::Value::CreateTensor<uint8_t>(memory_info_, new_data, elem_count, shape.data(), shape.size());
+    tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
     tensor_types_[new_tensor_id] = "uint8";
   } else if (target_type == "bool") {
     // Convert int64 to bool
-    std::vector<uint8_t> data_buffer(elem_count * sizeof(bool));
-    bool *new_data = reinterpret_cast<bool *>(data_buffer.data());
+    bool *new_data = new bool[elem_count];
     for (size_t i = 0; i < elem_count; i++) {
       new_data[i] = data[i] != 0;
     }
-    tensor_data_buffers_[new_tensor_id] = std::move(data_buffer);
-    auto new_tensor =
-        createOrtValue(tensor_data_buffers_[new_tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL);
-    tensors_[new_tensor_id] = std::move(new_tensor);
+    auto new_tensor = Ort::Value::CreateTensor<bool>(memory_info_, new_data, elem_count, shape.data(), shape.size());
+    tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
     tensor_types_[new_tensor_id] = "bool";
   } else {
     throw std::runtime_error("Unsupported type: " + target_type);
@@ -727,7 +589,7 @@ std::string TensorManager::convertUint8To(const std::string &tensor_id, const st
   Ort::TensorTypeAndShapeInfo tensor_info = tensor->GetTensorTypeAndShapeInfo();
   size_t elem_count = tensor_info.GetElementCount();
   std::vector<int64_t> shape = tensor_info.GetShape();
-  const uint8_t *data = tensor->GetTensorData<uint8_t>();
+  uint8_t *data = tensor->GetTensorMutableData<uint8_t>();
 
   // Create a new tensor ID
   std::string new_tensor_id = generateTensorId();
@@ -735,51 +597,39 @@ std::string TensorManager::convertUint8To(const std::string &tensor_id, const st
   // Convert to the target type
   if (target_type == "float32") {
     // Convert uint8 to float32
-    std::vector<uint8_t> data_buffer(elem_count * sizeof(float));
-    float *new_data = reinterpret_cast<float *>(data_buffer.data());
+    float *new_data = new float[elem_count];
     for (size_t i = 0; i < elem_count; i++) {
       new_data[i] = static_cast<float>(data[i]);
     }
-    tensor_data_buffers_[new_tensor_id] = std::move(data_buffer);
-    auto new_tensor =
-        createOrtValue(tensor_data_buffers_[new_tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT);
-    tensors_[new_tensor_id] = std::move(new_tensor);
+    auto new_tensor = Ort::Value::CreateTensor<float>(memory_info_, new_data, elem_count, shape.data(), shape.size());
+    tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
     tensor_types_[new_tensor_id] = "float32";
   } else if (target_type == "int32") {
     // Convert uint8 to int32
-    std::vector<uint8_t> data_buffer(elem_count * sizeof(int32_t));
-    int32_t *new_data = reinterpret_cast<int32_t *>(data_buffer.data());
+    int32_t *new_data = new int32_t[elem_count];
     for (size_t i = 0; i < elem_count; i++) {
       new_data[i] = static_cast<int32_t>(data[i]);
     }
-    tensor_data_buffers_[new_tensor_id] = std::move(data_buffer);
-    auto new_tensor =
-        createOrtValue(tensor_data_buffers_[new_tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32);
-    tensors_[new_tensor_id] = std::move(new_tensor);
+    auto new_tensor = Ort::Value::CreateTensor<int32_t>(memory_info_, new_data, elem_count, shape.data(), shape.size());
+    tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
     tensor_types_[new_tensor_id] = "int32";
   } else if (target_type == "int64") {
     // Convert uint8 to int64
-    std::vector<uint8_t> data_buffer(elem_count * sizeof(int64_t));
-    int64_t *new_data = reinterpret_cast<int64_t *>(data_buffer.data());
+    int64_t *new_data = new int64_t[elem_count];
     for (size_t i = 0; i < elem_count; i++) {
       new_data[i] = static_cast<int64_t>(data[i]);
     }
-    tensor_data_buffers_[new_tensor_id] = std::move(data_buffer);
-    auto new_tensor =
-        createOrtValue(tensor_data_buffers_[new_tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64);
-    tensors_[new_tensor_id] = std::move(new_tensor);
+    auto new_tensor = Ort::Value::CreateTensor<int64_t>(memory_info_, new_data, elem_count, shape.data(), shape.size());
+    tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
     tensor_types_[new_tensor_id] = "int64";
   } else if (target_type == "bool") {
     // Convert uint8 to bool
-    std::vector<uint8_t> data_buffer(elem_count * sizeof(bool));
-    bool *new_data = reinterpret_cast<bool *>(data_buffer.data());
+    bool *new_data = new bool[elem_count];
     for (size_t i = 0; i < elem_count; i++) {
       new_data[i] = data[i] != 0;
     }
-    tensor_data_buffers_[new_tensor_id] = std::move(data_buffer);
-    auto new_tensor =
-        createOrtValue(tensor_data_buffers_[new_tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL);
-    tensors_[new_tensor_id] = std::move(new_tensor);
+    auto new_tensor = Ort::Value::CreateTensor<bool>(memory_info_, new_data, elem_count, shape.data(), shape.size());
+    tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
     tensor_types_[new_tensor_id] = "bool";
   } else {
     throw std::runtime_error("Unsupported type: " + target_type);
@@ -797,7 +647,7 @@ std::string TensorManager::convertBoolTo(const std::string &tensor_id, const std
   Ort::TensorTypeAndShapeInfo tensor_info = tensor->GetTensorTypeAndShapeInfo();
   size_t elem_count = tensor_info.GetElementCount();
   std::vector<int64_t> shape = tensor_info.GetShape();
-  const bool *data = tensor->GetTensorData<bool>();
+  bool *data = tensor->GetTensorMutableData<bool>();
 
   // Create a new tensor ID
   std::string new_tensor_id = generateTensorId();
@@ -805,51 +655,39 @@ std::string TensorManager::convertBoolTo(const std::string &tensor_id, const std
   // Convert to the target type
   if (target_type == "float32") {
     // Convert bool to float32
-    std::vector<uint8_t> data_buffer(elem_count * sizeof(float));
-    float *new_data = reinterpret_cast<float *>(data_buffer.data());
+    float *new_data = new float[elem_count];
     for (size_t i = 0; i < elem_count; i++) {
       new_data[i] = data[i] ? 1.0f : 0.0f;
     }
-    tensor_data_buffers_[new_tensor_id] = std::move(data_buffer);
-    auto new_tensor =
-        createOrtValue(tensor_data_buffers_[new_tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT);
-    tensors_[new_tensor_id] = std::move(new_tensor);
+    auto new_tensor = Ort::Value::CreateTensor<float>(memory_info_, new_data, elem_count, shape.data(), shape.size());
+    tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
     tensor_types_[new_tensor_id] = "float32";
   } else if (target_type == "int32") {
     // Convert bool to int32
-    std::vector<uint8_t> data_buffer(elem_count * sizeof(int32_t));
-    int32_t *new_data = reinterpret_cast<int32_t *>(data_buffer.data());
+    int32_t *new_data = new int32_t[elem_count];
     for (size_t i = 0; i < elem_count; i++) {
       new_data[i] = data[i] ? 1 : 0;
     }
-    tensor_data_buffers_[new_tensor_id] = std::move(data_buffer);
-    auto new_tensor =
-        createOrtValue(tensor_data_buffers_[new_tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32);
-    tensors_[new_tensor_id] = std::move(new_tensor);
+    auto new_tensor = Ort::Value::CreateTensor<int32_t>(memory_info_, new_data, elem_count, shape.data(), shape.size());
+    tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
     tensor_types_[new_tensor_id] = "int32";
   } else if (target_type == "int64") {
     // Convert bool to int64
-    std::vector<uint8_t> data_buffer(elem_count * sizeof(int64_t));
-    int64_t *new_data = reinterpret_cast<int64_t *>(data_buffer.data());
+    int64_t *new_data = new int64_t[elem_count];
     for (size_t i = 0; i < elem_count; i++) {
       new_data[i] = data[i] ? 1 : 0;
     }
-    tensor_data_buffers_[new_tensor_id] = std::move(data_buffer);
-    auto new_tensor =
-        createOrtValue(tensor_data_buffers_[new_tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64);
-    tensors_[new_tensor_id] = std::move(new_tensor);
+    auto new_tensor = Ort::Value::CreateTensor<int64_t>(memory_info_, new_data, elem_count, shape.data(), shape.size());
+    tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
     tensor_types_[new_tensor_id] = "int64";
   } else if (target_type == "uint8") {
     // Convert bool to uint8
-    std::vector<uint8_t> data_buffer(elem_count);
-    uint8_t *new_data = data_buffer.data();
+    uint8_t *new_data = new uint8_t[elem_count];
     for (size_t i = 0; i < elem_count; i++) {
       new_data[i] = data[i] ? 1 : 0;
     }
-    tensor_data_buffers_[new_tensor_id] = std::move(data_buffer);
-    auto new_tensor =
-        createOrtValue(tensor_data_buffers_[new_tensor_id].data(), shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8);
-    tensors_[new_tensor_id] = std::move(new_tensor);
+    auto new_tensor = Ort::Value::CreateTensor<uint8_t>(memory_info_, new_data, elem_count, shape.data(), shape.size());
+    tensors_[new_tensor_id] = std::make_unique<Ort::Value>(std::move(new_tensor));
     tensor_types_[new_tensor_id] = "uint8";
   } else {
     throw std::runtime_error("Unsupported type: " + target_type);
@@ -861,47 +699,8 @@ std::string TensorManager::convertBoolTo(const std::string &tensor_id, const std
   return new_tensor_id;
 }
 
-std::unique_ptr<Ort::Value> TensorManager::createOrtValue(const void *data, const std::vector<int64_t> &shape,
-                                                          ONNXTensorElementDataType element_type) {
-  // Calculate total element count
-  size_t element_count =
-      shape.empty() ? 0
-                    : std::accumulate(shape.begin(), shape.end(), static_cast<size_t>(1), std::multiplies<size_t>());
-
-  // Create OrtValue based on element type
-  switch (element_type) {
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT: {
-    const float *tensor_data = static_cast<const float *>(data);
-    return std::make_unique<Ort::Value>(Ort::Value::CreateTensor<float>(memory_info_, const_cast<float *>(tensor_data),
-                                                                        element_count, shape.data(), shape.size()));
-  }
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32: {
-    const int32_t *tensor_data = static_cast<const int32_t *>(data);
-    return std::make_unique<Ort::Value>(Ort::Value::CreateTensor<int32_t>(
-        memory_info_, const_cast<int32_t *>(tensor_data), element_count, shape.data(), shape.size()));
-  }
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64: {
-    const int64_t *tensor_data = static_cast<const int64_t *>(data);
-    return std::make_unique<Ort::Value>(Ort::Value::CreateTensor<int64_t>(
-        memory_info_, const_cast<int64_t *>(tensor_data), element_count, shape.data(), shape.size()));
-  }
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8: {
-    const uint8_t *tensor_data = static_cast<const uint8_t *>(data);
-    return std::make_unique<Ort::Value>(Ort::Value::CreateTensor<uint8_t>(
-        memory_info_, const_cast<uint8_t *>(tensor_data), element_count, shape.data(), shape.size()));
-  }
-  case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL: {
-    const bool *tensor_data = static_cast<const bool *>(data);
-    return std::make_unique<Ort::Value>(Ort::Value::CreateTensor<bool>(memory_info_, const_cast<bool *>(tensor_data),
-                                                                       element_count, shape.data(), shape.size()));
-  }
-  default:
-    throw std::runtime_error("Unsupported tensor element type");
-  }
-}
-
-std::unique_ptr<Ort::Value> TensorManager::cloneTensor(const std::string &tensor_id) {
-  std::lock_guard<std::mutex> lock(tensor_mutex_);
+Ort::Value TensorManager::cloneTensor(const std::string &tensor_id) {
+  std::lock_guard<std::mutex> lock(mutex_);
 
   // Find the tensor
   auto tensor_it = tensors_.find(tensor_id);
@@ -916,22 +715,41 @@ std::unique_ptr<Ort::Value> TensorManager::cloneTensor(const std::string &tensor
   const std::string &tensor_type = type_it->second;
   const std::vector<int64_t> &shape = shape_it->second;
 
+  // Get tensor info
+  Ort::TensorTypeAndShapeInfo tensor_info = tensor_ptr->GetTensorTypeAndShapeInfo();
+  size_t element_count = tensor_info.GetElementCount();
+
   // Create a new tensor with the same data as the original
   if (tensor_type == "float32") {
-    const float *data = tensor_ptr->GetTensorData<float>();
-    return createOrtValue(data, shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT);
+    float *data = tensor_ptr->GetTensorMutableData<float>();
+    float *new_data = new float[element_count];
+    std::memcpy(new_data, data, element_count * sizeof(float));
+
+    return Ort::Value::CreateTensor<float>(memory_info_, new_data, element_count, shape.data(), shape.size());
   } else if (tensor_type == "int32") {
-    const int32_t *data = tensor_ptr->GetTensorData<int32_t>();
-    return createOrtValue(data, shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32);
+    int32_t *data = tensor_ptr->GetTensorMutableData<int32_t>();
+    int32_t *new_data = new int32_t[element_count];
+    std::memcpy(new_data, data, element_count * sizeof(int32_t));
+
+    return Ort::Value::CreateTensor<int32_t>(memory_info_, new_data, element_count, shape.data(), shape.size());
   } else if (tensor_type == "int64") {
-    const int64_t *data = tensor_ptr->GetTensorData<int64_t>();
-    return createOrtValue(data, shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64);
+    int64_t *data = tensor_ptr->GetTensorMutableData<int64_t>();
+    int64_t *new_data = new int64_t[element_count];
+    std::memcpy(new_data, data, element_count * sizeof(int64_t));
+
+    return Ort::Value::CreateTensor<int64_t>(memory_info_, new_data, element_count, shape.data(), shape.size());
   } else if (tensor_type == "uint8") {
-    const uint8_t *data = tensor_ptr->GetTensorData<uint8_t>();
-    return createOrtValue(data, shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8);
+    uint8_t *data = tensor_ptr->GetTensorMutableData<uint8_t>();
+    uint8_t *new_data = new uint8_t[element_count];
+    std::memcpy(new_data, data, element_count * sizeof(uint8_t));
+
+    return Ort::Value::CreateTensor<uint8_t>(memory_info_, new_data, element_count, shape.data(), shape.size());
   } else if (tensor_type == "bool") {
-    const bool *data = tensor_ptr->GetTensorData<bool>();
-    return createOrtValue(data, shape, ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL);
+    bool *data = tensor_ptr->GetTensorMutableData<bool>();
+    bool *new_data = new bool[element_count];
+    std::memcpy(new_data, data, element_count * sizeof(bool));
+
+    return Ort::Value::CreateTensor<bool>(memory_info_, new_data, element_count, shape.data(), shape.size());
   } else {
     throw std::runtime_error("Unsupported tensor type: " + tensor_type);
   }

@@ -9,6 +9,10 @@ on:
       - 'linux/**/*.h'
       - 'linux/**/*.cpp'
       - 'linux/**/*.hpp'
+      - 'windows/**/*.cc'
+      - 'windows/**/*.h'
+      - 'windows/**/*.cpp'
+      - 'windows/**/*.hpp'
       # Add paths for other C++ files if needed, e.g.:
       # - 'cpp/**/*.cc'
       # - 'cpp/**/*.h'
@@ -20,6 +24,10 @@ on:
       - 'linux/**/*.h'
       - 'linux/**/*.cpp'
       - 'linux/**/*.hpp'
+      - 'windows/**/*.cc'
+      - 'windows/**/*.h'
+      - 'windows/**/*.cpp'
+      - 'windows/**/*.hpp'
       # - 'cpp/**/*.cc'
       # - 'cpp/**/*.h'
 
@@ -37,7 +45,7 @@ jobs:
     
     - name: Run clang-format
       run: |
-        find linux -name "*.cc" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" | \
+        find linux windows -name "*.cc" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" | \
         grep -v "example/linux/flutter/" | \
         xargs clang-format -i --style=file
         

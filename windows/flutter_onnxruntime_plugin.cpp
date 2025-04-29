@@ -707,10 +707,9 @@ void FlutterOnnxruntimePlugin::HandleRunInference(
       if (tensor_ptr != nullptr) {
         try {
           // Clone the tensor and move it into the input_tensors vector
-          // TensorManager::cloneTensor returns std::unique_ptr<Ort::Value>
-          auto cloned_tensor = impl_->tensorManager_->cloneTensor(tensor_id);
+          Ort::Value cloned_tensor = impl_->tensorManager_->cloneTensor(tensor_id);
           if (cloned_tensor) {
-            input_tensors.push_back(std::move(*cloned_tensor));
+            input_tensors.push_back(std::move(cloned_tensor));
           }
         } catch (const std::exception &e) {
           // Log the error but continue with the next tensor
