@@ -8,6 +8,7 @@
 #define FLUTTER_ONNXRUNTIME_TENSOR_MANAGER_H_
 
 #include "pch.h"
+#include "session_manager.h"
 
 namespace flutter_onnxruntime {
 
@@ -75,9 +76,6 @@ public:
   // Generate a unique tensor ID
   std::string generateTensorId();
 
-  // Get the element type string
-  const char *get_element_type_string(ONNXTensorElementDataType element_type);
-
   // Clone a tensor
   Ort::Value cloneTensor(const std::string &tensor_id);
 
@@ -95,14 +93,10 @@ private:
   std::unordered_map<std::string, std::vector<uint8_t>> tensor_data_buffers_;
 
   // Mutex for thread safety
-  std::mutex tensor_mutex_;
+  std::mutex mutex_;
 
   // Memory info for CPU memory
   Ort::MemoryInfo memory_info_{nullptr};
-
-  // Create an OrtValue helper
-  std::unique_ptr<Ort::Value> createOrtValue(const void *data, const std::vector<int64_t> &shape,
-                                             ONNXTensorElementDataType element_type);
 };
 
 } // namespace flutter_onnxruntime
