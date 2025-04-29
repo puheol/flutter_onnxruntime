@@ -745,6 +745,7 @@ Ort::Value TensorManager::cloneTensor(const std::string &tensor_id) {
 
     // Extract strings from the tensor
     std::vector<std::string> data_vec;
+    data_vec.reserve(elem_count);
     for (size_t i = 0; i < elem_count; i++) {
       std::string s = tensor->GetStringTensorElement(i);
       data_vec.push_back(s);
