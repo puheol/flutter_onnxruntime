@@ -261,6 +261,34 @@ void main() {
         await convertedTensor.dispose();
       });
 
+      testWidgets('Int64 to Int32 conversion with cutoff values', (WidgetTester tester) async {
+        // skip the test for web platform as BigInt64Array required by ONNX Runtime Web for int64 tensors
+        // is not supported in all browsers
+        if (kIsWeb) {
+          return;
+        }
+        // Use numbers outside the range of Int32 (e.g., greater than 2^31 - 1)
+        final inputData = Int64List.fromList([2147483647, -2147483648, 9223372036854775807, -9223372036854775808]);
+        final shape = [4]; // 1D array
+
+        final tensor = await OrtValue.fromList(inputData, shape);
+        expect(tensor.dataType, OrtDataType.int64);
+
+        final convertedTensor = await tensor.to(OrtDataType.int32);
+        expect(convertedTensor.dataType, OrtDataType.int32);
+        expect(convertedTensor.shape, shape);
+
+        final retrievedData = await convertedTensor.asList();
+        expect(retrievedData.length, 4);
+        expect(retrievedData[0], 2147483647); // 2e31-1
+        expect(retrievedData[1], -2147483648); // -2e31
+        expect(retrievedData[2], 2147483647); // 2e31-1 - cutoff value
+        expect(retrievedData[3], -2147483648); // -2e31 - cutoff value
+
+        await tensor.dispose();
+        await convertedTensor.dispose();
+      });
+
       testWidgets('Same type conversion Float32 to Float32', (WidgetTester tester) async {
         // same type conversion should clone the tensor to a new tensor
         final inputData = Float32List.fromList([1.1, 2.2]);
