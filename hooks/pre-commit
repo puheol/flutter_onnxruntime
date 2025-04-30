@@ -115,7 +115,7 @@ fi
 
 # Run Flutter analyze
 echo "Running Flutter analyze..."
-flutter analyze
+flutter analyze lib test example/lib
 FLUTTER_ANALYZE_RESULT=$?
 
 # Now check for any modified files after all formatting has been done
