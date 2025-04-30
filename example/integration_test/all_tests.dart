@@ -8,11 +8,11 @@
 //
 // All integration tests are grouped into a single file due to an issue in Linux and macOS reported at:
 // https://github.com/flutter/flutter/issues/135673
-// Two models used in this Test: Addition model and Transpose-Avg Model
+// Three models used in this Test: Addition model, Transpose-Avg Model and String Concat Model
 //
-// The Addition Model is a simple model which perform Add operation between two tensor A and B, results in C
+// 1. The Addition Model is a simple model which perform Add operation between two tensor A and B, results in C
 //
-// The Transpose-Avg model operation is defined as follows:
+// 2. The Transpose-Avg model operation is defined as follows:
 // def forward(self, A, B):
 //     # Transpose tensor B (from [batch,n,m] to [batch,m,n])
 //     B_transposed = B.transpose(1, 2)
@@ -32,6 +32,9 @@
 // * FP32: input and output are float32
 // * INT32: input and output are int32
 // * FP16: model is fp16
+//
+// 3. The String Concat model is a similar version of Addition model but with string inputs and outputs
+//
 
 import 'dart:io';
 
