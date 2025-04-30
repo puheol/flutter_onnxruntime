@@ -122,7 +122,8 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
                 return
               }
             default:
-              continue
+              result(FlutterError(code: "INVALID_PROVIDER", message: "Provider \(provider) is not supported", details: nil))
+              return
             }
           }
         }

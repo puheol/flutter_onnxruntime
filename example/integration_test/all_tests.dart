@@ -499,7 +499,7 @@ void main() {
       await session.close();
     });
 
-    testWidgets('Create session with not available provider', (WidgetTester tester) async {
+    testWidgets('Create session with unavailable provider', (WidgetTester tester) async {
       // set a negative provider
       // we assume that CORE_ML is never available on Android and Linux
       // and XNNPACK is never available on iOS and MacOS
@@ -507,7 +507,7 @@ void main() {
       // Note: the Platform.is<OS> call is not supported on web and will cause issue when testing in web environment
       if (!kIsWeb) {
         if (Platform.isIOS || Platform.isMacOS) {
-          negativeProvider = OrtProvider.XNNPACK;
+          negativeProvider = OrtProvider.AZURE;
         }
       }
       try {
