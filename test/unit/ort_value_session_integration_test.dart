@@ -240,6 +240,29 @@ void main() {
       expect(outputs['output1']!.shape, [2, 2]);
     });
 
+    test('run() should accept string tensors as inputs', () async {
+      // Create OrtValue tensors including a string tensor
+      final tensor1 = await OrtValue.fromList(['word1', 'word2', 'word3', 'word4'], [2, 2]);
+      final tensor2 = await OrtValue.fromList(Float32List.fromList([5.0, 6.0, 7.0, 8.0]), [2, 2]);
+
+      // Use OrtValue objects in inputs map
+      final inputs = {'input1': tensor1, 'input2': tensor2};
+
+      // Run inference with OrtValues
+      final outputs = await session.run(inputs);
+
+      // Verify that the inputs were correctly processed
+      expect(mockPlatform.lastRunInputs, isNotNull);
+
+      // Check that the valueId and shape were passed correctly for string tensor
+      expect(mockPlatform.lastRunInputs!['input1'], isA<Map<String, dynamic>>());
+      expect(mockPlatform.lastRunInputs!['input1']['valueId'], tensor1.id);
+      expect(mockPlatform.lastRunInputs!['input1_shape'], tensor1.shape);
+
+      // Verify output format
+      expect(outputs, isA<Map<String, OrtValue>>());
+    });
+
     test('should properly clean up OrtValue resources', () async {
       // This test verifies that dispose() can be called after using in session.run()
 
@@ -317,6 +340,44 @@ void main() {
       expect(flatData, isA<List>());
       expect(flatData.length, 6);
       expect(flatData, [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+
+      // Clean up
+      FlutterOnnxruntimePlatform.instance = initialPlatform;
+    });
+
+    test('OrtValue.asList() correctly reshapes string tensor data', () async {
+      // Set up a specialized mock platform interface
+      final arrayShapeMock = ArrayShapeMock();
+      FlutterOnnxruntimePlatform.instance = arrayShapeMock;
+
+      // Create a mock string tensor
+      final tensor = OrtValue.fromMap({
+        'valueId': 'test_string_tensor_id',
+        'dataType': 'string',
+        'shape': [2, 2],
+      });
+
+      // Set up the mock string data
+      arrayShapeMock.setTensorData('test_string_tensor_id', ['hello', 'world', 'string', 'tensor'], [2, 2]);
+
+      // Get data using both methods
+      final shapedData = await tensor.asList();
+      final flatData = await tensor.asFlattenedList();
+
+      // Verify shaped data has the right structure (2x2 matrix)
+      expect(shapedData, isA<List>());
+      expect(shapedData.length, 2);
+      expect(shapedData[0], isA<List>());
+      expect(shapedData[0].length, 2);
+      expect(shapedData[0][0], 'hello');
+      expect(shapedData[0][1], 'world');
+      expect(shapedData[1][0], 'string');
+      expect(shapedData[1][1], 'tensor');
+
+      // Verify flat data is a simple 1D list
+      expect(flatData, isA<List>());
+      expect(flatData.length, 4);
+      expect(flatData, ['hello', 'world', 'string', 'tensor']);
 
       // Clean up
       FlutterOnnxruntimePlatform.instance = initialPlatform;

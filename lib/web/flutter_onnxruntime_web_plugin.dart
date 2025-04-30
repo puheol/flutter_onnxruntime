@@ -350,6 +350,8 @@ class FlutterOnnxruntimeWebPlugin extends FlutterOnnxruntimePlatform {
         return 'uint8';
       case 'bool':
         return 'bool';
+      case 'string':
+        return 'string';
       default:
         return ortType.toLowerCase();
     }
@@ -686,6 +688,13 @@ class FlutterOnnxruntimeWebPlugin extends FlutterOnnxruntimePlatform {
           tensor = js_util.callConstructor(tensorClass, [dataType, jsData, jsShape]);
           break;
 
+        case 'string':
+          // For string tensors, we use the standard JavaScript Array
+          // ONNX Runtime JS API accepts string arrays for string tensors
+          final stringArray = jsArrayFrom((data as List<String>).toList());
+          tensor = js_util.callConstructor(tensorClass, [dataType, stringArray, jsShape]);
+          break;
+
         default:
           throw PlatformException(
             code: "UNSUPPORTED_TYPE",
@@ -711,6 +720,7 @@ class FlutterOnnxruntimeWebPlugin extends FlutterOnnxruntimePlatform {
   }
 
   // Helper to convert Dart List to JavaScript TypedArray
+  // Array types: https://api.flutter.dev/flutter/dart-js_interop/JSFloat32Array-extension-type.html
   JSObject _convertToTypedArray(dynamic data, String arrayType) {
     // Make sure data is a list
     final dataList = data is List ? data : [data];
@@ -738,6 +748,8 @@ class FlutterOnnxruntimeWebPlugin extends FlutterOnnxruntimePlatform {
         return 'uint8';
       case 'bool':
         return 'bool';
+      case 'string':
+        return 'string';
       default:
         throw PlatformException(code: "UNSUPPORTED_TYPE", message: "Unsupported data type: $sourceType", details: null);
     }
@@ -809,6 +821,14 @@ class FlutterOnnxruntimeWebPlugin extends FlutterOnnxruntimePlatform {
             // Return the actual numeric value (1 or 0), not a boolean,
             // to match native implementations which return 1/0
             data.add(numValue != 0 ? 1 : 0);
+          }
+          break;
+
+        case 'string':
+          for (var i = 0; i < dataLength; i++) {
+            // For string tensors, extract string values
+            final value = callMethod(jsData, 'at', [i]);
+            data.add(value.toString());
           }
           break;
 
@@ -1024,6 +1044,7 @@ class FlutterOnnxruntimeWebPlugin extends FlutterOnnxruntimePlatform {
         case 'uint8-uint8':
         case 'int8-int8':
         case 'bool-bool':
+        case 'string-string':
           // Clone the original tensor with the same data
           final newData = getProperty(tensor, 'data');
           newTensor = js_util.callConstructor(tensorClass, [sourceType, newData, jsArrayFrom(shape)]);

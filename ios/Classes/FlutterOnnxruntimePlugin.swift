@@ -122,7 +122,8 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
                 return
               }
             default:
-              continue
+              result(FlutterError(code: "INVALID_PROVIDER", message: "Provider \(provider) is not supported", details: nil))
+              return
             }
           }
         }
@@ -558,6 +559,15 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
           return
         }
 
+      case "string":
+        if let stringArray = data as? [String] {
+          // Create a string tensor from a string array
+          tensor = try ORTValue(tensorStringData: stringArray, shape: shapeNumbers)
+        } else {
+          result(FlutterError(code: "INVALID_DATA", message: "Data must be a list of strings for string type", details: nil))
+          return
+        }
+
       default:
         result(FlutterError(code: "UNSUPPORTED_TYPE", message: "Unsupported source data type: \(sourceType)", details: nil))
         return
@@ -809,6 +819,16 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
         let int8Ptr = dataPtr.bytes.bindMemory(to: Int8.self, capacity: elementCount)
         let int8Buffer = UnsafeBufferPointer(start: int8Ptr, count: elementCount)
         data = Array(int8Buffer)
+
+      case .string:
+        // For string tensors, we need to use the special string tensor API
+        // Get string data using the dedicated string tensor accessor
+        do {
+          data = try tensor.tensorStringData()
+        } catch {
+          // In case of error, return an empty array
+          data = []
+        }
 
       default:
         // Try to extract as float for unsupported types

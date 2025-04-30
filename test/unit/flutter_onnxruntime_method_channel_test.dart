@@ -233,6 +233,49 @@ void main() {
       expect(result['output1'][2], [3]);
     });
 
+    test('runInference handles string tensor inputs and outputs', () async {
+      // Set up a mock implementation for the method channel
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+        MethodCall methodCall,
+      ) async {
+        // Verify methodCall.arguments for OrtValue format
+        if (methodCall.method == 'runInference') {
+          final args = methodCall.arguments as Map<Object?, Object?>;
+          final inputs = args['inputs'] as Map<Object?, Object?>;
+
+          // Check that the string tensor input is properly represented
+          expect(inputs['input1'], isA<Map>());
+          expect((inputs['input1'] as Map)['valueId'], 'string_tensor_1');
+
+          return {
+            'output1': [
+              'string_output_1',
+              'string',
+              [2],
+            ],
+          };
+        }
+        return null;
+      });
+
+      // Create mock string OrtValue
+      final stringOrtValue = OrtValue.fromMap({
+        'valueId': 'string_tensor_1',
+        'dataType': 'string',
+        'shape': [2],
+      });
+
+      // Run inference with the string tensor
+      final result = await platform.runInference('test_session_id', {'input1': stringOrtValue});
+
+      // Verify the result
+      expect(result, isA<Map<String, dynamic>>());
+      expect(result['output1'], isA<List>());
+      expect(result['output1'][0], 'string_output_1');
+      expect(result['output1'][1], 'string');
+      expect(result['output1'][2], [2]);
+    });
+
     test('getAvailableProviders returns list of providers', () async {
       // Set up a mock implementation for the method channel
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (

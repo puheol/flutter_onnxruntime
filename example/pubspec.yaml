@@ -40,3 +40,4 @@ flutter:
     - assets/models/transpose_and_avg_model_fp32.onnx
     - assets/models/transpose_and_avg_model_int32.onnx
     - assets/models/transpose_and_avg_model_fp16.onnx
+    - assets/models/string_concat_model.onnx

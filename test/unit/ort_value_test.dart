@@ -224,6 +224,22 @@ void main() {
       expect(tensor.dataType, OrtDataType.bool);
     });
 
+    test('fromList with List<String> should create OrtValue correctly', () async {
+      final testData = ['test1', 'test2', 'test3', 'test4'];
+      final testShape = [2, 2];
+
+      final tensor = await OrtValue.fromList(testData, testShape);
+
+      // Verify correct parameter forwarding
+      expect(mockPlatform.lastSourceType, 'string');
+      expect(mockPlatform.lastSourceData, testData);
+      expect(mockPlatform.lastShape, testShape);
+
+      // Verify OrtValue properties
+      expect(tensor.shape, testShape);
+      expect(tensor.dataType, OrtDataType.string);
+    });
+
     test('fromList with List<double> should convert to Float32List', () async {
       final testData = [1.0, 2.0, 3.0, 4.0];
       final testShape = [2, 2];
@@ -296,7 +312,7 @@ void main() {
     });
 
     test('fromList with unsupported type should throw ArgumentError', () async {
-      final testData = ['string1', 'string2'];
+      final testData = [DateTime.now(), DateTime.now()]; // Unsupported type
       final testShape = [2];
 
       expect(() => OrtValue.fromList(testData, testShape), throwsArgumentError);

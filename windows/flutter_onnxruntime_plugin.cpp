@@ -222,6 +222,21 @@ void FlutterOnnxruntimePlugin::HandleCreateOrtValue(
         }
       }
       tensor_id = impl_->tensorManager_->createBoolTensor(bool_data, shape);
+    } else if (source_type == "string") {
+      if (!std::holds_alternative<flutter::EncodableList>(data_value)) {
+        result->Error("INVALID_ARG", "String data must be a list of strings", nullptr);
+        return;
+      }
+      auto string_data_list = std::get<flutter::EncodableList>(data_value);
+      std::vector<std::string> string_data;
+      string_data.reserve(string_data_list.size());
+
+      for (const auto &item : string_data_list) {
+        if (std::holds_alternative<std::string>(item)) {
+          string_data.push_back(std::get<std::string>(item));
+        }
+      }
+      tensor_id = impl_->tensorManager_->createStringTensor(string_data, shape);
     } else {
       result->Error("INVALID_ARG", "Unsupported data type: " + source_type, nullptr);
       return;

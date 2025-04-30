@@ -31,6 +31,8 @@ public:
 
   // Specialization for bool vectors
   static flutter::EncodableValue vectorToFlValue(const std::vector<bool> &vec);
+
+  static flutter::EncodableValue vectorToFlValue(const std::vector<std::string> &vec);
 };
 
 } // namespace flutter_onnxruntime

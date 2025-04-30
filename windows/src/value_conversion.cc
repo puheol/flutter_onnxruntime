@@ -68,4 +68,16 @@ flutter::EncodableValue ValueConversion::vectorToFlValue(const std::vector<bool>
 
   return flutter::EncodableValue(result);
 }
+
+// Specialization for string vectors
+flutter::EncodableValue ValueConversion::vectorToFlValue(const std::vector<std::string> &vec) {
+  flutter::EncodableList result;
+  result.reserve(vec.size());
+
+  for (size_t i = 0; i < vec.size(); i++) {
+    result.push_back(vec[i]);
+  }
+
+  return flutter::EncodableValue(result);
+}
 } // namespace flutter_onnxruntime

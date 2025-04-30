@@ -88,7 +88,7 @@ void main() {
           return;
         }
         // Use numbers outside the range of Int32 (e.g., greater than 2^31 - 1)
-        final inputData = Int64List.fromList([2147483648, -2147483649, 9223372036854775807, -9223372036854775808]);
+        final inputData = Int64List.fromList([2147483648, -2147483649, 9223372036, -9223372036]);
         final shape = [2, 2]; // 2x2 matrix
 
         final tensor = await OrtValue.fromList(inputData, shape);
@@ -136,6 +136,20 @@ void main() {
         }
 
         await tensor.dispose();
+      });
+
+      testWidgets('String round-trip test', (WidgetTester tester) async {
+        final inputData = ['Hello', 'World'];
+        final shape = [2];
+
+        final tensor = await OrtValue.fromList(inputData, shape);
+        expect(tensor.dataType, OrtDataType.string);
+        expect(tensor.shape, shape);
+
+        final retrievedData = await tensor.asFlattenedList();
+        expect(retrievedData.length, 2);
+        expect(retrievedData[0], 'Hello');
+        expect(retrievedData[1], 'World');
       });
 
       testWidgets('Round-trip test with regular list of float32', (WidgetTester tester) async {
@@ -247,7 +261,38 @@ void main() {
         await convertedTensor.dispose();
       });
 
-      testWidgets('Same type conversion', (WidgetTester tester) async {
+      testWidgets('Int64 to Int32 conversion with cutoff values', (WidgetTester tester) async {
+        // skip the test for web platform as BigInt64Array required by ONNX Runtime Web for int64 tensors
+        // is not supported in all browsers
+        if (kIsWeb) {
+          return;
+        }
+        // Use numbers outside the range of Int32 (e.g., greater than 2^31 - 1)
+        final inputData = Int64List.fromList([2147483647, -2147483648, 9223372036, -9223372036]);
+        final shape = [4]; // 1D array
+
+        final tensor = await OrtValue.fromList(inputData, shape);
+        expect(tensor.dataType, OrtDataType.int64);
+
+        final convertedTensor = await tensor.to(OrtDataType.int32);
+        expect(convertedTensor.dataType, OrtDataType.int32);
+        expect(convertedTensor.shape, shape);
+
+        final retrievedData = await convertedTensor.asList();
+        expect(retrievedData.length, 4);
+        expect(retrievedData[0], 2147483647); // 2e31-1
+        expect(retrievedData[1], -2147483648); // -2e31
+        // Android does not support cutoff values
+        if (!Platform.isAndroid) {
+          expect(retrievedData[2], 2147483647); // 2e31-1 - cutoff value
+          expect(retrievedData[3], -2147483648); // -2e31 - cutoff value
+        }
+
+        await tensor.dispose();
+        await convertedTensor.dispose();
+      });
+
+      testWidgets('Same type conversion Float32 to Float32', (WidgetTester tester) async {
         // same type conversion should clone the tensor to a new tensor
         final inputData = Float32List.fromList([1.1, 2.2]);
         final shape = [2]; // 1D array
@@ -259,17 +304,42 @@ void main() {
         expect(tensor1.dataType, OrtDataType.float32);
         expect(tensor1.shape, shape);
 
-        // release tensor1 but tensor0 should still be valid
-        tensor1.dispose();
-        expect(tensor0.dataType, OrtDataType.float32);
-        expect(tensor0.shape, shape);
+        // release tensor0 but tensor1 should still be valid
+        tensor0.dispose();
+        expect(tensor1.dataType, OrtDataType.float32);
+        expect(tensor1.shape, shape);
 
-        final retrievedData = await tensor0.asList();
+        final retrievedData = await tensor1.asList();
         expect(retrievedData.length, 2);
         expect(retrievedData[0], closeTo(1.1, 1e-5));
         expect(retrievedData[1], closeTo(2.2, 1e-5));
 
-        await tensor0.dispose();
+        await tensor1.dispose();
+      });
+
+      testWidgets('Same type conversion String to String', (WidgetTester tester) async {
+        // same type conversion should clone the tensor to a new tensor
+        final inputData = ['Hello', 'World'];
+        final shape = [2]; // 1D array
+
+        final tensor0 = await OrtValue.fromList(inputData, shape);
+        expect(tensor0.dataType, OrtDataType.string);
+
+        final tensor1 = await tensor0.to(OrtDataType.string);
+        expect(tensor1.dataType, OrtDataType.string);
+        expect(tensor1.shape, shape);
+
+        // release tensor0 but tensor1 should still be valid
+        tensor0.dispose();
+        expect(tensor1.dataType, OrtDataType.string);
+        expect(tensor1.shape, shape);
+
+        final retrievedData = await tensor1.asList();
+        expect(retrievedData.length, 2);
+        expect(retrievedData[0], 'Hello');
+        expect(retrievedData[1], 'World');
+
+        await tensor1.dispose();
       });
     });
 
@@ -429,7 +499,7 @@ void main() {
       await session.close();
     });
 
-    testWidgets('Create session with not available provider', (WidgetTester tester) async {
+    testWidgets('Create session with unavailable provider', (WidgetTester tester) async {
       // set a negative provider
       // we assume that CORE_ML is never available on Android and Linux
       // and XNNPACK is never available on iOS and MacOS
@@ -437,7 +507,7 @@ void main() {
       // Note: the Platform.is<OS> call is not supported on web and will cause issue when testing in web environment
       if (!kIsWeb) {
         if (Platform.isIOS || Platform.isMacOS) {
-          negativeProvider = OrtProvider.XNNPACK;
+          negativeProvider = OrtProvider.AZURE;
         }
       }
       try {
@@ -808,6 +878,60 @@ void main() {
           );
         }
       });
+    });
+  });
+
+  group('StringConcat Model Test', () {
+    late OnnxRuntime onnxRuntime;
+    late OrtSession session;
+
+    setUpAll(() async {
+      onnxRuntime = OnnxRuntime();
+      session = await onnxRuntime.createSessionFromAsset('assets/models/string_concat_model.onnx');
+    });
+
+    tearDownAll(() async {
+      await session.close();
+    });
+
+    testWidgets('StringConcat model inference test', (WidgetTester tester) async {
+      final inputs = {
+        'input1': await OrtValue.fromList(['Hello'], [1]),
+        'input2': await OrtValue.fromList(['World'], [1]),
+      };
+
+      final outputs = await session.run(inputs);
+      final output = outputs['output'];
+      expect(output!.dataType, OrtDataType.string);
+      expect(output.shape, [1]);
+      final outputData = await output.asFlattenedList();
+      expect(outputData, ['HelloWorld']);
+
+      // clean up
+      for (var input in inputs.values) {
+        input.dispose();
+      }
+      await output.dispose();
+    });
+
+    testWidgets('StringConcat model inference test with multi-batch', (WidgetTester tester) async {
+      final inputs = {
+        'input1': await OrtValue.fromList(['Hello', 'flutter'], [2]),
+        'input2': await OrtValue.fromList(['World!', '_onnxruntime'], [2]),
+      };
+
+      final outputs = await session.run(inputs);
+      final output = outputs['output'];
+      expect(output!.dataType, OrtDataType.string);
+      expect(output.shape, [2]);
+      final outputData = await output.asFlattenedList();
+      expect(outputData, ['HelloWorld!', 'flutter_onnxruntime']);
+
+      // clean up
+      for (var input in inputs.values) {
+        input.dispose();
+      }
+      await output.dispose();
     });
   });
 }

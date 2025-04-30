@@ -154,6 +154,7 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
             "UINT16" -> "uint16"
             "INT16" -> "int16"
             "DOUBLE" -> "float64"
+            "STRING" -> "string"
             // Add other types as needed
             else -> type.toString().lowercase()
         }
@@ -766,6 +767,19 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                 // Boolean tensors are stored as bytes in ONNX Runtime
                                 OnnxTensor.createTensor(ortEnvironment, ByteBuffer.wrap(boolData), longShape)
                             }
+                            "string" -> {
+                                val stringData =
+                                    when (data) {
+                                        is List<*> -> {
+                                            data.map { it as String }.toTypedArray()
+                                        }
+                                        else -> {
+                                            result.error("INVALID_DATA", "Data must be a list of strings for string type", null)
+                                            return
+                                        }
+                                    }
+                                OnnxTensor.createTensor(ortEnvironment, stringData, longShape)
+                            }
                             else -> {
                                 result.error("UNSUPPORTED_TYPE", "Unsupported source data type: $sourceType", null)
                                 return
@@ -942,7 +956,8 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                 (dataType == "int64" && targetType == "int64") ||
                                 (dataType == "uint8" && targetType == "uint8") ||
                                 (dataType == "int8" && targetType == "int8") ||
-                                (dataType == "bool" && targetType == "bool") -> {
+                                (dataType == "bool" && targetType == "bool") ||
+                                (dataType == "string" && targetType == "string") -> {
                                 // clone the original tensor to a new tensor
                                 OnnxTensor.createTensor(ortEnvironment, tensor.getValue())
                             }
@@ -1037,6 +1052,10 @@ class FlutterOnnxruntimePlugin : FlutterPlugin, MethodCallHandler {
                                 val byteArray = ByteArray(flatSize)
                                 tensor.byteBuffer.get(byteArray)
                                 byteArray.map { it != 0.toByte() }
+                            }
+                            "string" -> {
+                                val stringArray = tensor.value as Array<String>
+                                stringArray.toList()
                             }
                             else -> {
                                 result.error("UNSUPPORTED_NATIVE_TYPE", "Unsupported native data type: ${tensor.info.type}", null)
