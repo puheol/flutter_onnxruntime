@@ -100,7 +100,7 @@ Clone [this repository](https://github.com/masicai/flutter-onnxruntime-examples)
 | Inference on Emulator | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Input/Output Info | ✅ | ❌* | ✅ | ❌* | ✅ | ❌* |
 | Model Metadata | ✅ | ❌* | ✅ | ❌* | ✅ | ❌* |
-| ORT Extensions support | ✍️ | ✍️ | ✍️ | ✍️ | ✍️ | ✍️ |
+| ORT Extensions support | 🚧 | 🚧 | 🚧 | 🚧 | 🚧 | 🚧 |
 | FP16 Support | ✅ | ❌** | ✍️ | ❌** | ✍️ | ✍️ |
 
 ✅: Complete
