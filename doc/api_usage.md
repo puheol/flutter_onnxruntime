@@ -25,30 +25,14 @@ import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
 // Create an instance of OnnxRuntime
 final ort = OnnxRuntime();
 
-// Create a session from a model file
-final session = await ort.createSession(
-  'path/to/model.onnx',
-  options: OrtSessionOptions(
-    intraOpNumThreads: 2,
-    interOpNumThreads: 1,
-    providers: ['CPU'],
-    useArena: true,
-    deviceId: 0,
-  ),
+// Create a session from an asset file
+final session = await ort.createSessionFromAsset(
+  'assets/model.onnx',
 );
 
 // Session information
 print('Input names: ${session.inputNames}');
 print('Output names: ${session.outputNames}');
-```
-
-### Creating a Session from an Asset
-
-```dart
-// Create a session from an asset file
-final session = await ort.createSessionFromAsset(
-  'assets/model.onnx',
-);
 ```
 
 ### Getting Available Providers
@@ -193,6 +177,24 @@ for (final info in outputInfo) {
   print('  Shape: ${info['shape']}');
   print('  Type: ${info['type']}');
 }
+```
+
+### Set session options
+
+```dart
+
+final options = OrtSessionOptions(
+  intraOpNumThreads: 2,
+  interOpNumThreads: 1,
+  providers: [OrtProvider.CPU],
+  useArena: true,
+);
+
+// Create a session from a model file
+final session = await ort.createSession(
+  'path/to/model.onnx',
+  options: options,
+);
 ```
 
 ## Best Practices
