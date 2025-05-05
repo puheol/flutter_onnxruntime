@@ -1,3 +1,8 @@
+## 1.4.1
+* Support string tensors in all platforms
+* Reinforce structure and behavior consistency between Linux and Windows implementations
+* Minor bug fixes and documentation updates
+
 ## 1.4.0
 * Support Windows platform 🎉🎉🎉
 * Refactor SessionManager in Linux for cleaner architecture
