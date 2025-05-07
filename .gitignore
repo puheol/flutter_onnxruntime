@@ -35,3 +35,6 @@ build/
 
 # Downloaded onnxruntime library
 onnxruntime_download/
+
+# FVM Version Cache
+.fvm/
